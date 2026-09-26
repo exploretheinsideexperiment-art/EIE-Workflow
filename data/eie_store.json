@@ -1,0 +1,1059 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_01",
+      "email": "exploretheinsideexperiment@gmail.com",
+      "name": "EIE Automation Engineer",
+      "passwordHash": "d671f0551c6cd37059395d8650ffa160fcb6979e4257c8e5d07ec3acbd735536",
+      "avatar": "/avatar.svg",
+      "createdAt": "2026-09-26T03:23:13.181Z"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "ws_default_01",
+      "name": "Personal Automation Hub",
+      "ownerId": "usr_admin_01",
+      "membersCount": 1,
+      "plan": "pro"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf_sample_ai_lead",
+      "workspaceId": "ws_default_01",
+      "name": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "description": "Receives customer inquiries or alerts, analyzes sentiment and extracts key points using Gemini AI, then sends an email notification.",
+      "active": true,
+      "viewport": {
+        "x": 80,
+        "y": 140,
+        "zoom": 0.95
+      },
+      "createdAt": "2026-09-24T03:23:13.182Z",
+      "updatedAt": "2026-09-26T03:23:13.182Z",
+      "executionCount": 16,
+      "lastExecutedAt": "2026-09-26T03:24:35.744Z",
+      "nodes": [
+        {
+          "id": "node_1",
+          "type": "trigger_webhook",
+          "name": "Inbound Webhook",
+          "category": "Triggers",
+          "icon": "Webhook",
+          "position": {
+            "x": 100,
+            "y": 220
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main",
+              "label": "Trigger Output"
+            }
+          ],
+          "config": {
+            "webhookPath": "wh_lead_inbound",
+            "method": "POST",
+            "responseCode": 200,
+            "samplePayload": "{\n  \"customer\": \"Alex Mercer\",\n  \"email\": \"alex.mercer@enterprise.io\",\n  \"company\": \"Apex Dynamics\",\n  \"inquiry\": \"We urgently need enterprise automation for 50,000 daily events with custom webhook triggers and AI classification.\",\n  \"priority\": \"High\"\n}"
+          }
+        },
+        {
+          "id": "node_2",
+          "type": "ai_agent",
+          "name": "Gemini AI Lead Analyst",
+          "category": "AI",
+          "icon": "Sparkles",
+          "position": {
+            "x": 480,
+            "y": 160
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main",
+              "label": "Input Data"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main",
+              "label": "AI Output"
+            }
+          ],
+          "config": {
+            "model": "gemini-3.8-flash",
+            "systemPrompt": "You are an elite sales engineering AI. Analyze the customer inquiry. Return a clean JSON object with summary, estimatedContractTier (Tier 1, Tier 2, Tier 3), urgencyScore (1-100), and recommendedNextSteps array.",
+            "userPromptTemplate": "Analyze customer inquiry from: {{$json.customer}} ({{$json.company}}):\nInquiry: {{$json.inquiry}}",
+            "temperature": 0.2,
+            "responseFormat": "json"
+          }
+        },
+        {
+          "id": "node_3",
+          "type": "logic_if",
+          "name": "Check High Urgency",
+          "category": "Logic",
+          "icon": "GitBranch",
+          "position": {
+            "x": 860,
+            "y": 220
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main",
+              "label": "Input"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_true",
+              "name": "true",
+              "type": "true",
+              "label": "Urgent (True)"
+            },
+            {
+              "id": "out_false",
+              "name": "false",
+              "type": "false",
+              "label": "Standard (False)"
+            }
+          ],
+          "config": {
+            "fieldPath": "urgencyScore",
+            "operator": ">=",
+            "value": "50"
+          }
+        },
+        {
+          "id": "node_4",
+          "type": "comm_email",
+          "name": "Urgent Alert to VP Sales",
+          "category": "Communication",
+          "icon": "Mail",
+          "position": {
+            "x": 1220,
+            "y": 140
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main",
+              "label": "Input"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main",
+              "label": "Sent"
+            }
+          ],
+          "config": {
+            "to": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: {{$node[\"Gemini AI Lead Analyst\"].json.estimatedContractTier}} from {{$json.company}}",
+            "bodyHtml": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> {{$json.customer}}</p><p><strong>Summary:</strong> {{$node[\"Gemini AI Lead Analyst\"].json.summary}}</p><p><strong>Urgency Score:</strong> {{$node[\"Gemini AI Lead Analyst\"].json.urgencyScore}}/100</p>"
+          }
+        },
+        {
+          "id": "node_5",
+          "type": "comm_slack",
+          "name": "Post to #leads-feed",
+          "category": "Communication",
+          "icon": "MessageSquare",
+          "position": {
+            "x": 1220,
+            "y": 340
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main",
+              "label": "Input"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main",
+              "label": "Posted"
+            }
+          ],
+          "config": {
+            "channel": "#standard-leads",
+            "messageText": "Standard lead queued from {{$json.company}}: {{$node[\"Gemini AI Lead Analyst\"].json.summary}}"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_1",
+          "fromNodeId": "node_1",
+          "fromPortId": "out_main",
+          "toNodeId": "node_2",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c_2",
+          "fromNodeId": "node_2",
+          "fromPortId": "out_main",
+          "toNodeId": "node_3",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c_3",
+          "fromNodeId": "node_3",
+          "fromPortId": "out_true",
+          "toNodeId": "node_4",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c_4",
+          "fromNodeId": "node_3",
+          "fromPortId": "out_false",
+          "toNodeId": "node_5",
+          "toPortId": "in_main"
+        }
+      ]
+    }
+  ],
+  "credentials": [
+    {
+      "id": "cred_gemini_default",
+      "workspaceId": "ws_default_01",
+      "name": "Google Gemini Workspace Key",
+      "type": "gemini",
+      "data": {
+        "apiKey": "AIzaSy********************"
+      },
+      "createdAt": "2026-09-26T03:23:13.182Z",
+      "updatedAt": "2026-09-26T03:23:13.182Z"
+    },
+    {
+      "id": "cred_telegram_bot",
+      "workspaceId": "ws_default_01",
+      "name": "DevOps Alert Bot",
+      "type": "telegram",
+      "data": {
+        "botToken": "689241****:AAH*****************"
+      },
+      "createdAt": "2026-09-26T03:23:13.182Z",
+      "updatedAt": "2026-09-26T03:23:13.182Z"
+    },
+    {
+      "id": "cred_postgres_prod",
+      "workspaceId": "ws_default_01",
+      "name": "Analytics Data Warehouse",
+      "type": "postgres",
+      "data": {
+        "host": "analytics-db.eie.internal",
+        "database": "prod_telemetry",
+        "user": "eie_ro"
+      },
+      "createdAt": "2026-09-26T03:23:13.182Z",
+      "updatedAt": "2026-09-26T03:23:13.182Z"
+    }
+  ],
+  "executions": [
+    {
+      "id": "exec_1790393075741_33e5ec",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "webhook",
+      "status": "success",
+      "startedAt": "2026-09-26T03:24:35.744Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-26T03:24:35.744Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:35.740Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          },
+          "finishedAt": "2026-09-26T03:24:35.745Z",
+          "durationMs": 1,
+          "output": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:35.740Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-26T03:24:35.745Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:35.740Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          },
+          "finishedAt": "2026-09-26T03:24:46.468Z",
+          "durationMs": 10723,
+          "output": {
+            "summary": "Analysis of inquiry from Arthur Dent (Megadodo Publications): Need guide automation for galaxy Hitchhikers.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 82,
+            "recommendedNextSteps": [
+              "Schedule technical discovery call",
+              "Review API rate requirements and payload schema",
+              "Deploy high-throughput automation cluster"
+            ],
+            "aiNote": "Analysis completed successfully."
+          }
+        },
+        "node_3": {
+          "nodeId": "node_3",
+          "nodeName": "Check High Urgency",
+          "nodeType": "logic_if",
+          "status": "success",
+          "startedAt": "2026-09-26T03:24:46.468Z",
+          "input": {
+            "summary": "Analysis of inquiry from Arthur Dent (Megadodo Publications): Need guide automation for galaxy Hitchhikers.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 82,
+            "recommendedNextSteps": [
+              "Schedule technical discovery call",
+              "Review API rate requirements and payload schema",
+              "Deploy high-throughput automation cluster"
+            ],
+            "aiNote": "Analysis completed successfully."
+          },
+          "finishedAt": "2026-09-26T03:24:46.468Z",
+          "durationMs": 0,
+          "output": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 82,
+            "targetValue": "50",
+            "isTrue": true
+          }
+        },
+        "node_5": {
+          "nodeId": "node_5",
+          "nodeName": "Post to #leads-feed",
+          "nodeType": "comm_slack",
+          "status": "skipped"
+        },
+        "node_4": {
+          "nodeId": "node_4",
+          "nodeName": "Urgent Alert to VP Sales",
+          "nodeType": "comm_email",
+          "status": "success",
+          "startedAt": "2026-09-26T03:24:46.468Z",
+          "input": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 82,
+            "targetValue": "50",
+            "isTrue": true
+          },
+          "finishedAt": "2026-09-26T03:24:46.469Z",
+          "durationMs": 1,
+          "output": {
+            "sent": true,
+            "recipient": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
+            "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Anal",
+            "sentAt": "2026-09-26T03:24:46.468Z",
+            "messageId": "msg_1790393086468_25078f35"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-26T03:24:35.744Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
+        },
+        {
+          "timestamp": "2026-09-26T03:24:35.745Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 1ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:46.468Z",
+          "level": "info",
+          "message": "Node \"Gemini AI Lead Analyst\" (ai_agent) executed successfully in 10723ms.",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:46.468Z",
+          "level": "info",
+          "message": "Node \"Check High Urgency\" (logic_if) executed successfully in 0ms.",
+          "nodeId": "node_3"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:46.469Z",
+          "level": "info",
+          "message": "Node \"Urgent Alert to VP Sales\" (comm_email) executed successfully in 1ms.",
+          "nodeId": "node_4"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:46.469Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 10725ms."
+        }
+      ],
+      "finishedAt": "2026-09-26T03:24:46.469Z",
+      "durationMs": 10725
+    },
+    {
+      "id": "exec_1790393064367_0141c0",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "webhook",
+      "status": "failed",
+      "startedAt": "2026-09-26T03:24:24.367Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-26T03:24:24.368Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:24.367Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          },
+          "finishedAt": "2026-09-26T03:24:24.368Z",
+          "durationMs": 0,
+          "output": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:24.367Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "failed",
+          "startedAt": "2026-09-26T03:24:24.368Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "117"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Arthur Dent",
+              "company": "Megadodo Publications",
+              "inquiry": "Need guide automation for galaxy Hitchhikers"
+            },
+            "receivedAt": "2026-09-26T03:24:24.367Z",
+            "customer": "Arthur Dent",
+            "company": "Megadodo Publications",
+            "inquiry": "Need guide automation for galaxy Hitchhikers"
+          },
+          "finishedAt": "2026-09-26T03:24:26.829Z",
+          "durationMs": 2461,
+          "error": "Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-26T03:24:24.367Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
+        },
+        {
+          "timestamp": "2026-09-26T03:24:24.368Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:26.829Z",
+          "level": "error",
+          "message": "Node \"Gemini AI Lead Analyst\" failed: Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-26T03:24:26.829Z",
+          "level": "error",
+          "message": "Workflow execution finished with status FAILED in 2462ms."
+        }
+      ],
+      "finishedAt": "2026-09-26T03:24:26.829Z",
+      "durationMs": 2462,
+      "error": "Node \"Gemini AI Lead Analyst\" failed: Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+    },
+    {
+      "id": "exec_1790393020010_da43f5",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "webhook",
+      "status": "failed",
+      "startedAt": "2026-09-26T03:23:40.010Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-26T03:23:40.010Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "107"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Bruce Wayne",
+              "company": "Wayne Enterprises",
+              "inquiry": "Automate satellite telemetry anomalies"
+            },
+            "receivedAt": "2026-09-26T03:23:40.009Z",
+            "customer": "Bruce Wayne",
+            "company": "Wayne Enterprises",
+            "inquiry": "Automate satellite telemetry anomalies"
+          },
+          "finishedAt": "2026-09-26T03:23:40.010Z",
+          "durationMs": 0,
+          "output": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "107"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Bruce Wayne",
+              "company": "Wayne Enterprises",
+              "inquiry": "Automate satellite telemetry anomalies"
+            },
+            "receivedAt": "2026-09-26T03:23:40.009Z",
+            "customer": "Bruce Wayne",
+            "company": "Wayne Enterprises",
+            "inquiry": "Automate satellite telemetry anomalies"
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "failed",
+          "startedAt": "2026-09-26T03:23:40.010Z",
+          "input": {
+            "headers": {
+              "host": "127.0.0.1:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "107"
+            },
+            "query": {},
+            "params": {
+              "path": "wh_lead_inbound"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Bruce Wayne",
+              "company": "Wayne Enterprises",
+              "inquiry": "Automate satellite telemetry anomalies"
+            },
+            "receivedAt": "2026-09-26T03:23:40.009Z",
+            "customer": "Bruce Wayne",
+            "company": "Wayne Enterprises",
+            "inquiry": "Automate satellite telemetry anomalies"
+          },
+          "finishedAt": "2026-09-26T03:23:48.444Z",
+          "durationMs": 8434,
+          "error": "Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-26T03:23:40.010Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
+        },
+        {
+          "timestamp": "2026-09-26T03:23:40.010Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:48.444Z",
+          "level": "error",
+          "message": "Node \"Gemini AI Lead Analyst\" failed: Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:48.444Z",
+          "level": "error",
+          "message": "Workflow execution finished with status FAILED in 8434ms."
+        }
+      ],
+      "finishedAt": "2026-09-26T03:23:48.444Z",
+      "durationMs": 8434,
+      "error": "Node \"Gemini AI Lead Analyst\" failed: Gemini AI Agent execution failed: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+    },
+    {
+      "id": "exec_1790393001703_3c105a",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-09-26T03:23:21.703Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-26T03:23:21.703Z",
+          "input": {
+            "customer": "Jane Doe",
+            "company": "CyberDynamics",
+            "inquiry": "Need AI automated routing for 100k events",
+            "priority": "Critical"
+          },
+          "finishedAt": "2026-09-26T03:23:21.704Z",
+          "durationMs": 1,
+          "output": {
+            "customer": "Jane Doe",
+            "company": "CyberDynamics",
+            "inquiry": "Need AI automated routing for 100k events",
+            "priority": "Critical"
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-26T03:23:21.704Z",
+          "input": {
+            "customer": "Jane Doe",
+            "company": "CyberDynamics",
+            "inquiry": "Need AI automated routing for 100k events",
+            "priority": "Critical"
+          },
+          "finishedAt": "2026-09-26T03:23:29.605Z",
+          "durationMs": 7901,
+          "output": {
+            "summary": "Jane Doe from CyberDynamics is seeking an AI-driven automated routing solution to handle a volume of 100,000 events.",
+            "estimatedContractTier": "Tier 2",
+            "urgencyScore": 72,
+            "recommendedNextSteps": [
+              "Schedule an initial discovery call to clarify event frequency, latency expectations, and destination systems.",
+              "Share relevant case studies and architecture specs for high-throughput AI event routing.",
+              "Prepare a tailored demo highlighting automated classification and routing rules at scale."
+            ]
+          }
+        },
+        "node_3": {
+          "nodeId": "node_3",
+          "nodeName": "Check High Urgency",
+          "nodeType": "logic_if",
+          "status": "success",
+          "startedAt": "2026-09-26T03:23:29.605Z",
+          "input": {
+            "summary": "Jane Doe from CyberDynamics is seeking an AI-driven automated routing solution to handle a volume of 100,000 events.",
+            "estimatedContractTier": "Tier 2",
+            "urgencyScore": 72,
+            "recommendedNextSteps": [
+              "Schedule an initial discovery call to clarify event frequency, latency expectations, and destination systems.",
+              "Share relevant case studies and architecture specs for high-throughput AI event routing.",
+              "Prepare a tailored demo highlighting automated classification and routing rules at scale."
+            ]
+          },
+          "finishedAt": "2026-09-26T03:23:29.605Z",
+          "durationMs": 0,
+          "output": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 72,
+            "targetValue": "50",
+            "isTrue": true
+          }
+        },
+        "node_5": {
+          "nodeId": "node_5",
+          "nodeName": "Post to #leads-feed",
+          "nodeType": "comm_slack",
+          "status": "skipped"
+        },
+        "node_4": {
+          "nodeId": "node_4",
+          "nodeName": "Urgent Alert to VP Sales",
+          "nodeType": "comm_email",
+          "status": "success",
+          "startedAt": "2026-09-26T03:23:29.605Z",
+          "input": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 72,
+            "targetValue": "50",
+            "isTrue": true
+          },
+          "finishedAt": "2026-09-26T03:23:29.605Z",
+          "durationMs": 0,
+          "output": {
+            "sent": true,
+            "recipient": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 2 from ",
+            "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Jane",
+            "sentAt": "2026-09-26T03:23:29.605Z",
+            "messageId": "msg_1790393009605_6939f7d4"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-26T03:23:21.703Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-26T03:23:21.704Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 1ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:29.605Z",
+          "level": "info",
+          "message": "Node \"Gemini AI Lead Analyst\" (ai_agent) executed successfully in 7901ms.",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:29.605Z",
+          "level": "info",
+          "message": "Node \"Check High Urgency\" (logic_if) executed successfully in 0ms.",
+          "nodeId": "node_3"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:29.605Z",
+          "level": "info",
+          "message": "Node \"Urgent Alert to VP Sales\" (comm_email) executed successfully in 0ms.",
+          "nodeId": "node_4"
+        },
+        {
+          "timestamp": "2026-09-26T03:23:29.605Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 7902ms."
+        }
+      ],
+      "finishedAt": "2026-09-26T03:23:29.605Z",
+      "durationMs": 7902
+    },
+    {
+      "id": "exec_1042",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "webhook",
+      "status": "success",
+      "startedAt": "2026-09-26T02:23:13.182Z",
+      "finishedAt": "2026-09-26T02:23:15.022Z",
+      "durationMs": 1840,
+      "logs": [
+        {
+          "timestamp": "2026-09-26T02:23:13.182Z",
+          "level": "info",
+          "message": "Webhook triggered with payload: Apex Dynamics inquiry",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-26T02:23:13.582Z",
+          "level": "info",
+          "message": "Gemini AI model gemini-3.8-flash generated structured analysis in 980ms",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-26T02:23:14.582Z",
+          "level": "info",
+          "message": "IF Condition evaluated urgencyScore (88 >= 50) => Branch TRUE",
+          "nodeId": "node_3"
+        },
+        {
+          "timestamp": "2026-09-26T02:23:15.022Z",
+          "level": "info",
+          "message": "Email dispatched successfully to vp-sales@eie-workflow.internal",
+          "nodeId": "node_4"
+        }
+      ],
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "durationMs": 12,
+          "output": {
+            "customer": "Alex Mercer",
+            "email": "alex.mercer@enterprise.io",
+            "company": "Apex Dynamics",
+            "inquiry": "We urgently need enterprise automation for 50,000 daily events with custom webhook triggers and AI classification.",
+            "priority": "High"
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "durationMs": 980,
+          "output": {
+            "summary": "Enterprise client requiring high-throughput visual workflow engine with 50k events/day capacity.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 88,
+            "recommendedNextSteps": [
+              "Schedule immediate enterprise architecture call",
+              "Provision dedicated worker pool",
+              "Offer custom node SDK demo"
+            ]
+          }
+        },
+        "node_3": {
+          "nodeId": "node_3",
+          "nodeName": "Check High Urgency",
+          "nodeType": "logic_if",
+          "status": "success",
+          "durationMs": 5,
+          "output": {
+            "branch": "true",
+            "urgencyScore": 88
+          }
+        },
+        "node_4": {
+          "nodeId": "node_4",
+          "nodeName": "Urgent Alert to VP Sales",
+          "nodeType": "comm_email",
+          "status": "success",
+          "durationMs": 340,
+          "output": {
+            "sent": true,
+            "recipient": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from Apex Dynamics"
+          }
+        },
+        "node_5": {
+          "nodeId": "node_5",
+          "nodeName": "Post to #leads-feed",
+          "nodeType": "comm_slack",
+          "status": "skipped"
+        }
+      }
+    }
+  ],
+  "webhooks": [
+    {
+      "id": "wh_lead_inbound",
+      "workflowId": "wf_sample_ai_lead",
+      "nodeId": "node_1",
+      "name": "Customer Lead Webhook",
+      "path": "wh_lead_inbound",
+      "method": "POST",
+      "callCount": 15,
+      "lastCalledAt": "2026-09-26T03:24:35.741Z",
+      "lastPayload": {
+        "customer": "Arthur Dent",
+        "company": "Megadodo Publications",
+        "inquiry": "Need guide automation for galaxy Hitchhikers"
+      },
+      "createdAt": "2026-09-25T03:23:13.182Z"
+    }
+  ],
+  "apiKeys": [
+    {
+      "id": "key_live_demo",
+      "workspaceId": "ws_default_01",
+      "name": "Production Ingestion Key",
+      "keyPrefix": "eie_live_9a8f",
+      "keyHash": "1f8da14c9ab66e9ad5858f775664b2015156319cfd262a257b695062e79d9ae8",
+      "createdAt": "2026-09-21T03:23:13.182Z",
+      "lastUsedAt": "2026-09-26T02:53:13.182Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "aud_1790395743676",
+      "workspaceId": "ws_default_01",
+      "action": "Avatar Updated",
+      "details": "User profile picture changed",
+      "timestamp": "2026-09-26T04:09:03.676Z"
+    },
+    {
+      "id": "aud_1790393086469",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1790393075741_33e5ec",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (10725ms)",
+      "timestamp": "2026-09-26T03:24:46.469Z"
+    },
+    {
+      "id": "aud_1790393066829",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1790393064367_0141c0",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: FAILED (2462ms)",
+      "timestamp": "2026-09-26T03:24:26.829Z"
+    },
+    {
+      "id": "aud_1790393028444",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1790393020010_da43f5",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: FAILED (8434ms)",
+      "timestamp": "2026-09-26T03:23:48.444Z"
+    },
+    {
+      "id": "aud_1790393009606",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1790393001703_3c105a",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (7902ms)",
+      "timestamp": "2026-09-26T03:23:29.606Z"
+    },
+    {
+      "id": "aud_1",
+      "workspaceId": "ws_default_01",
+      "action": "Workflow Created",
+      "details": "Initialized workflow \"Inbound Webhook → AI Agent Analysis\"",
+      "timestamp": "2026-09-24T03:23:13.182Z"
+    },
+    {
+      "id": "aud_2",
+      "workspaceId": "ws_default_01",
+      "action": "Workflow Activated",
+      "details": "Webhook listener enabled on /api/webhook/wh_lead_inbound",
+      "timestamp": "2026-09-25T03:23:13.182Z"
+    },
+    {
+      "id": "aud_3",
+      "workspaceId": "ws_default_01",
+      "action": "Execution #1042",
+      "details": "Manual & Webhook execution completed with status SUCCESS",
+      "timestamp": "2026-09-26T02:23:13.182Z"
+    }
+  ]
+}

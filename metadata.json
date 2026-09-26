@@ -1,0 +1,6 @@
+{
+  "name": "EIE-Workflow",
+  "description": "Visual no-code/low-code workflow automation platform. Connect applications, APIs, databases, AI services, communication platforms, and webhooks through an intuitive visual canvas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
