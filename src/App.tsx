@@ -14,7 +14,7 @@ import {
   User,
   Workspace
 } from './types/workflow';
-import { WorkflowTemplate } from './constants/templates';
+import { WorkflowTemplate, WORKFLOW_TEMPLATES } from './constants/templates';
 import { Navigation } from './components/common/Navigation';
 import { Sidebar } from './components/common/Sidebar';
 import { WorkflowCanvas } from './components/canvas/WorkflowCanvas';
@@ -29,6 +29,117 @@ import { SettingsView } from './components/views/SettingsView';
 import { LandingView } from './components/views/LandingView';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+
+const DEFAULT_USER: User = {
+  id: 'usr_explore',
+  email: 'exploretheinsideexperiment@gmail.com',
+  name: 'Explore The Inside Experiment',
+};
+
+const DEFAULT_WORKSPACE: Workspace = {
+  id: 'ws_explore',
+  name: 'EIE Automation Hub',
+  ownerId: 'usr_explore',
+  membersCount: 1,
+  plan: 'pro',
+};
+
+const getDefaultWorkflows = (): Workflow[] => {
+  return WORKFLOW_TEMPLATES.map((tpl, idx) => ({
+    id: `wf_${tpl.id}`,
+    name: tpl.workflow.name,
+    description: tpl.workflow.description,
+    active: tpl.workflow.active,
+    nodes: tpl.workflow.nodes,
+    connections: tpl.workflow.connections,
+    viewport: tpl.workflow.viewport,
+    workspaceId: 'ws_explore',
+    createdAt: new Date(Date.now() - idx * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    executionCount: 18 + idx * 7,
+    lastExecutedAt: new Date(Date.now() - idx * 3600000).toISOString(),
+  }));
+};
+
+const DEFAULT_CREDENTIALS: Credential[] = [
+  { id: 'c1', workspaceId: 'ws_explore', name: 'OpenAI Production Key', type: 'openai', data: { apiKey: 'sk-demo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'c2', workspaceId: 'ws_explore', name: 'Gemini Pro 1.5 API Key', type: 'gemini', data: { apiKey: 'AIzaDemo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'c3', workspaceId: 'ws_explore', name: 'Slack Bot Workspace Token', type: 'slack', data: { botToken: 'xoxb-demo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 'c4', workspaceId: 'ws_explore', name: 'Discord Webhook Connector', type: 'discord', data: { webhookUrl: 'https://discord.com/api/webhooks/...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
+
+const DEFAULT_EXECUTIONS: Execution[] = [
+  {
+    id: 'exec_101',
+    workflowId: 'wf_tpl_webhook_ai_email',
+    workflowName: 'Webhook → AI Agent → Smart Email Alert',
+    status: 'success',
+    startedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    finishedAt: new Date(Date.now() - 1000 * 60 * 15 + 1140).toISOString(),
+    durationMs: 1140,
+    triggerType: 'webhook',
+    nodeResults: {
+      n_wh: {
+        nodeId: 'n_wh',
+        nodeName: 'Customer Inbound Webhook',
+        nodeType: 'trigger_webhook',
+        status: 'success',
+        durationMs: 45,
+        output: { leadName: 'Elena Vance' },
+      },
+      n_ai: {
+        nodeId: 'n_ai',
+        nodeName: 'Gemini AI Lead Scorer',
+        nodeType: 'ai_agent',
+        status: 'success',
+        durationMs: 720,
+        output: { leadScore: 94, urgencyLevel: 'Critical' },
+      },
+    },
+    logs: [
+      { timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), level: 'info', message: 'Webhook payload received.' },
+      { timestamp: new Date(Date.now() - 1000 * 60 * 15 + 720).toISOString(), level: 'info', message: 'Gemini model scored lead successfully.' },
+    ],
+  },
+  {
+    id: 'exec_102',
+    workflowId: 'wf_tpl_webhook_ai_email',
+    workflowName: 'Webhook → AI Agent → Smart Email Alert',
+    status: 'success',
+    startedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    finishedAt: new Date(Date.now() - 1000 * 60 * 60 + 980).toISOString(),
+    durationMs: 980,
+    triggerType: 'manual',
+    nodeResults: {},
+    logs: [],
+  },
+];
+
+const DEFAULT_WEBHOOKS: Webhook[] = [
+  {
+    id: 'wh_inbound_lead',
+    workflowId: 'wf_tpl_webhook_ai_email',
+    nodeId: 'n_wh',
+    name: 'Customer Inbound Lead Listener',
+    path: 'inbound_lead',
+    method: 'POST',
+    callCount: 47,
+    lastCalledAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+  },
+];
+
+const DEFAULT_API_KEYS: ApiKey[] = [
+  {
+    id: 'key_prod_01',
+    workspaceId: 'ws_explore',
+    name: 'Default Automation Client Key',
+    keyPrefix: 'eie_live_948a',
+    secretKey: 'eie_live_948af038c8b1a37c9e01',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+    lastUsedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+  },
+];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -79,12 +190,31 @@ export default function App() {
           const data = await res.json();
           setUser(data.user);
           setWorkspace(data.workspace);
+          setIsLoadingAuth(false);
+          return;
         }
       } catch (err) {
-        console.warn('[EIE] Auth check failed or offline:', err);
-      } finally {
-        setIsLoadingAuth(false);
+        console.warn('[EIE] Server auth check failed, activating client-side offline mode:', err);
       }
+
+      // Fallback for static hosting (GitHub Pages) or offline mode
+      try {
+        const storedUser = localStorage.getItem('eie_user');
+        const storedWs = localStorage.getItem('eie_workspace');
+        if (storedUser && storedWs) {
+          setUser(JSON.parse(storedUser));
+          setWorkspace(JSON.parse(storedWs));
+        } else {
+          setUser(DEFAULT_USER);
+          setWorkspace(DEFAULT_WORKSPACE);
+          localStorage.setItem('eie_user', JSON.stringify(DEFAULT_USER));
+          localStorage.setItem('eie_workspace', JSON.stringify(DEFAULT_WORKSPACE));
+        }
+      } catch {
+        setUser(DEFAULT_USER);
+        setWorkspace(DEFAULT_WORKSPACE);
+      }
+      setIsLoadingAuth(false);
     }
     initAuth();
   }, []);
@@ -93,20 +223,57 @@ export default function App() {
   const refreshAllData = async () => {
     try {
       const [wfRes, credRes, execRes, whRes, keyRes] = await Promise.all([
-        fetch('/api/workflows'),
-        fetch('/api/credentials'),
-        fetch('/api/executions'),
-        fetch('/api/webhooks'),
-        fetch('/api/api-keys'),
+        fetch('/api/workflows').catch(() => null),
+        fetch('/api/credentials').catch(() => null),
+        fetch('/api/executions').catch(() => null),
+        fetch('/api/webhooks').catch(() => null),
+        fetch('/api/api-keys').catch(() => null),
       ]);
 
-      if (wfRes.ok) setWorkflows(await wfRes.json());
-      if (credRes.ok) setCredentials(await credRes.json());
-      if (execRes.ok) setExecutions(await execRes.json());
-      if (whRes.ok) setWebhooks(await whRes.json());
-      if (keyRes.ok) setApiKeys(await keyRes.json());
+      if (wfRes && wfRes.ok) {
+        const data = await wfRes.json();
+        setWorkflows(data);
+        try { localStorage.setItem('eie_workflows', JSON.stringify(data)); } catch {}
+      } else {
+        const localWfs = localStorage.getItem('eie_workflows');
+        if (localWfs) {
+          setWorkflows(JSON.parse(localWfs));
+        } else {
+          const defaults = getDefaultWorkflows();
+          setWorkflows(defaults);
+          try { localStorage.setItem('eie_workflows', JSON.stringify(defaults)); } catch {}
+        }
+      }
+
+      if (credRes && credRes.ok) {
+        setCredentials(await credRes.json());
+      } else {
+        const localCreds = localStorage.getItem('eie_credentials');
+        setCredentials(localCreds ? JSON.parse(localCreds) : DEFAULT_CREDENTIALS);
+      }
+
+      if (execRes && execRes.ok) {
+        setExecutions(await execRes.json());
+      } else {
+        const localExecs = localStorage.getItem('eie_executions');
+        setExecutions(localExecs ? JSON.parse(localExecs) : DEFAULT_EXECUTIONS);
+      }
+
+      if (whRes && whRes.ok) {
+        setWebhooks(await whRes.json());
+      } else {
+        const localWhs = localStorage.getItem('eie_webhooks');
+        setWebhooks(localWhs ? JSON.parse(localWhs) : DEFAULT_WEBHOOKS);
+      }
+
+      if (keyRes && keyRes.ok) {
+        setApiKeys(await keyRes.json());
+      } else {
+        const localKeys = localStorage.getItem('eie_api_keys');
+        setApiKeys(localKeys ? JSON.parse(localKeys) : DEFAULT_API_KEYS);
+      }
     } catch (err) {
-      console.error('[EIE] Failed to fetch data:', err);
+      console.warn('[EIE] Failed to fetch server data, loaded local state:', err);
     }
   };
 
@@ -134,119 +301,197 @@ export default function App() {
 
   // --- ACTIONS ---
   const handleCreateNewWorkflow = async () => {
+    const fallbackNewWf: Workflow = {
+      id: `wf_${Date.now()}`,
+      name: 'Untitled Automation Workflow',
+      description: 'Visually connects APIs, triggers, AI models, and communication channels.',
+      active: false,
+      nodes: [],
+      connections: [],
+      viewport: { x: 120, y: 120, zoom: 1 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      executionCount: 0,
+      workspaceId: workspace?.id || 'ws_explore',
+    };
+
     try {
       const res = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Untitled Automation Workflow',
-          description: 'Visually connects APIs, triggers, AI models, and communication channels.',
-          nodes: [],
-          connections: [],
-          viewport: { x: 120, y: 120, zoom: 1 },
-        }),
+        body: JSON.stringify(fallbackNewWf),
       });
 
-      const newWf = await res.json();
-      setWorkflows((prev) => [newWf, ...prev]);
-      setActiveWorkflowId(newWf.id);
-      setCurrentView('editor');
-    } catch (err) {
-      console.error('Failed to create workflow:', err);
+      if (res.ok) {
+        const newWf = await res.json();
+        setWorkflows((prev) => [newWf, ...prev]);
+        setActiveWorkflowId(newWf.id);
+        setCurrentView('editor');
+        return;
+      }
+    } catch {
+      // Local fallback
     }
+
+    setWorkflows((prev) => {
+      const updated = [fallbackNewWf, ...prev];
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setActiveWorkflowId(fallbackNewWf.id);
+    setCurrentView('editor');
   };
 
   const handleUseTemplate = async (template: WorkflowTemplate) => {
+    const fallbackNewWf: Workflow = {
+      id: `wf_${Date.now()}`,
+      name: template.workflow.name,
+      description: template.workflow.description,
+      active: template.workflow.active,
+      nodes: template.workflow.nodes,
+      connections: template.workflow.connections,
+      viewport: template.workflow.viewport,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      executionCount: 0,
+      workspaceId: workspace?.id || 'ws_explore',
+    };
+
     try {
       const res = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: template.workflow.name,
-          description: template.workflow.description,
-          nodes: template.workflow.nodes,
-          connections: template.workflow.connections,
-          viewport: template.workflow.viewport,
-        }),
+        body: JSON.stringify(fallbackNewWf),
       });
 
-      const newWf = await res.json();
-      setWorkflows((prev) => [newWf, ...prev]);
-      setActiveWorkflowId(newWf.id);
-      setCurrentView('editor');
-    } catch (err) {
-      console.error('Failed to instantiate template:', err);
+      if (res.ok) {
+        const newWf = await res.json();
+        setWorkflows((prev) => [newWf, ...prev]);
+        setActiveWorkflowId(newWf.id);
+        setCurrentView('editor');
+        return;
+      }
+    } catch {
+      // Local fallback
     }
+
+    setWorkflows((prev) => {
+      const updated = [fallbackNewWf, ...prev];
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setActiveWorkflowId(fallbackNewWf.id);
+    setCurrentView('editor');
   };
 
   const handleSaveWorkflow = async (updatedWf: Workflow) => {
+    setWorkflows((prev) => {
+      const updated = prev.map((w) => (w.id === updatedWf.id ? updatedWf : w));
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
     try {
-      const res = await fetch(`/api/workflows/${updatedWf.id}`, {
+      await fetch(`/api/workflows/${updatedWf.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedWf),
       });
-      const saved = await res.json();
-      setWorkflows((prev) => prev.map((w) => (w.id === saved.id ? saved : w)));
-    } catch (err) {
-      console.error('Failed to save workflow:', err);
+    } catch {
+      // Offline fallback already updated state
     }
   };
 
   const handleToggleActive = async (wfId: string) => {
+    setWorkflows((prev) => {
+      const updated = prev.map((w) => (w.id === wfId ? { ...w, active: !w.active } : w));
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
     try {
-      const res = await fetch(`/api/workflows/${wfId}/toggle`, { method: 'POST' });
-      const data = await res.json();
-      setWorkflows((prev) =>
-        prev.map((w) => (w.id === wfId ? { ...w, active: data.active } : w))
-      );
-    } catch (err) {
-      console.error('Failed to toggle workflow:', err);
+      await fetch(`/api/workflows/${wfId}/toggle`, { method: 'POST' });
+    } catch {
+      // Handled locally
     }
   };
 
   const handleDuplicateWorkflow = async (wfId: string) => {
+    const target = workflows.find((w) => w.id === wfId);
+    if (!target) return;
+
+    const dup: Workflow = {
+      ...target,
+      id: `wf_${Date.now()}`,
+      name: `${target.name} (Copy)`,
+      active: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      executionCount: 0,
+    };
+
+    setWorkflows((prev) => {
+      const updated = [dup, ...prev];
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
     try {
-      const res = await fetch(`/api/workflows/${wfId}/duplicate`, { method: 'POST' });
-      const dup = await res.json();
-      setWorkflows((prev) => [dup, ...prev]);
-    } catch (err) {
-      console.error('Failed to duplicate workflow:', err);
+      await fetch(`/api/workflows/${wfId}/duplicate`, { method: 'POST' });
+    } catch {
+      // Handled locally
     }
   };
 
   const handleDeleteWorkflow = async (wfId: string) => {
+    setWorkflows((prev) => {
+      const updated = prev.filter((w) => w.id !== wfId);
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (activeWorkflowId === wfId) {
+      setActiveWorkflowId(null);
+      setCurrentView('workflows');
+    }
+
     try {
       await fetch(`/api/workflows/${wfId}`, { method: 'DELETE' });
-      setWorkflows((prev) => prev.filter((w) => w.id !== wfId));
-      if (activeWorkflowId === wfId) {
-        setActiveWorkflowId(null);
-        setCurrentView('workflows');
-      }
-    } catch (err) {
-      console.error('Failed to delete workflow:', err);
+    } catch {
+      // Handled locally
     }
   };
 
   const handleImportWorkflow = async (importedWf: any) => {
+    const newWf: Workflow = {
+      id: `wf_${Date.now()}`,
+      name: importedWf.name ? `${importedWf.name} (Imported)` : 'Imported Workflow',
+      description: importedWf.description || '',
+      active: false,
+      nodes: importedWf.nodes || [],
+      connections: importedWf.connections || [],
+      viewport: importedWf.viewport || { x: 120, y: 120, zoom: 1 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      executionCount: 0,
+      workspaceId: workspace?.id || 'ws_explore',
+    };
+
+    setWorkflows((prev) => {
+      const updated = [newWf, ...prev];
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setActiveWorkflowId(newWf.id);
+    setCurrentView('editor');
+
     try {
-      const res = await fetch('/api/workflows', {
+      await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: importedWf.name ? `${importedWf.name} (Imported)` : 'Imported Workflow',
-          description: importedWf.description || '',
-          nodes: importedWf.nodes || [],
-          connections: importedWf.connections || [],
-          viewport: importedWf.viewport || { x: 120, y: 120, zoom: 1 },
-        }),
+        body: JSON.stringify(newWf),
       });
-      const newWf = await res.json();
-      setWorkflows((prev) => [newWf, ...prev]);
-      setActiveWorkflowId(newWf.id);
-      setCurrentView('editor');
-    } catch (err) {
-      console.error('Failed to import workflow:', err);
+    } catch {
+      // Handled locally
     }
   };
 

@@ -6,25 +6,26 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.svg', 'avatar.svg', 'avatar.png'],
         manifest: {
-          id: '/',
+          id: './',
           name: 'EIE-Workflow',
           short_name: 'EIE-Workflow',
           description: 'Visual no-code/low-code workflow automation platform. Connect applications, APIs, databases, AI services, communication platforms, and webhooks.',
           theme_color: '#090d16',
           background_color: '#090d16',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: './',
+          scope: './',
           icons: [
             {
-              src: '/icon.svg',
+              src: 'icon.svg',
               sizes: '192x192 512x512',
               type: 'image/svg+xml',
               purpose: 'any',

@@ -43,17 +43,30 @@ export const LandingView: React.FC<LandingViewProps> = ({ onLoginSuccess }) => {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed');
+      if (res.ok) {
+        const data = await res.json();
+        onLoginSuccess(data.user, data.workspace);
+        return;
       }
-
-      onLoginSuccess(data.user, data.workspace);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
-    } finally {
-      setLoading(false);
+    } catch {
+      // Offline fallback
     }
+
+    // Offline / GitHub Pages fallback
+    const fallbackUser: User = {
+      id: 'usr_local',
+      email: email || 'exploretheinsideexperiment@gmail.com',
+      name: name || (email ? email.split('@')[0] : 'Explore The Inside Experiment'),
+    };
+    const fallbackWorkspace: Workspace = {
+      id: 'ws_local',
+      name: `${fallbackUser.name}'s Automation Lab`,
+      ownerId: fallbackUser.id,
+      membersCount: 1,
+      plan: 'pro',
+    };
+    onLoginSuccess(fallbackUser, fallbackWorkspace);
+    setLoading(false);
   };
 
   const handleDemoLogin = async () => {
