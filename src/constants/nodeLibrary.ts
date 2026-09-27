@@ -1,7 +1,877 @@
 import { NodeDefinition, NodeCategory } from '../types/workflow';
 
+export const CATEGORIES: NodeCategory[] = [
+  'All Applications',
+  'Triggers',
+  'AI',
+  'Communication',
+  'Database',
+  'HTTP',
+  'Logic',
+  'Data',
+  'Files',
+  'Developer',
+  'Utilities'
+];
+
 export const NODE_LIBRARY: NodeDefinition[] = [
-  // 1. TRIGGERS
+  // ==========================================
+  // 1. ALL APPLICATIONS (n8n Style)
+  // ==========================================
+  {
+    type: 'app_google_sheets',
+    name: 'Google Sheets',
+    description: 'Read rows, append new records, update values, or query spreadsheet tables.',
+    category: 'Applications',
+    icon: 'FileSpreadsheet',
+    accentColor: '#0F9D58',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sheet Data' }],
+    defaultConfig: {
+      operation: 'appendRow',
+      sheetId: '',
+      sheetName: 'Sheet1',
+      range: 'A:Z'
+    },
+    requiresCredentials: true,
+    credentialType: 'google_sheets'
+  },
+  {
+    type: 'app_gmail',
+    name: 'Gmail',
+    description: 'Send emails, draft replies, search messages, or trigger on incoming Gmail emails.',
+    category: 'Applications',
+    icon: 'Mail',
+    accentColor: '#EA4335',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Email Context' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Message Sent' }],
+    defaultConfig: {
+      operation: 'send',
+      to: 'recipient@domain.com',
+      subject: 'Automated Update: {{$json.event || "EIE Alert"}}',
+      body: '<p>Hello,</p><p>Workflow completed: {{$json}}</p>'
+    },
+    requiresCredentials: true,
+    credentialType: 'gmail'
+  },
+  {
+    type: 'app_google_drive',
+    name: 'Google Drive',
+    description: 'Upload assets, create folders, download files, and search Cloud drive items.',
+    category: 'Applications',
+    icon: 'Folder',
+    accentColor: '#4285F4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'File Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Drive File' }],
+    defaultConfig: {
+      operation: 'upload',
+      folderId: 'root'
+    },
+    requiresCredentials: true,
+    credentialType: 'google_drive'
+  },
+  {
+    type: 'app_google_calendar',
+    name: 'Google Calendar',
+    description: 'Create scheduled events, retrieve upcoming agenda meetings, or update time slots.',
+    category: 'Applications',
+    icon: 'Calendar',
+    accentColor: '#34A853',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Event Details' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Calendar Event' }],
+    defaultConfig: {
+      operation: 'createEvent',
+      summary: 'Automated Client Strategy Session',
+      durationMinutes: 30
+    },
+    requiresCredentials: true,
+    credentialType: 'google_calendar'
+  },
+  {
+    type: 'app_slack',
+    name: 'Slack',
+    description: 'Post rich channel messages, send block-kit alerts, direct message users, or reply to threads.',
+    category: 'Applications',
+    icon: 'MessageSquare',
+    accentColor: '#4A154B',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Payload' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Slack Response' }],
+    defaultConfig: {
+      operation: 'postMessage',
+      channel: '#general',
+      text: '🚀 EIE-Workflow Notification: {{$json.summary || "Process finished"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'slack'
+  },
+  {
+    type: 'app_discord',
+    name: 'Discord',
+    description: 'Broadcast webhook notifications, post rich embeds, and ping channels in Discord.',
+    category: 'Applications',
+    icon: 'Disc',
+    accentColor: '#5865F2',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Embed Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivered' }],
+    defaultConfig: {
+      operation: 'sendWebhook',
+      content: '⚡ EIE-Workflow: Event executed successfully.'
+    }
+  },
+  {
+    type: 'app_telegram',
+    name: 'Telegram',
+    description: 'Send messages, photos, documents, and interactive buttons via Telegram Bot API.',
+    category: 'Applications',
+    icon: 'Send',
+    accentColor: '#229ED9',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Chat Message' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent Message' }],
+    defaultConfig: {
+      operation: 'sendMessage',
+      chatId: '@devops_channel',
+      text: '🚨 Alert: {{$json.message || "Trigger fired"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'telegram'
+  },
+  {
+    type: 'app_whatsapp',
+    name: 'WhatsApp Business',
+    description: 'Send WhatsApp Cloud API template notifications, media files, and customer messages.',
+    category: 'Applications',
+    icon: 'MessageCircle',
+    accentColor: '#25D366',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Message Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivery Status' }],
+    defaultConfig: {
+      operation: 'sendTemplate',
+      templateName: 'order_status_update',
+      phoneNumber: '+10000000000'
+    },
+    requiresCredentials: true,
+    credentialType: 'whatsapp'
+  },
+  {
+    type: 'app_twilio',
+    name: 'Twilio',
+    description: 'Send SMS text messages, initiate voice calls, or trigger 2FA phone verifications.',
+    category: 'Applications',
+    icon: 'PhoneCall',
+    accentColor: '#F22F46',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'SMS Payload' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'SMS Receipt' }],
+    defaultConfig: {
+      operation: 'sendSms',
+      to: '+10000000000',
+      from: '+10000000001',
+      body: 'Your automated alert: {{$json.text || "Status OK"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'twilio'
+  },
+  {
+    type: 'app_notion',
+    name: 'Notion',
+    description: 'Create database pages, query notion workspaces, append blocks, and update properties.',
+    category: 'Applications',
+    icon: 'BookOpen',
+    accentColor: '#FFFFFF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Page Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Notion Page' }],
+    defaultConfig: {
+      operation: 'createDatabasePage',
+      databaseId: '',
+      title: 'Automated Workflow Task'
+    },
+    requiresCredentials: true,
+    credentialType: 'notion'
+  },
+  {
+    type: 'app_airtable',
+    name: 'Airtable',
+    description: 'Search, list, create, update, or delete records in Airtable relational bases.',
+    category: 'Applications',
+    icon: 'Table',
+    accentColor: '#FCB400',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Record Fields' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Records' }],
+    defaultConfig: {
+      operation: 'createRecord',
+      baseId: '',
+      table: 'Leads'
+    },
+    requiresCredentials: true,
+    credentialType: 'airtable'
+  },
+  {
+    type: 'app_github',
+    name: 'GitHub',
+    description: 'Create issues, trigger on push/PR events, manage releases, and query repository files.',
+    category: 'Applications',
+    icon: 'GitBranch',
+    accentColor: '#F0F6FC',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Payload' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'GitHub Event' }],
+    defaultConfig: {
+      operation: 'createIssue',
+      owner: 'exploretheinsideexperiment-art',
+      repo: 'EIE-Workflow',
+      title: 'Automated CI/CD Issue'
+    },
+    requiresCredentials: true,
+    credentialType: 'github'
+  },
+  {
+    type: 'app_jira',
+    name: 'Jira Software',
+    description: 'Create issues, transition sprint tickets, and assign development tasks in Atlassian Jira.',
+    category: 'Applications',
+    icon: 'CheckSquare',
+    accentColor: '#0052CC',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Issue Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Jira Issue' }],
+    defaultConfig: {
+      operation: 'createIssue',
+      projectKey: 'AUTO',
+      issueType: 'Task',
+      summary: 'Automated Ticket'
+    },
+    requiresCredentials: true,
+    credentialType: 'jira'
+  },
+  {
+    type: 'app_linear',
+    name: 'Linear',
+    description: 'Sync feedback, errors, and feature requests directly into Linear issues and cycles.',
+    category: 'Applications',
+    icon: 'CheckCircle2',
+    accentColor: '#5E6AD2',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Issue Details' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Linear Issue' }],
+    defaultConfig: {
+      operation: 'createIssue',
+      teamKey: 'ENG',
+      title: 'Automated Task: {{$json.title || "New Request"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'linear'
+  },
+  {
+    type: 'app_trello',
+    name: 'Trello',
+    description: 'Create cards, move cards between lists, add checklists, and listen to board events.',
+    category: 'Applications',
+    icon: 'Columns3',
+    accentColor: '#0079BF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Card Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Card Result' }],
+    defaultConfig: {
+      operation: 'createCard',
+      listId: '',
+      name: 'New Kanban Item'
+    },
+    requiresCredentials: true,
+    credentialType: 'trello'
+  },
+  {
+    type: 'app_asana',
+    name: 'Asana',
+    description: 'Create tasks, assign team members, and update task deadlines in Asana workspaces.',
+    category: 'Applications',
+    icon: 'ListTodo',
+    accentColor: '#F06A6A',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Task Info' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Asana Task' }],
+    defaultConfig: {
+      operation: 'createTask',
+      workspaceId: '',
+      name: 'Client Task'
+    },
+    requiresCredentials: true,
+    credentialType: 'asana'
+  },
+  {
+    type: 'app_clickup',
+    name: 'ClickUp',
+    description: 'Manage ClickUp tasks, custom fields, comments, and task statuses automatically.',
+    category: 'Applications',
+    icon: 'CheckSquare',
+    accentColor: '#7B68EE',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Task Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Task Created' }],
+    defaultConfig: {
+      operation: 'createTask',
+      listId: '',
+      name: 'High Priority Automation Task'
+    },
+    requiresCredentials: true,
+    credentialType: 'clickup'
+  },
+  {
+    type: 'app_stripe',
+    name: 'Stripe',
+    description: 'Create customers, process payment charges, manage subscriptions, or capture invoices.',
+    category: 'Applications',
+    icon: 'CreditCard',
+    accentColor: '#635BFF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Payment Details' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Stripe Charge' }],
+    defaultConfig: {
+      operation: 'createCustomer',
+      email: 'customer@domain.com',
+      name: 'Enterprise Client'
+    },
+    requiresCredentials: true,
+    credentialType: 'stripe'
+  },
+  {
+    type: 'app_shopify',
+    name: 'Shopify',
+    description: 'Retrieve e-commerce store orders, create products, update inventory, and handle fulfillments.',
+    category: 'Applications',
+    icon: 'ShoppingBag',
+    accentColor: '#96BF48',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Order / Product' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Shopify Data' }],
+    defaultConfig: {
+      operation: 'getOrders',
+      status: 'any',
+      limit: 10
+    },
+    requiresCredentials: true,
+    credentialType: 'shopify'
+  },
+  {
+    type: 'app_hubspot',
+    name: 'HubSpot',
+    description: 'Create contacts, update deal stages, log marketing activities, and sync CRM companies.',
+    category: 'Applications',
+    icon: 'Users',
+    accentColor: '#FF7A59',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Lead Info' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'HubSpot Contact' }],
+    defaultConfig: {
+      operation: 'createContact',
+      email: 'lead@enterprise.com',
+      firstname: 'Elena',
+      lastname: 'Vance'
+    },
+    requiresCredentials: true,
+    credentialType: 'hubspot'
+  },
+  {
+    type: 'app_salesforce',
+    name: 'Salesforce',
+    description: 'Query SOQL records, create enterprise leads, opportunities, and sync account details.',
+    category: 'Applications',
+    icon: 'Cloud',
+    accentColor: '#00A1E0',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'CRM Record' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Salesforce Lead' }],
+    defaultConfig: {
+      operation: 'createLead',
+      company: 'Quantum Corp',
+      lastName: 'Vance'
+    },
+    requiresCredentials: true,
+    credentialType: 'salesforce'
+  },
+  {
+    type: 'app_zendesk',
+    name: 'Zendesk',
+    description: 'Create customer support tickets, update status, and assign inquiries to support agents.',
+    category: 'Applications',
+    icon: 'Headphones',
+    accentColor: '#03363D',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Inquiry' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Ticket' }],
+    defaultConfig: {
+      operation: 'createTicket',
+      subject: 'Inquiry from Workflow: {{$json.subject || "Help Needed"}}',
+      comment: 'Ticket auto-created by EIE-Workflow.'
+    },
+    requiresCredentials: true,
+    credentialType: 'zendesk'
+  },
+  {
+    type: 'app_mailchimp',
+    name: 'Mailchimp',
+    description: 'Add subscribers to marketing lists, trigger automated drip campaigns, and manage tags.',
+    category: 'Applications',
+    icon: 'MailCheck',
+    accentColor: '#FFE01B',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Subscriber' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Audience Member' }],
+    defaultConfig: {
+      operation: 'addMember',
+      listId: '',
+      email: 'subscriber@domain.com',
+      status: 'subscribed'
+    },
+    requiresCredentials: true,
+    credentialType: 'mailchimp'
+  },
+  {
+    type: 'app_openai',
+    name: 'OpenAI ChatGPT',
+    description: 'Call GPT-4o, GPT-4o-mini, DALL-E, text embeddings, or chat completions.',
+    category: 'Applications',
+    icon: 'Bot',
+    accentColor: '#10A37F',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Prompt' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Completion' }],
+    defaultConfig: {
+      model: 'gpt-4o',
+      prompt: 'Summarize the following payload: {{$json}}',
+      temperature: 0.7
+    },
+    requiresCredentials: true,
+    credentialType: 'openai'
+  },
+  {
+    type: 'app_anthropic',
+    name: 'Anthropic Claude',
+    description: 'Leverage Claude 3.5 Sonnet for deep contextual reasoning, complex coding, and structured JSON.',
+    category: 'Applications',
+    icon: 'BrainCircuit',
+    accentColor: '#D97706',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'System & Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Claude Response' }],
+    defaultConfig: {
+      model: 'claude-3-5-sonnet',
+      prompt: 'Analyze and extract key parameters from {{$json}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'anthropic'
+  },
+  {
+    type: 'app_supabase',
+    name: 'Supabase',
+    description: 'Perform CRUD operations on hosted PostgreSQL tables, query storage buckets, or listen to realtime changes.',
+    category: 'Applications',
+    icon: 'Database',
+    accentColor: '#3ECF8E',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Row Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Results' }],
+    defaultConfig: {
+      operation: 'select',
+      table: 'profiles',
+      selectQuery: '*'
+    },
+    requiresCredentials: true,
+    credentialType: 'supabase'
+  },
+  {
+    type: 'app_aws_s3',
+    name: 'Amazon S3',
+    description: 'Upload files to S3 buckets, download assets, list objects, and generate presigned download URLs.',
+    category: 'Applications',
+    icon: 'Server',
+    accentColor: '#FF9900',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Object / File' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'S3 Object' }],
+    defaultConfig: {
+      operation: 'uploadObject',
+      bucket: 'my-bucket',
+      key: 'uploads/file_{{Date.now()}}.json'
+    },
+    requiresCredentials: true,
+    credentialType: 'aws_s3'
+  },
+  {
+    type: 'app_zoom',
+    name: 'Zoom',
+    description: 'Automatically schedule Zoom video meetings, manage attendees, and listen to webinar recordings.',
+    category: 'Applications',
+    icon: 'Video',
+    accentColor: '#2D8CFF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Meeting Info' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Meeting Link' }],
+    defaultConfig: {
+      operation: 'createMeeting',
+      topic: 'Automated Strategy Session',
+      type: 2,
+      duration: 45
+    },
+    requiresCredentials: true,
+    credentialType: 'zoom'
+  },
+  {
+    type: 'app_typeform',
+    name: 'Typeform',
+    description: 'Trigger on new form survey responses, extract answers, and route respondent leads.',
+    category: 'Applications',
+    icon: 'FileText',
+    accentColor: '#262627',
+    inputs: [],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Form Submission' }],
+    defaultConfig: {
+      formId: '',
+      sampleResponse: '{\n  "name": "Alex Vance",\n  "score": 10\n}'
+    },
+    requiresCredentials: true,
+    credentialType: 'typeform'
+  },
+  {
+    type: 'app_webflow',
+    name: 'Webflow',
+    description: 'Publish CMS collection items, update live website data, and listen to site form triggers.',
+    category: 'All Applications',
+    icon: 'Globe',
+    accentColor: '#4353FF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'CMS Fields' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'CMS Item' }],
+    defaultConfig: {
+      operation: 'createItem',
+      collectionId: '',
+      live: true
+    },
+    requiresCredentials: true,
+    credentialType: 'webflow'
+  },
+  {
+    type: 'app_google_gemini',
+    name: 'Google Gemini AI',
+    description: 'Run multimodal Gemini 2.5/3.8 Flash, text generation, structured JSON extraction, and agents.',
+    category: 'All Applications',
+    icon: 'Sparkles',
+    accentColor: '#1A73E8',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Prompt / Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Output' }],
+    defaultConfig: {
+      model: 'gemini-3.8-flash',
+      prompt: 'Summarize and extract key action items: {{$json}}',
+      temperature: 0.2
+    },
+    requiresCredentials: true,
+    credentialType: 'gemini'
+  },
+  {
+    type: 'app_google_docs',
+    name: 'Google Docs',
+    description: 'Create Google Documents, append rich text content, insert tables, or export PDF files.',
+    category: 'All Applications',
+    icon: 'FileText',
+    accentColor: '#4285F4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Document Content' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Created Doc' }],
+    defaultConfig: {
+      operation: 'createDocument',
+      title: 'Automated Report: {{$json.title || "Weekly Summary"}}',
+      body: 'Document generated by EIE-Workflow.'
+    },
+    requiresCredentials: true,
+    credentialType: 'google_docs'
+  },
+  {
+    type: 'app_google_forms',
+    name: 'Google Forms',
+    description: 'Listen to incoming Google Forms submissions, poll responses, and trigger alerts.',
+    category: 'All Applications',
+    icon: 'FileCode',
+    accentColor: '#7248B9',
+    inputs: [],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Form Response' }],
+    defaultConfig: {
+      formId: '',
+      pollInterval: '5m'
+    },
+    requiresCredentials: true,
+    credentialType: 'google_forms'
+  },
+  {
+    type: 'app_sendgrid',
+    name: 'SendGrid',
+    description: 'Deliver transactional emails, marketing newsletters, and monitor delivery analytics.',
+    category: 'All Applications',
+    icon: 'Send',
+    accentColor: '#1A82E2',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Email Context' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivery Receipt' }],
+    defaultConfig: {
+      operation: 'sendEmail',
+      to: 'recipient@client.com',
+      from: 'noreply@eie-workflow.com',
+      subject: 'Transaction Notice',
+      content: '<p>Workflow processed successfully: {{$json}}</p>'
+    },
+    requiresCredentials: true,
+    credentialType: 'sendgrid'
+  },
+  {
+    type: 'app_paypal',
+    name: 'PayPal',
+    description: 'Generate customer invoices, check payment capture status, and process refunds.',
+    category: 'All Applications',
+    icon: 'CreditCard',
+    accentColor: '#003087',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Invoice Details' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'PayPal Order' }],
+    defaultConfig: {
+      operation: 'createInvoice',
+      amount: '99.00',
+      currency: 'USD',
+      recipientEmail: 'client@company.com'
+    },
+    requiresCredentials: true,
+    credentialType: 'paypal'
+  },
+  {
+    type: 'app_woocommerce',
+    name: 'WooCommerce',
+    description: 'Manage store orders, products, inventory count, and sync e-commerce customer records.',
+    category: 'All Applications',
+    icon: 'ShoppingBag',
+    accentColor: '#96588A',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Order / Product' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'WooCommerce Data' }],
+    defaultConfig: {
+      operation: 'getOrders',
+      status: 'processing'
+    },
+    requiresCredentials: true,
+    credentialType: 'woocommerce'
+  },
+  {
+    type: 'app_gitlab',
+    name: 'GitLab',
+    description: 'Manage merge requests, trigger CI/CD pipelines, create issues, and manage code branches.',
+    category: 'All Applications',
+    icon: 'GitBranch',
+    accentColor: '#FC6D26',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Pipeline / Issue' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'GitLab Result' }],
+    defaultConfig: {
+      operation: 'createIssue',
+      projectId: '',
+      title: 'Automated Pipeline Issue'
+    },
+    requiresCredentials: true,
+    credentialType: 'gitlab'
+  },
+  {
+    type: 'app_monday',
+    name: 'Monday.com',
+    description: 'Create board items, update column values, move task stages, and notify team members.',
+    category: 'All Applications',
+    icon: 'Columns3',
+    accentColor: '#FF3D57',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Item Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Board Item' }],
+    defaultConfig: {
+      operation: 'createItem',
+      boardId: '',
+      itemName: 'New Workflow Lead'
+    },
+    requiresCredentials: true,
+    credentialType: 'monday'
+  },
+  {
+    type: 'app_ms_teams',
+    name: 'Microsoft Teams',
+    description: 'Post adaptive cards to Teams channels, direct message colleagues, and manage meetings.',
+    category: 'All Applications',
+    icon: 'MessageSquare',
+    accentColor: '#6264A7',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Message Payload' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Teams Response' }],
+    defaultConfig: {
+      operation: 'postMessage',
+      channelId: '',
+      message: '🚨 EIE-Workflow Alert: {{$json.title || "Execution Successful"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'ms_teams'
+  },
+  {
+    type: 'app_ms_outlook',
+    name: 'Microsoft Outlook',
+    description: 'Send emails, draft responses, manage calendar invitations, and monitor inbox messages.',
+    category: 'All Applications',
+    icon: 'Mail',
+    accentColor: '#0078D4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Email Content' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Outlook Sent' }],
+    defaultConfig: {
+      operation: 'sendMail',
+      to: 'recipient@organization.com',
+      subject: 'Automated Status Notification',
+      body: 'Workflow notification delivered.'
+    },
+    requiresCredentials: true,
+    credentialType: 'ms_outlook'
+  },
+  {
+    type: 'app_ms_excel',
+    name: 'Microsoft Excel 365',
+    description: 'Read and append rows to cloud Excel workbooks, query tables, and format spreadsheets.',
+    category: 'All Applications',
+    icon: 'Table',
+    accentColor: '#107C41',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Row Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Excel Output' }],
+    defaultConfig: {
+      operation: 'addRow',
+      workbookId: '',
+      worksheetName: 'Sheet1'
+    },
+    requiresCredentials: true,
+    credentialType: 'ms_excel'
+  },
+  {
+    type: 'app_postgres',
+    name: 'PostgreSQL',
+    description: 'Execute SQL queries, insert records, perform transactions, or listen to Postgres notifications.',
+    category: 'All Applications',
+    icon: 'Database',
+    accentColor: '#336791',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'SQL Params' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Rows' }],
+    defaultConfig: {
+      operation: 'executeQuery',
+      query: 'SELECT * FROM users WHERE active = true LIMIT 10;'
+    },
+    requiresCredentials: true,
+    credentialType: 'postgres'
+  },
+  {
+    type: 'app_mysql',
+    name: 'MySQL',
+    description: 'Query relational tables, execute stored procedures, and bulk insert rows in MySQL databases.',
+    category: 'All Applications',
+    icon: 'Database',
+    accentColor: '#00758F',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'SQL Params' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'MySQL Rows' }],
+    defaultConfig: {
+      operation: 'executeQuery',
+      query: 'SELECT id, status, updated_at FROM orders ORDER BY id DESC LIMIT 20;'
+    },
+    requiresCredentials: true,
+    credentialType: 'mysql'
+  },
+  {
+    type: 'app_mongodb',
+    name: 'MongoDB',
+    description: 'Insert documents, find collections, update BSON documents, or aggregate collections.',
+    category: 'All Applications',
+    icon: 'HardDrive',
+    accentColor: '#47A248',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Document' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Mongo Result' }],
+    defaultConfig: {
+      operation: 'find',
+      collection: 'customers',
+      query: '{ "status": "active" }'
+    },
+    requiresCredentials: true,
+    credentialType: 'mongodb'
+  },
+  {
+    type: 'app_redis',
+    name: 'Redis',
+    description: 'Set cache keys with TTL, get values, push to lists, or publish messages to Redis Pub/Sub channels.',
+    category: 'All Applications',
+    icon: 'Cpu',
+    accentColor: '#DC382D',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Key / Value' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Redis Output' }],
+    defaultConfig: {
+      operation: 'set',
+      key: 'user:session:{{$json.id}}',
+      value: '{{JSON.stringify($json)}}',
+      ttlSeconds: 3600
+    },
+    requiresCredentials: true,
+    credentialType: 'redis'
+  },
+  {
+    type: 'app_pinecone',
+    name: 'Pinecone Vector DB',
+    description: 'Upsert dense embeddings, query top-k similar vectors, and manage RAG AI indexes.',
+    category: 'All Applications',
+    icon: 'BrainCircuit',
+    accentColor: '#10B981',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Embedding Vector' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Nearest Neighbors' }],
+    defaultConfig: {
+      operation: 'queryVectors',
+      indexName: 'enterprise-knowledge-base',
+      topK: 5
+    },
+    requiresCredentials: true,
+    credentialType: 'pinecone'
+  },
+  {
+    type: 'app_dropbox',
+    name: 'Dropbox',
+    description: 'Upload files, share download links, organize cloud folders, and search assets.',
+    category: 'All Applications',
+    icon: 'Folder',
+    accentColor: '#0061FF',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'File Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dropbox File' }],
+    defaultConfig: {
+      operation: 'uploadFile',
+      path: '/backups/workflow_{{Date.now()}}.json'
+    },
+    requiresCredentials: true,
+    credentialType: 'dropbox'
+  },
+  {
+    type: 'app_wordpress',
+    name: 'WordPress',
+    description: 'Publish blog posts, manage media uploads, update pages, and listen to site events.',
+    category: 'All Applications',
+    icon: 'Globe',
+    accentColor: '#21759B',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Post Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Published Post' }],
+    defaultConfig: {
+      operation: 'createPost',
+      title: 'Automated Insight: {{$json.title || "Industry Update"}}',
+      status: 'publish'
+    },
+    requiresCredentials: true,
+    credentialType: 'wordpress'
+  },
+  {
+    type: 'app_twitter',
+    name: 'Twitter / X',
+    description: 'Post tweets, search tweets by hashtag or user, and listen to brand mentions.',
+    category: 'All Applications',
+    icon: 'Share2',
+    accentColor: '#1DA1F2',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Tweet Content' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Tweet ID' }],
+    defaultConfig: {
+      operation: 'postTweet',
+      text: '🚀 Automated launch update: {{$json.text || "Workflow active on EIE-Workflow"}}'
+    },
+    requiresCredentials: true,
+    credentialType: 'twitter'
+  },
+  {
+    type: 'app_linkedin',
+    name: 'LinkedIn',
+    description: 'Publish company page updates, share professional articles, and manage social reach.',
+    category: 'All Applications',
+    icon: 'Users',
+    accentColor: '#0A66C2',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Post Text' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Share Result' }],
+    defaultConfig: {
+      operation: 'shareUpdate',
+      text: 'Excited to announce our automated workflow integration.'
+    },
+    requiresCredentials: true,
+    credentialType: 'linkedin'
+  },
+
+  // ==========================================
+  // 2. TRIGGERS
+  // ==========================================
   {
     type: 'trigger_manual',
     name: 'Manual Trigger',
@@ -354,18 +1224,4 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       query: 'query { viewer { login } }'
     }
   }
-];
-
-export const CATEGORIES: NodeCategory[] = [
-  'Triggers',
-  'Applications',
-  'HTTP',
-  'AI',
-  'Logic',
-  'Data',
-  'Communication',
-  'Database',
-  'Files',
-  'Developer',
-  'Utilities'
 ];

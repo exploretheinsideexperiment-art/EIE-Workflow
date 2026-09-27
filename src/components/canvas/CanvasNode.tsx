@@ -8,6 +8,7 @@ interface CanvasNodeProps {
   executionResult?: ExecutionNodeResult;
   isConnecting?: boolean;
   onSelect: (nodeId: string, multi: boolean) => void;
+  onStartDrag?: (nodeId: string, clientX: number, clientY: number, multi: boolean) => void;
   onStartPortDrag: (nodeId: string, portId: string, isOutput: boolean, pos: { x: number; y: number }) => void;
   onPortMouseUp: (nodeId: string, portId: string, isOutput: boolean) => void;
   onDeleteNode: (nodeId: string) => void;
@@ -21,6 +22,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   executionResult,
   isConnecting,
   onSelect,
+  onStartDrag,
   onStartPortDrag,
   onPortMouseUp,
   onDeleteNode,
@@ -86,6 +88,21 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         transform: `translate(${node.position.x}px, ${node.position.y}px)`,
       }}
       className={`absolute w-64 select-none rounded-2xl bg-slate-900/95 backdrop-blur-xl border transition-all duration-150 group cursor-move ${borderGlowClass}`}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('[data-port="true"]')) return;
+        e.stopPropagation();
+        onStartDrag?.(node.id, e.clientX, e.clientY, e.shiftKey || e.metaKey || e.ctrlKey);
+      }}
+      onTouchStart={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('[data-port="true"]')) return;
+        e.stopPropagation();
+        if (e.touches.length === 1) {
+          onStartDrag?.(node.id, e.touches[0].clientX, e.touches[0].clientY, false);
+        }
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);

@@ -65,7 +65,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
   const vpBoxH = viewWorldH * scale;
 
   return (
-    <div className="absolute bottom-6 right-6 w-[200px] h-[130px] rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 shadow-2xl p-2 select-none z-20 overflow-hidden">
+    <div className="absolute bottom-18 sm:bottom-6 right-4 sm:right-6 w-[180px] sm:w-[200px] h-[120px] sm:h-[130px] rounded-xl bg-slate-950/90 backdrop-blur-md border border-slate-800 shadow-2xl p-2 select-none z-20 overflow-hidden">
       <div className="flex items-center justify-between pb-1 border-b border-slate-800/80 mb-1">
         <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">Mini Map</span>
         <button

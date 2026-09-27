@@ -18,6 +18,8 @@ import { ExecutionDrawer } from '../panels/ExecutionDrawer';
 interface WorkflowCanvasProps {
   workflow: Workflow;
   credentials: Credential[];
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
   onSave: (wf: Workflow) => Promise<void>;
   onToggleActive: () => Promise<void>;
 }
@@ -25,6 +27,8 @@ interface WorkflowCanvasProps {
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   workflow: initialWorkflow,
   credentials,
+  isSidebarOpen = true,
+  onToggleSidebar,
   onSave,
   onToggleActive,
 }) => {
@@ -33,10 +37,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
-  // Canvas Settings
+  // Canvas Settings & Modes
+  const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select');
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [gridEnabled, setGridEnabled] = useState(true);
   const [snapEnabled, setSnapEnabled] = useState(true);
-  const [miniMapOpen, setMiniMapOpen] = useState(true);
+  const [miniMapOpen, setMiniMapOpen] = useState(false);
   const [addNodeModalOpen, setAddNodeModalOpen] = useState(false);
   const [executionDrawerOpen, setExecutionDrawerOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -46,10 +52,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [viewport, setViewport] = useState(initialWorkflow.viewport || { x: 120, y: 120, zoom: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchDistanceRef = useRef<number | null>(null);
+  const touchInitialZoomRef = useRef<number>(1);
 
   // Node Dragging State
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const initialDragPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
 
   // Connection Dragging State
   const [connectingState, setConnectingState] = useState<{
@@ -132,77 +142,194 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Snap to 20px grid
   const snapVal = (val: number) => (snapEnabled ? Math.round(val / 20) * 20 : val);
 
+  // Spacebar pan mode detection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
   // --- PANNING HANDLERS ---
   const handleMouseDownCanvas = (e: React.MouseEvent) => {
-    if (e.button === 0 || e.button === 1) { // Left or middle click on background
-      setIsPanning(true);
-      panStartRef.current = { x: e.clientX - viewport.x, y: e.clientY - viewport.y };
-      setSelectedNodeIds([]);
-      setSelectedConnectionId(null);
+    const isPanMode = canvasMode === 'pan' || isSpacePressed || e.button === 1;
+    if (e.button === 0 || e.button === 1) {
+      if (isPanMode || (e.target as HTMLElement) === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX - viewport.x, y: e.clientY - viewport.y };
+        if (!isPanMode) {
+          setSelectedNodeIds([]);
+          setSelectedConnectionId(null);
+        }
+      }
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    // 1. Canvas Panning
-    if (isPanning) {
-      setViewport((prev) => ({
-        ...prev,
-        x: e.clientX - panStartRef.current.x,
-        y: e.clientY - panStartRef.current.y,
-      }));
-      return;
-    }
+  // --- GLOBAL WINDOW-LEVEL DRAG & PAN LISTENERS (Smooth, Never Drops) ---
+  useEffect(() => {
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      // 1. Panning Canvas
+      if (isPanning) {
+        setViewport((prev) => ({
+          ...prev,
+          x: e.clientX - panStartRef.current.x,
+          y: e.clientY - panStartRef.current.y,
+        }));
+        return;
+      }
 
-    // 2. Node Dragging
-    if (draggingNodeId) {
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) return;
+      // 2. Dragging Node(s)
+      if (draggingNodeId) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
 
-      const rawWorldX = (e.clientX - containerRect.left - viewport.x) / viewport.zoom;
-      const rawWorldY = (e.clientY - containerRect.top - viewport.y) / viewport.zoom;
+        const rawWorldX = (e.clientX - containerRect.left - viewport.x) / viewport.zoom;
+        const rawWorldY = (e.clientY - containerRect.top - viewport.y) / viewport.zoom;
 
-      const targetX = snapVal(rawWorldX - dragOffsetRef.current.x);
-      const targetY = snapVal(rawWorldY - dragOffsetRef.current.y);
+        const targetX = snapVal(rawWorldX - dragOffsetRef.current.x);
+        const targetY = snapVal(rawWorldY - dragOffsetRef.current.y);
 
-      setWorkflow((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) =>
-          n.id === draggingNodeId ? { ...n, position: { x: targetX, y: targetY } } : n
-        ),
-      }));
-      setHasUnsavedChanges(true);
-      return;
-    }
+        const primaryInitial = initialDragPositionsRef.current[draggingNodeId];
+        const deltaX = primaryInitial ? targetX - primaryInitial.x : 0;
+        const deltaY = primaryInitial ? targetY - primaryInitial.y : 0;
 
-    // 3. Port Wire Dragging
-    if (connectingState) {
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) return;
-
-      setConnectingState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentPos: {
-                x: (e.clientX - containerRect.left - viewport.x) / viewport.zoom,
-                y: (e.clientY - containerRect.top - viewport.y) / viewport.zoom,
-              },
+        setWorkflow((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) => {
+            if (n.id === draggingNodeId) {
+              return { ...n, position: { x: targetX, y: targetY } };
             }
-          : null
-      );
+            if (selectedNodeIds.includes(n.id) && initialDragPositionsRef.current[n.id]) {
+              const init = initialDragPositionsRef.current[n.id];
+              return {
+                ...n,
+                position: { x: snapVal(init.x + deltaX), y: snapVal(init.y + deltaY) },
+              };
+            }
+            return n;
+          }),
+        }));
+        setHasUnsavedChanges(true);
+        return;
+      }
+
+      // 3. Port Wire Dragging
+      if (connectingState) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
+
+        setConnectingState((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentPos: {
+                  x: (e.clientX - containerRect.left - viewport.x) / viewport.zoom,
+                  y: (e.clientY - containerRect.top - viewport.y) / viewport.zoom,
+                },
+              }
+            : null
+        );
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+      }
+      if (draggingNodeId) {
+        setDraggingNodeId(null);
+        pushHistory(workflow);
+      }
+      if (connectingState) {
+        setConnectingState(null);
+      }
+    };
+
+    if (isPanning || draggingNodeId || connectingState) {
+      window.addEventListener('mousemove', handleWindowMouseMove);
+      window.addEventListener('mouseup', handleWindowMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleWindowMouseMove);
+        window.removeEventListener('mouseup', handleWindowMouseUp);
+      };
+    }
+  }, [isPanning, draggingNodeId, connectingState, viewport, workflow, pushHistory, snapEnabled, selectedNodeIds]);
+
+  // --- TOUCH HANDLERS FOR MOBILE FIREFOX & PHONES ---
+  const handleTouchStartCanvas = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsPanning(true);
+      touchStartRef.current = {
+        x: e.touches[0].clientX - viewport.x,
+        y: e.touches[0].clientY - viewport.y,
+      };
+      if (canvasMode !== 'pan') {
+        setSelectedNodeIds([]);
+        setSelectedConnectionId(null);
+      }
+    } else if (e.touches.length === 2) {
+      setIsPanning(false);
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchDistanceRef.current = Math.hypot(dx, dy);
+      touchInitialZoomRef.current = viewport.zoom;
     }
   };
 
-  const handleMouseUp = () => {
-    if (isPanning) setIsPanning(false);
-    if (draggingNodeId) {
-      setDraggingNodeId(null);
-      pushHistory(workflow);
+  useEffect(() => {
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1 && isPanning) {
+        setViewport((prev) => ({
+          ...prev,
+          x: e.touches[0].clientX - touchStartRef.current.x,
+          y: e.touches[0].clientY - touchStartRef.current.y,
+        }));
+      } else if (e.touches.length === 2 && touchDistanceRef.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const currentDist = Math.hypot(dx, dy);
+        const factor = currentDist / touchDistanceRef.current;
+        const newZoom = Math.min(Math.max(touchInitialZoomRef.current * factor, 0.25), 2.5);
+
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - containerRect.left;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - containerRect.top;
+          const newX = midX - (midX - viewport.x) * (newZoom / viewport.zoom);
+          const newY = midY - (midY - viewport.y) * (newZoom / viewport.zoom);
+          setViewport({ x: newX, y: newY, zoom: newZoom });
+        }
+      }
+    };
+
+    const handleWindowTouchEnd = () => {
+      if (isPanning) setIsPanning(false);
+      touchDistanceRef.current = null;
+    };
+
+    if (isPanning || touchDistanceRef.current !== null) {
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+      window.addEventListener('touchend', handleWindowTouchEnd);
+      window.addEventListener('touchcancel', handleWindowTouchEnd);
+      return () => {
+        window.removeEventListener('touchmove', handleWindowTouchMove);
+        window.removeEventListener('touchend', handleWindowTouchEnd);
+        window.removeEventListener('touchcancel', handleWindowTouchEnd);
+      };
     }
-    if (connectingState) {
-      setConnectingState(null);
-    }
-  };
+  }, [isPanning, viewport]);
 
   // Zoom Handler with Mouse Wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -223,7 +350,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setViewport({ x: newX, y: newY, zoom: newZoom });
   };
 
-  // --- NODE SELECTION & DRAGGING ---
+  // --- NODE SELECTION & SMOOTH DRAGGING ---
   const handleNodeSelect = (nodeId: string, multi: boolean) => {
     if (multi) {
       setSelectedNodeIds((prev) =>
@@ -233,18 +360,136 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       setSelectedNodeIds([nodeId]);
     }
     setSelectedConnectionId(null);
+  };
 
-    // Initialize node dragging
+  const handleStartNodeDrag = (
+    nodeId: string,
+    clientX: number,
+    clientY: number,
+    multi: boolean
+  ) => {
+    if (canvasMode === 'pan' || isSpacePressed) {
+      setIsPanning(true);
+      panStartRef.current = { x: clientX - viewport.x, y: clientY - viewport.y };
+      return;
+    }
+
+    if (!selectedNodeIds.includes(nodeId)) {
+      handleNodeSelect(nodeId, multi);
+    }
+
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (node && containerRef.current) {
       setDraggingNodeId(nodeId);
       const containerRect = containerRef.current.getBoundingClientRect();
-      // Record offset between click and node position
+      const rawWorldX = (clientX - containerRect.left - viewport.x) / viewport.zoom;
+      const rawWorldY = (clientY - containerRect.top - viewport.y) / viewport.zoom;
       dragOffsetRef.current = {
-        x: 0,
-        y: 0,
+        x: rawWorldX - node.position.x,
+        y: rawWorldY - node.position.y,
       };
+
+      const initialPos: Record<string, { x: number; y: number }> = {};
+      workflow.nodes.forEach((n) => {
+        initialPos[n.id] = { ...n.position };
+      });
+      initialDragPositionsRef.current = initialPos;
     }
+  };
+
+  // --- AUTO-SEPARATE OVERLAPPING NODES ---
+  const handleSeparateNodes = () => {
+    if (workflow.nodes.length <= 1) return;
+
+    // Detect root nodes and connections to arrange into non-overlapping columns and rows
+    const incomingCount: Record<string, number> = {};
+    const outgoingMap: Record<string, string[]> = {};
+
+    workflow.nodes.forEach((n) => {
+      incomingCount[n.id] = 0;
+      outgoingMap[n.id] = [];
+    });
+
+    workflow.connections.forEach((c) => {
+      if (incomingCount[c.toNodeId] !== undefined) {
+        incomingCount[c.toNodeId] = (incomingCount[c.toNodeId] || 0) + 1;
+      }
+      if (outgoingMap[c.fromNodeId]) {
+        outgoingMap[c.fromNodeId].push(c.toNodeId);
+      }
+    });
+
+    const levels: Record<string, number> = {};
+    const queue: string[] = [];
+
+    // Root nodes (triggers or zero incoming)
+    workflow.nodes.forEach((n) => {
+      if (incomingCount[n.id] === 0 || n.category === 'Triggers') {
+        levels[n.id] = 0;
+        queue.push(n.id);
+      }
+    });
+
+    if (queue.length === 0 && workflow.nodes.length > 0) {
+      queue.push(workflow.nodes[0].id);
+      levels[workflow.nodes[0].id] = 0;
+    }
+
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const currentLevel = levels[current] || 0;
+      const targets = outgoingMap[current] || [];
+      targets.forEach((targetId) => {
+        levels[targetId] = Math.max(levels[targetId] || 0, currentLevel + 1);
+        if (!visited.has(targetId)) {
+          queue.push(targetId);
+        }
+      });
+    }
+
+    let maxLevel = 0;
+    Object.values(levels).forEach((l) => { if (l > maxLevel) maxLevel = l; });
+    workflow.nodes.forEach((n) => {
+      if (levels[n.id] === undefined) {
+        maxLevel += 1;
+        levels[n.id] = maxLevel;
+      }
+    });
+
+    const levelColumns: Record<number, WorkflowNodeData[]> = {};
+    workflow.nodes.forEach((n) => {
+      const col = levels[n.id] || 0;
+      if (!levelColumns[col]) levelColumns[col] = [];
+      levelColumns[col].push(n);
+    });
+
+    // Ample spacing: 350px horizontal spacing, 170px vertical spacing (completely non-overlapping)
+    const startX = 100;
+    const startY = 120;
+    const updatedNodes: WorkflowNodeData[] = [];
+
+    const sortedCols = Object.keys(levelColumns).map(Number).sort((a, b) => a - b);
+    sortedCols.forEach((colIdx) => {
+      const columnNodes = levelColumns[colIdx];
+      const colX = startX + colIdx * 350;
+      columnNodes.forEach((node, rowIdx) => {
+        const rowY = startY + rowIdx * 180;
+        updatedNodes.push({
+          ...node,
+          position: { x: colX, y: rowY }
+        });
+      });
+    });
+
+    const updatedWorkflow = {
+      ...workflow,
+      nodes: updatedNodes
+    };
+    pushHistory(updatedWorkflow);
   };
 
   // --- PORT WIRE CONNECTION ---
@@ -273,9 +518,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const handlePortMouseUp = (targetNodeId: string, targetPortId: string, isOutput: boolean) => {
     if (!connectingState) return;
 
-    // Only connect if released on an INPUT port of a DIFFERENT node
     if (!isOutput && connectingState.fromNodeId !== targetNodeId) {
-      // Prevent duplicate connection
       const exists = workflow.connections.some(
         (c) =>
           c.fromNodeId === connectingState.fromNodeId &&
@@ -357,8 +600,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       id: `node_${Date.now()}_dup`,
       name: `${target.name} (Copy)`,
       position: {
-        x: target.position.x + 40,
-        y: target.position.y + 40,
+        x: target.position.x + 50,
+        y: target.position.y + 50,
       },
     };
 
@@ -393,7 +636,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setIsExecuting(true);
     setExecutionDrawerOpen(true);
     try {
-      // First save if unsaved
       if (hasUnsavedChanges) {
         await handleSave();
       }
@@ -413,7 +655,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const handleTestSingleNode = async (node: WorkflowNodeData) => {
-    // Run an isolated node test through workflow run or simulated evaluation
     const res = await fetch(`/api/workflows/${workflow.id}/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -469,13 +710,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       if (n.position.y + 100 > maxY) maxY = n.position.y + 100;
     }
 
-    const padding = 80;
+    const padding = 100;
     const w = maxX - minX + padding * 2;
     const h = maxY - minY + padding * 2;
 
     const zoom = Math.min(
-      Math.max(Math.min(containerRect.width / w, containerRect.height / h), 0.3),
-      1.5
+      Math.max(Math.min(containerRect.width / w, containerRect.height / h), 0.35),
+      1.4
     );
 
     const x = containerRect.width / 2 - ((minX + maxX) / 2) * zoom;
@@ -487,7 +728,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is currently typing in input or textarea
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         return;
       }
@@ -513,6 +753,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         if (selectedNodeIds.length > 0) {
           selectedNodeIds.forEach(handleDuplicateNode);
         }
+      } else if (e.key.toLowerCase() === 'h') {
+        setCanvasMode('pan');
+      } else if (e.key.toLowerCase() === 'v') {
+        setCanvasMode('select');
       }
     };
 
@@ -542,123 +786,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const editingNode = workflow.nodes.find((n) => n.id === editingNodeId) || null;
+  const isPanActive = canvasMode === 'pan' || isSpacePressed;
 
   return (
-    <div
-      ref={containerRef}
-      onMouseDown={handleMouseDownCanvas}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
-      className="relative w-full h-full overflow-hidden bg-[#070b14] select-none cursor-grab active:cursor-grabbing"
-    >
-      {/* Visual Dot Grid Background */}
-      {gridEnabled && (
-        <div
-          className="absolute inset-0 pointer-events-none opacity-20"
-          style={{
-            backgroundImage: `radial-gradient(#38bdf8 1px, transparent 1px)`,
-            backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
-            backgroundPosition: `${viewport.x}px ${viewport.y}px`,
-          }}
-        />
-      )}
-
-      {/* SVG Canvas Layer for Wires */}
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ overflow: 'visible' }}
-      >
-        <defs>
-          <filter id="particle-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
-          {/* Static Existing Connections */}
-          {workflow.connections.map((conn) => {
-            const startPos = getNodePortPos(conn.fromNodeId, conn.fromPortId, true);
-            const endPos = getNodePortPos(conn.toNodeId, conn.toPortId, false);
-
-            const fromNode = workflow.nodes.find((n) => n.id === conn.fromNodeId);
-            const fromPort = fromNode?.outputs.find((p) => p.id === conn.fromPortId);
-            const stepResult = latestExecution?.nodeResults[conn.fromNodeId];
-
-            return (
-              <g key={conn.id} className="pointer-events-auto">
-                <ConnectionWire
-                  connection={conn}
-                  startPos={startPos}
-                  endPos={endPos}
-                  fromPortType={fromPort?.type}
-                  isSelected={selectedConnectionId === conn.id}
-                  isExecuting={isExecuting}
-                  executionStatus={stepResult?.status}
-                  onDelete={handleDeleteConnection}
-                  onSelect={(id) => {
-                    setSelectedConnectionId(id);
-                    setSelectedNodeIds([]);
-                  }}
-                />
-              </g>
-            );
-          })}
-
-          {/* Active Wire being dragged from port */}
-          {connectingState && (
-            <path
-              d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
-                connectingState.startPos.x + 80
-              } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
-                connectingState.currentPos.y
-              }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
-              fill="none"
-              stroke="#06b6d4"
-              strokeWidth="2.5"
-              strokeDasharray="6 4"
-              strokeLinecap="round"
-              className="animate-pulse"
-            />
-          )}
-        </g>
-      </svg>
-
-      {/* HTML Layer for Node Cards */}
-      <div
-        style={{
-          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-          transformOrigin: '0 0',
-        }}
-        className="absolute inset-0 pointer-events-none"
-      >
-        <div className="relative w-full h-full pointer-events-auto">
-          {workflow.nodes.map((node) => (
-            <CanvasNode
-              key={node.id}
-              node={node}
-              isSelected={selectedNodeIds.includes(node.id)}
-              executionResult={latestExecution?.nodeResults[node.id]}
-              isConnecting={Boolean(connectingState)}
-              onSelect={handleNodeSelect}
-              onStartPortDrag={handleStartPortDrag}
-              onPortMouseUp={handlePortMouseUp}
-              onDeleteNode={handleDeleteNode}
-              onDuplicateNode={handleDuplicateNode}
-              onOpenConfig={(id) => {
-                setSelectedNodeIds([id]);
-                setEditingNodeId(id);
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Top and Bottom Floating Canvas Toolbars */}
+    <div className="relative w-full h-full flex flex-col bg-[#070b14] overflow-hidden select-none">
+      {/* Top Dedicated Action Subheader Strip - Completely Non-Overlapping */}
       <CanvasToolbar
         zoom={viewport.zoom}
         gridEnabled={gridEnabled}
@@ -671,6 +803,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         isActive={workflow.active}
         hasUnsavedChanges={hasUnsavedChanges}
         executionDrawerOpen={executionDrawerOpen}
+        canvasMode={canvasMode}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={onToggleSidebar}
+        onChangeCanvasMode={(mode) => setCanvasMode(mode)}
+        onSeparateNodes={handleSeparateNodes}
         onZoomIn={() => setViewport((v) => ({ ...v, zoom: Math.min(v.zoom * 1.15, 2.5) }))}
         onZoomOut={() => setViewport((v) => ({ ...v, zoom: Math.max(v.zoom * 0.85, 0.25) }))}
         onResetZoom={() => setViewport((v) => ({ ...v, zoom: 1 }))}
@@ -690,17 +827,139 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }}
       />
 
-      {/* Mini Map HUD */}
-      {miniMapOpen && (
-        <MiniMap
-          nodes={workflow.nodes}
-          viewport={viewport}
-          containerWidth={containerRef.current?.clientWidth || 1000}
-          containerHeight={containerRef.current?.clientHeight || 600}
-          onPanTo={(x, y) => setViewport((v) => ({ ...v, x, y }))}
-          onClose={() => setMiniMapOpen(false)}
-        />
-      )}
+      {/* Interactive Workflow Canvas Area (Nodes Can Never Overlap Top Bar) */}
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDownCanvas}
+        onTouchStart={handleTouchStartCanvas}
+        onWheel={handleWheel}
+        className={`relative flex-1 w-full h-full overflow-hidden bg-[#070b14] select-none touch-none ${
+          isPanActive
+            ? isPanning
+              ? 'cursor-grabbing'
+              : 'cursor-grab'
+            : 'cursor-default'
+        }`}
+      >
+        {/* Visual Dot Grid Background */}
+        {gridEnabled && (
+          <div
+            className="absolute inset-0 pointer-events-none opacity-20"
+            style={{
+              backgroundImage: `radial-gradient(#38bdf8 1px, transparent 1px)`,
+              backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
+              backgroundPosition: `${viewport.x}px ${viewport.y}px`,
+            }}
+          />
+        )}
+
+        {/* SVG Canvas Layer for Wires */}
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{ overflow: 'visible' }}
+        >
+          <defs>
+            <filter id="particle-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
+            {/* Static Existing Connections */}
+            {workflow.connections.map((conn) => {
+              const startPos = getNodePortPos(conn.fromNodeId, conn.fromPortId, true);
+              const endPos = getNodePortPos(conn.toNodeId, conn.toPortId, false);
+
+              const fromNode = workflow.nodes.find((n) => n.id === conn.fromNodeId);
+              const fromPort = fromNode?.outputs.find((p) => p.id === conn.fromPortId);
+              const stepResult = latestExecution?.nodeResults[conn.fromNodeId];
+
+              return (
+                <g key={conn.id} className="pointer-events-auto">
+                  <ConnectionWire
+                    connection={conn}
+                    startPos={startPos}
+                    endPos={endPos}
+                    fromPortType={fromPort?.type}
+                    isSelected={selectedConnectionId === conn.id}
+                    isExecuting={isExecuting}
+                    executionStatus={stepResult?.status}
+                    onDelete={handleDeleteConnection}
+                    onSelect={(id) => {
+                      setSelectedConnectionId(id);
+                      setSelectedNodeIds([]);
+                    }}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Active Wire being dragged from port */}
+            {connectingState && (
+              <path
+                d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
+                  connectingState.startPos.x + 80
+                } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
+                  connectingState.currentPos.y
+                }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
+                fill="none"
+                stroke="#06b6d4"
+                strokeWidth="2.5"
+                strokeDasharray="6 4"
+                strokeLinecap="round"
+                className="animate-pulse"
+              />
+            )}
+          </g>
+        </svg>
+
+        {/* HTML Layer for Node Cards */}
+        <div
+          style={{
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+            transformOrigin: '0 0',
+          }}
+          className="absolute inset-0 pointer-events-none"
+        >
+          <div className="relative w-full h-full pointer-events-auto">
+            {workflow.nodes.map((node) => (
+              <CanvasNode
+                key={node.id}
+                node={node}
+                isSelected={selectedNodeIds.includes(node.id)}
+                executionResult={latestExecution?.nodeResults[node.id]}
+                isConnecting={Boolean(connectingState)}
+                onSelect={handleNodeSelect}
+                onStartDrag={handleStartNodeDrag}
+                onStartPortDrag={handleStartPortDrag}
+                onPortMouseUp={handlePortMouseUp}
+                onDeleteNode={handleDeleteNode}
+                onDuplicateNode={handleDuplicateNode}
+                onOpenConfig={(id) => {
+                  setSelectedNodeIds([id]);
+                  setEditingNodeId(id);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Mini Map HUD (Bottom Right, Tucked Away) */}
+        {miniMapOpen && (
+          <MiniMap
+            nodes={workflow.nodes}
+            viewport={viewport}
+            containerWidth={containerRef.current?.clientWidth || 1000}
+            containerHeight={containerRef.current?.clientHeight || 600}
+            onPanTo={(x, y) => setViewport((v) => ({ ...v, x, y }))}
+            onClose={() => setMiniMapOpen(false)}
+          />
+        )}
+      </div>
 
       {/* Add Node Search Modal */}
       <AddNodeModal

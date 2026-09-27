@@ -1,6 +1,7 @@
 export type NodeCategory =
-  | 'Triggers'
+  | 'All Applications'
   | 'Applications'
+  | 'Triggers'
   | 'HTTP'
   | 'AI'
   | 'Database'

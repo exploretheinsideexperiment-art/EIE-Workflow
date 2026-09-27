@@ -616,8 +616,8 @@ export default function App() {
 
         {/* View Switcher */}
         <main className="flex-1 flex flex-col relative overflow-hidden bg-[#070b14]">
-          {/* Quick toggle button when sidebar is collapsed/hidden */}
-          {!isSidebarOpen && (
+          {/* Quick toggle button when sidebar is collapsed/hidden in non-editor views */}
+          {!isSidebarOpen && currentView !== 'editor' && (
             <button
               onClick={toggleSidebar}
               aria-label="Show navigation menu"
@@ -634,6 +634,8 @@ export default function App() {
               key={activeWorkflow.id}
               workflow={activeWorkflow}
               credentials={credentials}
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={toggleSidebar}
               onSave={handleSaveWorkflow}
               onToggleActive={() => handleToggleActive(activeWorkflow.id)}
             />
