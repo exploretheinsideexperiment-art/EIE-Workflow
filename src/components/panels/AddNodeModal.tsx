@@ -207,7 +207,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         </div>
 
         {/* Modal Content: Categories Sidebar & Nodes Grid */}
-        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
           {/* Category Tabs Sidebar */}
           <div className="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-slate-800/80 p-2 sm:p-3 overflow-x-auto sm:overflow-y-auto flex sm:flex-col gap-1.5 bg-slate-950/50 shrink-0 no-scrollbar">
             {/* Primary Highlighted Category: All Applications */}
@@ -216,17 +216,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 setSelectedCategory('All Applications');
                 setAppSubFilter('all');
               }}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shadow-xs ${
+              className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 shadow-xs ${
                 isAppCategory(selectedCategory)
                   ? 'bg-gradient-to-r from-cyan-500/25 to-blue-600/20 text-cyan-300 border border-cyan-500/40'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2">
-                <AppWindow className="w-4 h-4 text-cyan-400" />
+                <AppWindow className="w-4 h-4 text-cyan-400 shrink-0" />
                 <span>All Applications</span>
               </div>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50 shrink-0">
                 {appCount}
               </span>
             </button>
@@ -234,49 +234,55 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             {/* AI & Agents Category */}
             <button
               onClick={() => setSelectedCategory('AI')}
-              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 selectedCategory === 'AI'
                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Bot className="w-3.5 h-3.5 text-purple-400" />
+                <Bot className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 <span>AI Agent & Models</span>
               </div>
-              <span className="text-[10px] font-mono text-purple-400">4</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800/50 shrink-0">
+                4
+              </span>
             </button>
 
             {/* AI Tools for Agent Category */}
             <button
               onClick={() => setSelectedCategory('AI Tools')}
-              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 selectedCategory === 'AI Tools'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Wrench className="w-3.5 h-3.5 text-emerald-400" />
+                <Wrench className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>AI Agent Tools</span>
               </div>
-              <span className="text-[10px] font-mono text-emerald-400">6</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50 shrink-0">
+                6
+              </span>
             </button>
 
             {/* All Nodes / Categories */}
             <button
               onClick={() => setSelectedCategory('All')}
-              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+              className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0 ${
                 selectedCategory === 'All'
                   ? 'bg-cyan-500/15 text-cyan-300 font-semibold border border-cyan-500/30'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
+                <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>All Nodes</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">{NODE_LIBRARY.length}</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 shrink-0">
+                {NODE_LIBRARY.length}
+              </span>
             </button>
 
             <div className="hidden sm:block my-1 border-t border-slate-800/60" />
@@ -287,105 +293,107 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`flex items-center justify-between px-3 py-1.5 sm:py-2 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+                  className={`flex items-center justify-between gap-2 px-3 py-1.5 sm:py-2 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0 ${
                     selectedCategory === cat
                       ? 'bg-cyan-500/15 text-cyan-300 font-semibold border border-cyan-500/30'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                   }`}
                 >
                   <span>{cat}</span>
-                  <span className="text-[10px] font-mono text-slate-500">{count}</span>
+                  <span className="text-[10px] font-mono text-slate-500 shrink-0">{count}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Node Cards Grid */}
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 content-start">
+          {/* Node Cards Scrollable Area */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 overscroll-contain">
             {filteredNodes.length === 0 ? (
-              <div className="col-span-full py-16 text-center text-slate-500">
+              <div className="py-16 text-center text-slate-500">
                 <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm font-medium text-slate-400">No nodes found matching "{searchQuery}"</p>
                 <p className="text-xs text-slate-600 mt-1">Try searching for "Google", "Slack", "Agent", or "Stripe"</p>
               </div>
             ) : (
-              filteredNodes.map((node) => {
-                const IconComponent = ((Icons as any)[node.icon] || Icons.Box) as React.ComponentType<{ className?: string }>;
-                const isApplication = isAppCategory(node.category);
-                const isAiAgent = node.type === 'ai_agent';
-                const isAiTool = node.category === 'AI Tools';
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-6">
+                {filteredNodes.map((node) => {
+                  const IconComponent = ((Icons as any)[node.icon] || Icons.Box) as React.ComponentType<{ className?: string }>;
+                  const isApplication = isAppCategory(node.category);
+                  const isAiAgent = node.type === 'ai_agent';
+                  const isAiTool = node.category === 'AI Tools';
 
-                return (
-                  <div
-                    key={node.type}
-                    onClick={() => {
-                      onSelectNode(node);
-                      onClose();
-                    }}
-                    className="p-3 sm:p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-cyan-500/60 hover:bg-slate-850 transition cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-cyan-950/40 relative overflow-hidden"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div
-                            className="p-2.5 rounded-xl shrink-0 border"
-                            style={{
-                              backgroundColor: `${node.accentColor}18`,
-                              borderColor: `${node.accentColor}40`,
-                              color: node.accentColor,
-                            }}
-                          >
-                            <IconComponent className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition truncate flex items-center gap-1.5">
-                              <span>{node.name}</span>
-                              {isAiAgent && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-950 text-purple-300 border border-purple-800 font-mono">
-                                  Autonomous
+                  return (
+                    <div
+                      key={node.type}
+                      onClick={() => {
+                        onSelectNode(node);
+                        onClose();
+                      }}
+                      className="min-h-[110px] h-auto p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/80 hover:border-cyan-500/60 hover:bg-slate-900 transition-colors cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-cyan-950/40 relative shrink-0"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center border"
+                              style={{
+                                backgroundColor: `${node.accentColor}18`,
+                                borderColor: `${node.accentColor}40`,
+                                color: node.accentColor,
+                              }}
+                            >
+                              <IconComponent className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs sm:text-sm font-bold text-slate-100 group-hover:text-cyan-300 transition truncate flex items-center gap-1.5">
+                                <span>{node.name}</span>
+                                {isAiAgent && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-950 text-purple-300 border border-purple-800 font-mono shrink-0">
+                                    Autonomous
+                                  </span>
+                                )}
+                                {isAiTool && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono shrink-0">
+                                    Agent Tool
+                                  </span>
+                                )}
+                              </h4>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] font-mono text-cyan-400 font-medium uppercase tracking-wider">
+                                  {isApplication ? 'Application' : node.category}
                                 </span>
-                              )}
-                              {isAiTool && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono">
-                                  Agent Tool
-                                </span>
-                              )}
-                            </h4>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wide">
-                                {isApplication ? 'Application' : node.category}
-                              </span>
-                              {node.requiresCredentials && (
-                                <span className="text-[9px] text-amber-400/90 font-mono bg-amber-950/50 px-1 py-0.2 rounded border border-amber-800/40">
-                                  Auth
-                                </span>
-                              )}
+                                {node.requiresCredentials && (
+                                  <span className="text-[9px] text-amber-400 font-mono bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-800/40 shrink-0">
+                                    Auth
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
+
+                          <span className="p-1 rounded-md text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition shrink-0 ml-1">
+                            <ArrowRight className="w-4 h-4" />
+                          </span>
                         </div>
 
-                        <span className="p-1 rounded-md text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition shrink-0 ml-1">
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </span>
+                        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed mt-1">
+                          {node.description}
+                        </p>
                       </div>
 
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                        {node.description}
-                      </p>
+                      {/* Ports & Action preview footer */}
+                      <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span className="text-slate-400">
+                          {node.inputs.length === 0 ? 'Trigger / Source' : `${node.inputs.length} in • ${node.outputs.length} out`}
+                        </span>
+                        <span className="text-cyan-400 font-semibold group-hover:text-cyan-300 transition">
+                          + Add Node
+                        </span>
+                      </div>
                     </div>
-
-                    {/* Ports & Action preview footer */}
-                    <div className="mt-2.5 pt-2 border-t border-slate-900/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
-                      <span className="text-slate-400">
-                        {node.inputs.length === 0 ? 'Trigger / Source' : `${node.inputs.length} in • ${node.outputs.length} out`}
-                      </span>
-                      <span className="text-cyan-400/90 font-semibold group-hover:text-cyan-300 transition">
-                        + Add & Connect
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
