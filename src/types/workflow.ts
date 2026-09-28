@@ -2,8 +2,9 @@ export type NodeCategory =
   | 'All Applications'
   | 'Applications'
   | 'Triggers'
-  | 'HTTP'
   | 'AI'
+  | 'AI Tools'
+  | 'HTTP'
   | 'Database'
   | 'Communication'
   | 'Logic'
@@ -15,8 +16,9 @@ export type NodeCategory =
 export interface NodePort {
   id: string;
   name: string;
-  type: 'main' | 'true' | 'false' | 'error' | 'branch';
+  type: 'main' | 'true' | 'false' | 'error' | 'branch' | 'model' | 'memory' | 'tool' | 'outputParser';
   label?: string;
+  color?: string;
 }
 
 export interface WorkflowNodeData {

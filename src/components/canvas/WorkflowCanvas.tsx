@@ -14,6 +14,7 @@ import { MiniMap } from './MiniMap';
 import { AddNodeModal } from '../panels/AddNodeModal';
 import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
+import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -47,6 +48,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [executionDrawerOpen, setExecutionDrawerOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Quick Connection State (Click-to-connect & Quick Add '+')
+  const [pendingSourcePort, setPendingSourcePort] = useState<{
+    nodeId: string;
+    portId: string;
+    isOutput: boolean;
+  } | null>(null);
+
+  const [autoConnectState, setAutoConnectState] = useState<{
+    fromNodeId?: string;
+    fromPortId?: string;
+    fromNodeName?: string;
+    toNodeId?: string;
+    toPortId?: string;
+    targetPos?: { x: number; y: number };
+  } | null>(null);
 
   // Pan & Zoom
   const [viewport, setViewport] = useState(initialWorkflow.viewport || { x: 120, y: 120, zoom: 1 });
@@ -172,12 +189,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         if (!isPanMode) {
           setSelectedNodeIds([]);
           setSelectedConnectionId(null);
+          setPendingSourcePort(null);
         }
       }
     }
   };
 
-  // --- GLOBAL WINDOW-LEVEL DRAG & PAN LISTENERS (Smooth, Never Drops) ---
+  // --- GLOBAL WINDOW-LEVEL DRAG & PAN LISTENERS ---
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
       // 1. Panning Canvas
@@ -244,7 +262,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       }
     };
 
-    const handleWindowMouseUp = () => {
+    const handleWindowMouseUp = (e: MouseEvent) => {
       if (isPanning) {
         setIsPanning(false);
       }
@@ -252,7 +270,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         setDraggingNodeId(null);
         pushHistory(workflow);
       }
+      // If connectingState and released on empty canvas, open Add Node modal right at drop point!
       if (connectingState) {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const dropWorldX = snapVal((e.clientX - containerRect.left - viewport.x) / viewport.zoom);
+          const dropWorldY = snapVal((e.clientY - containerRect.top - viewport.y) / viewport.zoom);
+          const fromNode = workflow.nodes.find((n) => n.id === connectingState.fromNodeId);
+
+          setAutoConnectState({
+            fromNodeId: connectingState.fromNodeId,
+            fromPortId: connectingState.fromPortId,
+            fromNodeName: fromNode?.name,
+            targetPos: { x: dropWorldX, y: dropWorldY },
+          });
+          setAddNodeModalOpen(true);
+        }
         setConnectingState(null);
       }
     };
@@ -278,6 +311,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       if (canvasMode !== 'pan') {
         setSelectedNodeIds([]);
         setSelectedConnectionId(null);
+        setPendingSourcePort(null);
       }
     } else if (e.touches.length === 2) {
       setIsPanning(false);
@@ -343,14 +377,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const mouseX = e.clientX - containerRect.left;
     const mouseY = e.clientY - containerRect.top;
 
-    // Zoom centered around mouse pointer
     const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
     const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
 
     setViewport({ x: newX, y: newY, zoom: newZoom });
   };
 
-  // --- NODE SELECTION & SMOOTH DRAGGING ---
+  // --- NODE SELECTION & DRAGGING ---
   const handleNodeSelect = (nodeId: string, multi: boolean) => {
     if (multi) {
       setSelectedNodeIds((prev) =>
@@ -401,7 +434,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const handleSeparateNodes = () => {
     if (workflow.nodes.length <= 1) return;
 
-    // Detect root nodes and connections to arrange into non-overlapping columns and rows
     const incomingCount: Record<string, number> = {};
     const outgoingMap: Record<string, string[]> = {};
 
@@ -422,7 +454,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const levels: Record<string, number> = {};
     const queue: string[] = [];
 
-    // Root nodes (triggers or zero incoming)
     workflow.nodes.forEach((n) => {
       if (incomingCount[n.id] === 0 || n.category === 'Triggers') {
         levels[n.id] = 0;
@@ -467,7 +498,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       levelColumns[col].push(n);
     });
 
-    // Ample spacing: 350px horizontal spacing, 170px vertical spacing (completely non-overlapping)
     const startX = 100;
     const startY = 120;
     const updatedNodes: WorkflowNodeData[] = [];
@@ -492,7 +522,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     pushHistory(updatedWorkflow);
   };
 
-  // --- PORT WIRE CONNECTION ---
+  // --- CONNECTING NODES (DRAG & 2-CLICK) ---
   const handleStartPortDrag = (
     nodeId: string,
     portId: string,
@@ -519,42 +549,153 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     if (!connectingState) return;
 
     if (!isOutput && connectingState.fromNodeId !== targetNodeId) {
-      const exists = workflow.connections.some(
-        (c) =>
-          c.fromNodeId === connectingState.fromNodeId &&
-          c.fromPortId === connectingState.fromPortId &&
-          c.toNodeId === targetNodeId &&
-          c.toPortId === targetPortId
-      );
-
-      if (!exists) {
-        const newConnection: WorkflowConnection = {
-          id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-          fromNodeId: connectingState.fromNodeId,
-          fromPortId: connectingState.fromPortId,
-          toNodeId: targetNodeId,
-          toPortId: targetPortId,
-        };
-
-        const updated = {
-          ...workflow,
-          connections: [...workflow.connections, newConnection],
-        };
-        pushHistory(updated);
-      }
+      connectTwoPorts(connectingState.fromNodeId, connectingState.fromPortId, targetNodeId, targetPortId);
     }
 
     setConnectingState(null);
   };
 
-  // --- NODE ACTIONS ---
+  // Click-to-Connect implementation (2-click connection without dragging)
+  const handlePortClick = (nodeId: string, portId: string, isOutput: boolean) => {
+    if (isOutput) {
+      // Set as pending output source
+      setPendingSourcePort({ nodeId, portId, isOutput: true });
+    } else {
+      // Clicked an input port! If we have a pending output source, complete the connection!
+      if (pendingSourcePort && pendingSourcePort.isOutput && pendingSourcePort.nodeId !== nodeId) {
+        connectTwoPorts(pendingSourcePort.nodeId, pendingSourcePort.portId, nodeId, portId);
+        setPendingSourcePort(null);
+      }
+    }
+  };
+
+  const connectTwoPorts = (fromNodeId: string, fromPortId: string, toNodeId: string, toPortId: string) => {
+    const exists = workflow.connections.some(
+      (c) =>
+        c.fromNodeId === fromNodeId &&
+        c.fromPortId === fromPortId &&
+        c.toNodeId === toNodeId &&
+        c.toPortId === toPortId
+    );
+
+    if (!exists) {
+      const newConnection: WorkflowConnection = {
+        id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        fromNodeId,
+        fromPortId,
+        toNodeId,
+        toPortId,
+      };
+
+      const updated = {
+        ...workflow,
+        connections: [...workflow.connections, newConnection],
+      };
+      pushHistory(updated);
+    }
+  };
+
+  // Quick Connect '+' Button on Output Port (n8n Style)
+  const handleQuickConnect = (nodeId: string, portId: string) => {
+    const node = workflow.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    setAutoConnectState({
+      fromNodeId: nodeId,
+      fromPortId: portId,
+      fromNodeName: node.name,
+      targetPos: {
+        x: node.position.x + 350,
+        y: node.position.y,
+      },
+    });
+    setAddNodeModalOpen(true);
+  };
+
+  // AI Agent Sub-node Quick Connection ('+ Model', '+ Memory', '+ Tool')
+  const handleQuickAddSubNode = (nodeId: string, subType: 'model' | 'memory' | 'tool') => {
+    const node = workflow.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    if (subType === 'model') {
+      const modelDef = NODE_LIBRARY.find((n) => n.type === 'ai_model_gemini') || NODE_LIBRARY.find((n) => n.category === 'AI');
+      if (modelDef) {
+        const newNode: WorkflowNodeData = {
+          id: `node_${Date.now()}_model`,
+          type: modelDef.type,
+          name: modelDef.name,
+          category: modelDef.category,
+          icon: modelDef.icon,
+          position: { x: node.position.x - 320, y: node.position.y - 40 },
+          inputs: modelDef.inputs,
+          outputs: modelDef.outputs,
+          config: JSON.parse(JSON.stringify(modelDef.defaultConfig)),
+        };
+        const newConn: WorkflowConnection = {
+          id: `c_${Date.now()}`,
+          fromNodeId: newNode.id,
+          fromPortId: newNode.outputs[0]?.id || 'out_model',
+          toNodeId: node.id,
+          toPortId: 'in_model',
+        };
+        const updated = {
+          ...workflow,
+          nodes: [...workflow.nodes, newNode],
+          connections: [...workflow.connections, newConn],
+        };
+        pushHistory(updated);
+      }
+    } else if (subType === 'memory') {
+      const memDef = NODE_LIBRARY.find((n) => n.type === 'ai_memory_window');
+      if (memDef) {
+        const newNode: WorkflowNodeData = {
+          id: `node_${Date.now()}_mem`,
+          type: memDef.type,
+          name: memDef.name,
+          category: memDef.category,
+          icon: memDef.icon,
+          position: { x: node.position.x - 320, y: node.position.y + 110 },
+          inputs: memDef.inputs,
+          outputs: memDef.outputs,
+          config: JSON.parse(JSON.stringify(memDef.defaultConfig)),
+        };
+        const newConn: WorkflowConnection = {
+          id: `c_${Date.now()}`,
+          fromNodeId: newNode.id,
+          fromPortId: newNode.outputs[0]?.id || 'out_memory',
+          toNodeId: node.id,
+          toPortId: 'in_memory',
+        };
+        const updated = {
+          ...workflow,
+          nodes: [...workflow.nodes, newNode],
+          connections: [...workflow.connections, newConn],
+        };
+        pushHistory(updated);
+      }
+    } else if (subType === 'tool') {
+      // Open modal targeting the AI Agent's in_tools port
+      const toolsConnected = workflow.connections.filter((c) => c.toNodeId === node.id && c.toPortId === 'in_tools').length;
+      setAutoConnectState({
+        toNodeId: node.id,
+        toPortId: 'in_tools',
+        targetPos: {
+          x: node.position.x - 320,
+          y: node.position.y + 240 + toolsConnected * 100,
+        },
+      });
+      setAddNodeModalOpen(true);
+    }
+  };
+
+  // --- ADD NODE FROM MODAL (WITH OPTIONAL AUTO-CONNECT) ---
   const handleAddNodeFromModal = (nodeDef: NodeDefinition) => {
     const containerRect = containerRef.current?.getBoundingClientRect();
-    const centerX = containerRect ? containerRect.width / 2 : 500;
-    const centerY = containerRect ? containerRect.height / 2 : 350;
+    const defaultX = containerRect ? (containerRect.width / 2 - viewport.x) / viewport.zoom - 128 : 200;
+    const defaultY = containerRect ? (containerRect.height / 2 - viewport.y) / viewport.zoom - 40 : 200;
 
-    const worldX = snapVal((centerX - viewport.x) / viewport.zoom - 128);
-    const worldY = snapVal((centerY - viewport.y) / viewport.zoom - 40);
+    const targetX = autoConnectState?.targetPos ? autoConnectState.targetPos.x : snapVal(defaultX);
+    const targetY = autoConnectState?.targetPos ? autoConnectState.targetPos.y : snapVal(defaultY);
 
     const newNode: WorkflowNodeData = {
       id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
@@ -562,20 +703,48 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       name: nodeDef.name,
       category: nodeDef.category,
       icon: nodeDef.icon,
-      position: { x: worldX, y: worldY },
+      position: { x: targetX, y: targetY },
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
       config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
       executionSettings: { continueOnError: false, timeoutMs: 15000 },
     };
 
+    let newConnections = [...workflow.connections];
+
+    // If auto-connecting from an existing node output:
+    if (autoConnectState?.fromNodeId && autoConnectState.fromPortId) {
+      const targetInputPort = newNode.inputs[0]?.id || 'in_main';
+      newConnections.push({
+        id: `c_${Date.now()}_auto`,
+        fromNodeId: autoConnectState.fromNodeId,
+        fromPortId: autoConnectState.fromPortId,
+        toNodeId: newNode.id,
+        toPortId: targetInputPort,
+      });
+    }
+
+    // If auto-connecting as an inbound tool or model to an existing node:
+    if (autoConnectState?.toNodeId && autoConnectState.toPortId) {
+      const sourceOutputPort = newNode.outputs[0]?.id || 'out_main';
+      newConnections.push({
+        id: `c_${Date.now()}_auto_in`,
+        fromNodeId: newNode.id,
+        fromPortId: sourceOutputPort,
+        toNodeId: autoConnectState.toNodeId,
+        toPortId: autoConnectState.toPortId,
+      });
+    }
+
     const updated = {
       ...workflow,
       nodes: [...workflow.nodes, newNode],
+      connections: newConnections,
     };
+
     pushHistory(updated);
     setSelectedNodeIds([newNode.id]);
-    setEditingNodeId(newNode.id);
+    setAutoConnectState(null);
   };
 
   const handleDeleteNode = (nodeId: string) => {
@@ -705,9 +874,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const n of workflow.nodes) {
       if (n.position.x < minX) minX = n.position.x;
-      if (n.position.x + 256 > maxX) maxX = n.position.x + 256;
+      if (n.position.x + 280 > maxX) maxX = n.position.x + 280;
       if (n.position.y < minY) minY = n.position.y;
-      if (n.position.y + 100 > maxY) maxY = n.position.y + 100;
+      if (n.position.y + 120 > maxY) maxY = n.position.y + 120;
     }
 
     const padding = 100;
@@ -764,23 +933,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeIds, selectedConnectionId, historyIndex, history, workflow]);
 
-  // Node position lookup helper for wire rendering
+  // Exact wire port position calculator
   const getNodePortPos = (nodeId: string, portId: string, isOutput: boolean) => {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return { x: 0, y: 0 };
 
-    const nodeWidth = 256;
-    const nodeHeight = 85;
+    const nodeWidth = node.type === 'ai_agent' ? 280 : 264;
+    const ports = isOutput ? node.outputs : node.inputs;
+    const portIndex = ports.findIndex((p) => p.id === portId);
+    const totalPorts = ports.length || 1;
+
+    // Center single ports or distribute multiple ports evenly
+    const topOffset = 44;
+    const spanHeight = Math.max(30, (totalPorts - 1) * 22);
+    const step = totalPorts > 1 ? spanHeight / (totalPorts - 1) : 0;
+    const portY = node.position.y + topOffset + (portIndex >= 0 ? portIndex * step : 15);
 
     if (isOutput) {
       return {
         x: node.position.x + nodeWidth,
-        y: node.position.y + nodeHeight / 2,
+        y: portY,
       };
     } else {
       return {
         x: node.position.x,
-        y: node.position.y + nodeHeight / 2,
+        y: portY,
       };
     }
   };
@@ -818,7 +995,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onRedo={handleRedo}
         onToggleMiniMap={() => setMiniMapOpen(!miniMapOpen)}
         onToggleExecutionDrawer={() => setExecutionDrawerOpen(!executionDrawerOpen)}
-        onOpenAddNode={() => setAddNodeModalOpen(true)}
+        onOpenAddNode={() => {
+          setAutoConnectState(null);
+          setAddNodeModalOpen(true);
+        }}
         onRunWorkflow={handleTestWorkflow}
         onSaveWorkflow={handleSave}
         onToggleActive={async () => {
@@ -827,7 +1007,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }}
       />
 
-      {/* Interactive Workflow Canvas Area (Nodes Can Never Overlap Top Bar) */}
+      {/* Interactive Workflow Canvas Area */}
       <div
         ref={containerRef}
         onMouseDown={handleMouseDownCanvas}
@@ -851,6 +1031,19 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               backgroundPosition: `${viewport.x}px ${viewport.y}px`,
             }}
           />
+        )}
+
+        {/* Pending Connection Banner (Click-to-Connect Helper) */}
+        {pendingSourcePort && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/90 border border-cyan-400 text-cyan-300 text-xs font-medium shadow-lg animate-pulse">
+            <span>⚡ Click any input port on another node to connect</span>
+            <button
+              onClick={() => setPendingSourcePort(null)}
+              className="text-slate-400 hover:text-white ml-1 text-xs"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
         {/* SVG Canvas Layer for Wires */}
@@ -892,6 +1085,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     onSelect={(id) => {
                       setSelectedConnectionId(id);
                       setSelectedNodeIds([]);
+                      setPendingSourcePort(null);
                     }}
                   />
                 </g>
@@ -931,12 +1125,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 key={node.id}
                 node={node}
                 isSelected={selectedNodeIds.includes(node.id)}
+                isPendingSource={pendingSourcePort?.nodeId === node.id}
                 executionResult={latestExecution?.nodeResults[node.id]}
                 isConnecting={Boolean(connectingState)}
                 onSelect={handleNodeSelect}
                 onStartDrag={handleStartNodeDrag}
                 onStartPortDrag={handleStartPortDrag}
                 onPortMouseUp={handlePortMouseUp}
+                onPortClick={handlePortClick}
+                onQuickConnect={handleQuickConnect}
+                onQuickAddSubNode={handleQuickAddSubNode}
                 onDeleteNode={handleDeleteNode}
                 onDuplicateNode={handleDuplicateNode}
                 onOpenConfig={(id) => {
@@ -961,11 +1159,19 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         )}
       </div>
 
-      {/* Add Node Search Modal */}
+      {/* Add Node Search Modal (with Auto-Connect Context support) */}
       <AddNodeModal
         isOpen={addNodeModalOpen}
-        onClose={() => setAddNodeModalOpen(false)}
+        onClose={() => {
+          setAddNodeModalOpen(false);
+          setAutoConnectState(null);
+        }}
         onSelectNode={handleAddNodeFromModal}
+        autoConnectContext={
+          autoConnectState?.fromNodeName
+            ? { fromNodeName: autoConnectState.fromNodeName }
+            : null
+        }
       />
 
       {/* Right-Side Node Inspector Drawer */}

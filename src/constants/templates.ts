@@ -11,6 +11,115 @@ export interface WorkflowTemplate {
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
+    id: 'tpl_n8n_ai_agent',
+    name: 'n8n Autonomous AI Agent (Tools + Memory + LLM Model)',
+    description: 'Autonomous LangChain AI Agent connected with Google Gemini Model, Window Buffer Memory, Calculator Tool, and Web Search Tool to solve complex multi-step automations.',
+    category: 'AI & Ingestion',
+    tags: ['AI Agent', 'Gemini', 'Memory', 'Tools', 'n8n Style'],
+    workflow: {
+      name: 'n8n Autonomous AI Agent (Tools + Memory + LLM Model)',
+      description: 'Autonomous LangChain AI Agent connected with Google Gemini Model, Window Buffer Memory, Calculator Tool, and Web Search Tool.',
+      active: true,
+      viewport: { x: 40, y: 80, zoom: 0.85 },
+      nodes: [
+        {
+          id: 'agent_wh',
+          type: 'trigger_webhook',
+          name: 'Chat Inbound Trigger',
+          category: 'Triggers',
+          icon: 'Webhook',
+          position: { x: 80, y: 240 },
+          inputs: [],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Message' }],
+          config: { webhookPath: 'chat_agent', method: 'POST' }
+        },
+        {
+          id: 'agent_core',
+          type: 'ai_agent',
+          name: 'Autonomous AI Agent',
+          category: 'AI',
+          icon: 'Bot',
+          position: { x: 440, y: 220 },
+          inputs: [
+            { id: 'in_main', name: 'main', type: 'main', label: 'Chat Input' },
+            { id: 'in_model', name: 'model', type: 'model', label: 'Chat Model' },
+            { id: 'in_memory', name: 'memory', type: 'memory', label: 'Memory' },
+            { id: 'in_tools', name: 'tool', type: 'tool', label: 'Tools' },
+          ],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Agent Response' }],
+          config: {
+            agentType: 'tools_agent',
+            systemPrompt: 'You are an autonomous AI Agent that solves problems by invoking Calculator, Web Search, and HTTP tools.',
+            temperature: 0.2
+          }
+        },
+        {
+          id: 'agent_model',
+          type: 'ai_model_gemini',
+          name: 'Google Gemini 3.8 Flash',
+          category: 'AI',
+          icon: 'Sparkles',
+          position: { x: 120, y: 60 },
+          inputs: [],
+          outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
+          config: { model: 'gemini-3.8-flash' }
+        },
+        {
+          id: 'agent_mem',
+          type: 'ai_memory_window',
+          name: 'Window Buffer Memory',
+          category: 'AI',
+          icon: 'History',
+          position: { x: 120, y: 380 },
+          inputs: [],
+          outputs: [{ id: 'out_memory', name: 'memory', type: 'memory', label: 'Memory' }],
+          config: { contextWindowLength: 10 }
+        },
+        {
+          id: 'agent_calc',
+          type: 'ai_tool_calculator',
+          name: 'Calculator Tool',
+          category: 'AI Tools',
+          icon: 'Activity',
+          position: { x: 120, y: 520 },
+          inputs: [],
+          outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+          config: { toolName: 'calculator' }
+        },
+        {
+          id: 'agent_search',
+          type: 'ai_tool_search',
+          name: 'Web Search Tool',
+          category: 'AI Tools',
+          icon: 'Globe',
+          position: { x: 120, y: 660 },
+          inputs: [],
+          outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+          config: { toolName: 'web_search' }
+        },
+        {
+          id: 'agent_slack',
+          type: 'app_slack',
+          name: 'Slack Notification',
+          category: 'All Applications',
+          icon: 'MessageSquare',
+          position: { x: 820, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Payload' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Result' }],
+          config: { channel: '#ai-agent-outputs', text: '🤖 Agent Completed: {{$json.text}}' }
+        }
+      ],
+      connections: [
+        { id: 'conn_wh', fromNodeId: 'agent_wh', fromPortId: 'out_main', toNodeId: 'agent_core', toPortId: 'in_main' },
+        { id: 'conn_model', fromNodeId: 'agent_model', fromPortId: 'out_model', toNodeId: 'agent_core', toPortId: 'in_model' },
+        { id: 'conn_mem', fromNodeId: 'agent_mem', fromPortId: 'out_memory', toNodeId: 'agent_core', toPortId: 'in_memory' },
+        { id: 'conn_calc', fromNodeId: 'agent_calc', fromPortId: 'out_tool', toNodeId: 'agent_core', toPortId: 'in_tools' },
+        { id: 'conn_search', fromNodeId: 'agent_search', fromPortId: 'out_tool', toNodeId: 'agent_core', toPortId: 'in_tools' },
+        { id: 'conn_slack', fromNodeId: 'agent_core', fromPortId: 'out_main', toNodeId: 'agent_slack', toPortId: 'in_main' }
+      ]
+    }
+  },
+  {
     id: 'tpl_webhook_ai_email',
     name: 'Webhook → AI Agent → Smart Email Alert',
     description: 'Intercepts incoming webhook payloads, executes Gemini AI analysis with structured entity extraction, and dispatches dynamic email notifications.',

@@ -4,6 +4,7 @@ export const CATEGORIES: NodeCategory[] = [
   'All Applications',
   'Triggers',
   'AI',
+  'AI Tools',
   'Communication',
   'Database',
   'HTTP',
@@ -949,22 +950,176 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     }
   },
 
-  // 3. AI SERVICES
+  // 3. ADVANCED AI & AGENTS (n8n LangChain Style)
   {
     type: 'ai_agent',
-    name: 'Gemini AI Agent',
-    description: 'Leverages Google Gemini 3.8 to reason, classify, extract entities, or summarize.',
+    name: 'AI Agent',
+    description: 'Autonomous AI Agent with LLM reasoning, conversational memory, and multi-tool execution capabilities.',
+    category: 'AI',
+    icon: 'Bot',
+    accentColor: '#9333ea', // purple
+    inputs: [
+      { id: 'in_main', name: 'main', type: 'main', label: 'Chat / Trigger Input' },
+      { id: 'in_model', name: 'model', type: 'model', label: 'Chat Model' },
+      { id: 'in_memory', name: 'memory', type: 'memory', label: 'Memory' },
+      { id: 'in_tools', name: 'tool', type: 'tool', label: 'Tools' },
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Agent Response' }],
+    defaultConfig: {
+      agentType: 'tools_agent',
+      systemPrompt: 'You are an expert autonomous AI agent equipped with external tools. Analyze user queries, plan actions, invoke tools as needed, and return structured answers.',
+      temperature: 0.2,
+      maxIterations: 10,
+      returnIntermediateSteps: true
+    }
+  },
+  {
+    type: 'ai_model_gemini',
+    name: 'Google Gemini Chat Model',
+    description: 'Provides Gemini 3.8 Flash or Gemini 2.5 Pro multimodal reasoning engine to AI Agents.',
     category: 'AI',
     icon: 'Sparkles',
-    accentColor: '#ec4899', // pink
-    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Context / Data' }],
-    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Output' }],
+    accentColor: '#1A73E8',
+    inputs: [],
+    outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
     defaultConfig: {
       model: 'gemini-3.8-flash',
-      systemPrompt: 'You are an intelligent workflow automation agent. Analyze input data and return concise structured output.',
-      userPromptTemplate: 'Analyze this record: {{$json}}',
       temperature: 0.2,
-      responseFormat: 'json'
+      maxOutputTokens: 2048
+    },
+    requiresCredentials: true,
+    credentialType: 'gemini'
+  },
+  {
+    type: 'ai_model_openai',
+    name: 'OpenAI Chat Model',
+    description: 'Connects GPT-4o, GPT-4o-mini, or o1 reasoning language model to the AI Agent.',
+    category: 'AI',
+    icon: 'Bot',
+    accentColor: '#10A37F',
+    inputs: [],
+    outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
+    defaultConfig: {
+      model: 'gpt-4o',
+      temperature: 0.7
+    },
+    requiresCredentials: true,
+    credentialType: 'openai'
+  },
+  {
+    type: 'ai_model_claude',
+    name: 'Anthropic Claude Model',
+    description: 'Connects Claude 3.5 Sonnet to AI Agent for deep code analysis and complex reasoning.',
+    category: 'AI',
+    icon: 'BrainCircuit',
+    accentColor: '#D97706',
+    inputs: [],
+    outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
+    defaultConfig: {
+      model: 'claude-3-5-sonnet',
+      temperature: 0.3
+    },
+    requiresCredentials: true,
+    credentialType: 'anthropic'
+  },
+  {
+    type: 'ai_memory_window',
+    name: 'Window Buffer Memory',
+    description: 'Keeps a rolling window of recent chat conversation turns for contextual memory in the AI Agent.',
+    category: 'AI',
+    icon: 'History',
+    accentColor: '#F59E0B',
+    inputs: [],
+    outputs: [{ id: 'out_memory', name: 'memory', type: 'memory', label: 'Memory' }],
+    defaultConfig: {
+      sessionKey: 'user_session_{{$json.userId || "default"}}',
+      contextWindowLength: 10
+    }
+  },
+  {
+    type: 'ai_memory_redis',
+    name: 'Redis Chat Memory',
+    description: 'Persists user session chat history into high-performance Redis cache for cross-session continuity.',
+    category: 'AI',
+    icon: 'Cpu',
+    accentColor: '#DC382D',
+    inputs: [],
+    outputs: [{ id: 'out_memory', name: 'memory', type: 'memory', label: 'Memory' }],
+    defaultConfig: {
+      sessionKey: 'chat:{{$json.sessionId}}',
+      ttlSeconds: 86400
+    },
+    requiresCredentials: true,
+    credentialType: 'redis'
+  },
+  {
+    type: 'ai_tool_calculator',
+    name: 'Calculator Tool',
+    description: 'Enables the AI Agent to execute precise mathematical, financial, and formula calculations.',
+    category: 'AI Tools',
+    icon: 'Activity',
+    accentColor: '#10B981',
+    inputs: [],
+    outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+    defaultConfig: {
+      toolName: 'calculator',
+      toolDescription: 'Calculates mathematical equations and numerical operations with precision.'
+    }
+  },
+  {
+    type: 'ai_tool_search',
+    name: 'Web Search Tool',
+    description: 'Allows the AI Agent to search Google and live web engines for real-time information.',
+    category: 'AI Tools',
+    icon: 'Globe',
+    accentColor: '#3B82F6',
+    inputs: [],
+    outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+    defaultConfig: {
+      toolName: 'web_search',
+      maxResults: 5
+    }
+  },
+  {
+    type: 'ai_tool_http',
+    name: 'Custom HTTP Request Tool',
+    description: 'Enables AI Agent to make arbitrary REST API calls to external microservices as a dynamic tool.',
+    category: 'AI Tools',
+    icon: 'Terminal',
+    accentColor: '#06B6D4',
+    inputs: [],
+    outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+    defaultConfig: {
+      toolName: 'api_caller',
+      endpointUrl: 'https://api.example.com/data'
+    }
+  },
+  {
+    type: 'ai_tool_code',
+    name: 'Custom Code Tool',
+    description: 'Empowers the AI Agent to execute custom JavaScript/Python snippets on demand.',
+    category: 'AI Tools',
+    icon: 'Code2',
+    accentColor: '#8B5CF6',
+    inputs: [],
+    outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+    defaultConfig: {
+      toolName: 'custom_code_evaluator',
+      codeSnippet: 'return { result: input.number * 2 };'
+    }
+  },
+  {
+    type: 'ai_tool_vector_store',
+    name: 'Vector Store Tool',
+    description: 'Connects Pinecone or Supabase vector embeddings to retrieve relevant documentation for RAG.',
+    category: 'AI Tools',
+    icon: 'Database',
+    accentColor: '#14B8A6',
+    inputs: [],
+    outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
+    defaultConfig: {
+      toolName: 'knowledge_base_retriever',
+      topK: 4
     }
   },
   {

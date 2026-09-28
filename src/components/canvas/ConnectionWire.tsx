@@ -46,6 +46,12 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
     strokeColor = '#10b981'; // emerald
   } else if (fromPortType === 'false') {
     strokeColor = '#f43f5e'; // rose
+  } else if (fromPortType === 'model') {
+    strokeColor = '#a855f7'; // purple
+  } else if (fromPortType === 'memory') {
+    strokeColor = '#f59e0b'; // amber
+  } else if (fromPortType === 'tool') {
+    strokeColor = '#10b981'; // emerald
   }
 
   if (executionStatus === 'running' || isExecuting) {
