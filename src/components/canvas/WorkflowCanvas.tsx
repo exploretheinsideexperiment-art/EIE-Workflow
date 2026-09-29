@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, Settings, Copy } from 'lucide-react';
+import { Trash2, Settings, Copy, AlertCircle } from 'lucide-react';
 import {
   Workflow,
   WorkflowNodeData,
@@ -16,6 +16,12 @@ import { AddNodeModal } from '../panels/AddNodeModal';
 import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
+import {
+  validateConnection,
+  getPortColorDef,
+  getPortTypeFromNode,
+  isPortCompatible
+} from '../../utils/portValidation';
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -54,8 +60,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [pendingSourcePort, setPendingSourcePort] = useState<{
     nodeId: string;
     portId: string;
+    portType: string;
     isOutput: boolean;
   } | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const [autoConnectState, setAutoConnectState] = useState<{
     fromNodeId?: string;
@@ -83,6 +91,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [connectingState, setConnectingState] = useState<{
     fromNodeId: string;
     fromPortId: string;
+    portType: string;
     startPos: { x: number; y: number };
     currentPos: { x: number; y: number };
   } | null>(null);
@@ -538,9 +547,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       y: (screenPos.y - containerRect.top - viewport.y) / viewport.zoom,
     };
 
+    const fromNode = workflow.nodes.find((n) => n.id === nodeId);
+    const portType = getPortTypeFromNode(fromNode, portId, true);
+
     setConnectingState({
       fromNodeId: nodeId,
       fromPortId: portId,
+      portType,
       startPos: worldStart,
       currentPos: worldStart,
     });
@@ -558,9 +571,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // Click-to-Connect implementation (2-click connection without dragging)
   const handlePortClick = (nodeId: string, portId: string, isOutput: boolean) => {
+    const node = workflow.nodes.find((n) => n.id === nodeId);
     if (isOutput) {
       // Set as pending output source
-      setPendingSourcePort({ nodeId, portId, isOutput: true });
+      const portType = getPortTypeFromNode(node, portId, true);
+      setPendingSourcePort({ nodeId, portId, portType, isOutput: true });
     } else {
       // Clicked an input port! If we have a pending output source, complete the connection!
       if (pendingSourcePort && pendingSourcePort.isOutput && pendingSourcePort.nodeId !== nodeId) {
@@ -571,6 +586,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const connectTwoPorts = (fromNodeId: string, fromPortId: string, toNodeId: string, toPortId: string) => {
+    const fromNode = workflow.nodes.find((n) => n.id === fromNodeId);
+    const toNode = workflow.nodes.find((n) => n.id === toNodeId);
+    if (!fromNode || !toNode) return;
+
+    const fromPort = fromNode.outputs.find((p) => p.id === fromPortId);
+    const toPort = toNode.inputs.find((p) => p.id === toPortId);
+
+    // Validate type and color compatibility strictly
+    const validation = validateConnection(fromNode, fromPort, toNode, toPort);
+    if (!validation.valid) {
+      setConnectionError(validation.errorMessage || 'Invalid Connection: Port types and colors must match!');
+      setTimeout(() => {
+        setConnectionError((err) => (err === validation.errorMessage ? null : err));
+      }, 4500);
+      return;
+    }
+
+    setConnectionError(null);
+
     const exists = workflow.connections.some(
       (c) =>
         c.fromNodeId === fromNodeId &&
@@ -579,21 +613,34 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         c.toPortId === toPortId
     );
 
-    if (!exists) {
-      const newConnection: WorkflowConnection = {
-        id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        fromNodeId,
-        fromPortId,
-        toNodeId,
-        toPortId,
-      };
+    if (exists) return;
 
-      const updated = {
-        ...workflow,
-        connections: [...workflow.connections, newConnection],
-      };
-      pushHistory(updated);
+    // For single-input slots (e.g. AI Agent's Chat Model or Memory), replace any existing incoming wire
+    const targetPortType = toPort?.type || getPortTypeFromNode(toNode, toPortId, false);
+    const isSingleSlot = ['model', 'memory'].includes(targetPortType);
+
+    let updatedConnections = [...workflow.connections];
+    if (isSingleSlot) {
+      updatedConnections = updatedConnections.filter(
+        (c) => !(c.toNodeId === toNodeId && c.toPortId === toPortId)
+      );
     }
+
+    const newConnection: WorkflowConnection = {
+      id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      fromNodeId,
+      fromPortId,
+      toNodeId,
+      toPortId,
+    };
+
+    updatedConnections.push(newConnection);
+
+    const updated = {
+      ...workflow,
+      connections: updatedConnections,
+    };
+    pushHistory(updated);
   };
 
   // Quick Connect '+' Button on Output Port (n8n Style)
@@ -1040,33 +1087,28 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeIds, selectedConnectionId, historyIndex, history, workflow]);
 
-  // Exact wire port position calculator
+  // Exact wire port position calculator matching DOM flexbox coordinates
   const getNodePortPos = (nodeId: string, portId: string, isOutput: boolean) => {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return { x: 0, y: 0 };
 
     const nodeWidth = node.type === 'ai_agent' ? 280 : 264;
+    const nodeHeight = node.type === 'ai_agent' ? 204 : 84;
     const ports = isOutput ? node.outputs : node.inputs;
     const portIndex = ports.findIndex((p) => p.id === portId);
-    const totalPorts = ports.length || 1;
+    const totalPorts = Math.max(ports.length, 1);
 
-    // Center single ports or distribute multiple ports evenly
-    const topOffset = 44;
-    const spanHeight = Math.max(30, (totalPorts - 1) * 22);
-    const step = totalPorts > 1 ? spanHeight / (totalPorts - 1) : 0;
-    const portY = node.position.y + topOffset + (portIndex >= 0 ? portIndex * step : 15);
+    // Port container has CSS: top-1/2 -translate-y-1/2 flex flex-col gap-2.5 (20px port + 10px gap)
+    const portPitch = 30;
+    const totalPortContainerHeight = totalPorts * 20 + (totalPorts - 1) * 10;
+    const startY = (nodeHeight - totalPortContainerHeight) / 2 + 10;
+    const idx = portIndex >= 0 ? portIndex : 0;
+    const portY = node.position.y + startY + idx * portPitch;
 
-    if (isOutput) {
-      return {
-        x: node.position.x + nodeWidth,
-        y: portY,
-      };
-    } else {
-      return {
-        x: node.position.x,
-        y: portY,
-      };
-    }
+    return {
+      x: isOutput ? node.position.x + nodeWidth : node.position.x,
+      y: portY,
+    };
   };
 
   const editingNode = workflow.nodes.find((n) => n.id === editingNodeId) || null;
@@ -1144,12 +1186,36 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         )}
 
         {/* Pending Connection Banner (Click-to-Connect Helper) */}
-        {pendingSourcePort && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/90 border border-cyan-400 text-cyan-300 text-xs font-medium shadow-lg animate-pulse">
-            <span>⚡ Click any input port on another node to connect</span>
+        {pendingSourcePort && (() => {
+          const colorDef = getPortColorDef(pendingSourcePort.portType);
+          return (
+            <div
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-950/95 border shadow-2xl shadow-black/90 backdrop-blur-md animate-in slide-in-from-top-2 duration-200"
+              style={{ borderColor: colorDef.hex }}
+            >
+              <span className="w-2.5 h-2.5 rounded-full animate-ping" style={{ backgroundColor: colorDef.hex }} />
+              <span className="text-xs font-semibold" style={{ color: colorDef.hex }}>
+                Connect {colorDef.name} — Click matching {colorDef.shortLabel} input port
+              </span>
+              <button
+                onClick={() => setPendingSourcePort(null)}
+                className="text-slate-400 hover:text-white ml-2 text-xs cursor-pointer p-0.5"
+                title="Cancel Connection"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Connection Error Toast Alert */}
+        {connectionError && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-rose-950/95 border border-rose-500/80 text-rose-200 text-xs font-semibold shadow-2xl shadow-black/80 backdrop-blur-md animate-in slide-in-from-top-2 duration-200 max-w-[90vw] text-center">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{connectionError}</span>
             <button
-              onClick={() => setPendingSourcePort(null)}
-              className="text-slate-400 hover:text-white ml-1 text-xs"
+              onClick={() => setConnectionError(null)}
+              className="ml-2 text-rose-400 hover:text-white p-0.5 rounded cursor-pointer"
             >
               ✕
             </button>
@@ -1178,7 +1244,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const endPos = getNodePortPos(conn.toNodeId, conn.toPortId, false);
 
               const fromNode = workflow.nodes.find((n) => n.id === conn.fromNodeId);
-              const fromPort = fromNode?.outputs.find((p) => p.id === conn.fromPortId);
+              const fromPortType =
+                fromNode?.outputs.find((p) => p.id === conn.fromPortId)?.type ||
+                getPortTypeFromNode(fromNode, conn.fromPortId, true);
               const stepResult = latestExecution?.nodeResults[conn.fromNodeId];
 
               return (
@@ -1187,7 +1255,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     connection={conn}
                     startPos={startPos}
                     endPos={endPos}
-                    fromPortType={fromPort?.type}
+                    fromPortType={fromPortType}
                     isSelected={selectedConnectionId === conn.id}
                     isExecuting={isExecuting}
                     executionStatus={stepResult?.status}
@@ -1202,22 +1270,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               );
             })}
 
-            {/* Active Wire being dragged from port */}
-            {connectingState && (
-              <path
-                d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
-                  connectingState.startPos.x + 80
-                } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
-                  connectingState.currentPos.y
-                }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
-                fill="none"
-                stroke="#06b6d4"
-                strokeWidth="2.5"
-                strokeDasharray="6 4"
-                strokeLinecap="round"
-                className="animate-pulse"
-              />
-            )}
+            {/* Active Wire being dragged from port with matching color */}
+            {connectingState && (() => {
+              const activeColorDef = getPortColorDef(connectingState.portType);
+              return (
+                <path
+                  d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
+                    connectingState.startPos.x + 80
+                  } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
+                    connectingState.currentPos.y
+                  }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
+                  fill="none"
+                  stroke={activeColorDef.hex}
+                  strokeWidth="3.5"
+                  strokeDasharray="6 4"
+                  strokeLinecap="round"
+                  className="animate-pulse"
+                  style={{ filter: activeColorDef.glow }}
+                />
+              );
+            })()}
           </g>
         </svg>
 
@@ -1236,6 +1308,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 node={node}
                 isSelected={selectedNodeIds.includes(node.id)}
                 isPendingSource={pendingSourcePort?.nodeId === node.id}
+                activeConnectingPortType={connectingState?.portType || pendingSourcePort?.portType || null}
+                activeConnectingNodeId={connectingState?.fromNodeId || pendingSourcePort?.nodeId || null}
                 executionResult={latestExecution?.nodeResults[node.id]}
                 isConnecting={Boolean(connectingState)}
                 onSelect={handleNodeSelect}

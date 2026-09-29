@@ -1,5 +1,6 @@
 import React from 'react';
 import { WorkflowConnection } from '../../types/workflow';
+import { getPortColorDef } from '../../utils/portValidation';
 
 interface ConnectionWireProps {
   connection: WorkflowConnection;
@@ -39,20 +40,9 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   const midY = (startPos.y + endPos.y) / 2;
 
   // Determine stroke color by port type & execution status
-  let strokeColor = '#475569'; // default slate-600
-  let strokeGlow = 'none';
-
-  if (fromPortType === 'true') {
-    strokeColor = '#10b981'; // emerald
-  } else if (fromPortType === 'false') {
-    strokeColor = '#f43f5e'; // rose
-  } else if (fromPortType === 'model') {
-    strokeColor = '#a855f7'; // purple
-  } else if (fromPortType === 'memory') {
-    strokeColor = '#f59e0b'; // amber
-  } else if (fromPortType === 'tool') {
-    strokeColor = '#10b981'; // emerald
-  }
+  const colorDef = getPortColorDef(fromPortType);
+  let strokeColor = colorDef.hex;
+  let strokeGlow = isSelected ? colorDef.glow : 'none';
 
   if (executionStatus === 'running' || isExecuting) {
     strokeColor = '#06b6d4'; // cyan
@@ -62,11 +52,6 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
     strokeGlow = 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.6))';
   } else if (executionStatus === 'failed') {
     strokeColor = '#ef4444';
-  }
-
-  if (isSelected) {
-    strokeColor = '#38bdf8';
-    strokeGlow = 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.9))';
   }
 
   return (
@@ -107,9 +92,36 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         className="transition-colors duration-300"
       />
 
+      {/* Port type indicator pill along wire when hovered or selected */}
+      {isSelected && (
+        <g transform={`translate(${midX}, ${midY - 14})`}>
+          <rect
+            x="-28"
+            y="-10"
+            width="56"
+            height="20"
+            rx="10"
+            fill="#0f172a"
+            stroke={colorDef.hex}
+            strokeWidth="1.5"
+          />
+          <text
+            x="0"
+            y="3"
+            textAnchor="middle"
+            fill={colorDef.hex}
+            fontSize="9"
+            fontWeight="bold"
+            fontFamily="monospace"
+          >
+            {colorDef.shortLabel}
+          </text>
+        </g>
+      )}
+
       {/* Flowing animated pulse particle during execution */}
       {(isExecuting || executionStatus === 'running' || executionStatus === 'success') && (
-        <circle r="4" fill="#38bdf8" filter="url(#particle-glow)">
+        <circle r="4" fill={strokeColor} filter="url(#particle-glow)">
           <animateMotion path={pathData} dur="1.2s" repeatCount="indefinite" />
         </circle>
       )}

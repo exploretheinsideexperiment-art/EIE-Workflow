@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import * as Icons from 'lucide-react';
 import { Plus, Bot, Sparkles, BrainCircuit, History, Wrench, Shield, Check, Loader2, X, Settings, Copy, Trash2, KeyRound } from 'lucide-react';
 import { WorkflowNodeData, ExecutionNodeResult, NodePort } from '../../types/workflow';
+import { getPortColorDef, isPortCompatible } from '../../utils/portValidation';
 
 interface CanvasNodeProps {
   node: WorkflowNodeData;
@@ -9,6 +10,8 @@ interface CanvasNodeProps {
   isPendingSource?: boolean;
   executionResult?: ExecutionNodeResult;
   isConnecting?: boolean;
+  activeConnectingPortType?: string | null;
+  activeConnectingNodeId?: string | null;
   onSelect: (nodeId: string, multi: boolean) => void;
   onStartDrag?: (nodeId: string, clientX: number, clientY: number, multi: boolean) => void;
   onStartPortDrag: (nodeId: string, portId: string, isOutput: boolean, pos: { x: number; y: number }) => void;
@@ -27,6 +30,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   isPendingSource,
   executionResult,
   isConnecting,
+  activeConnectingPortType,
+  activeConnectingNodeId,
   onSelect,
   onStartDrag,
   onStartPortDrag,
@@ -95,24 +100,6 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   } else if (node.type === 'comm_email') {
     subtitle = node.config?.to || 'recipient@domain';
   }
-
-  // Get color for specific port type
-  const getPortColors = (portType: string) => {
-    switch (portType) {
-      case 'model':
-        return { border: 'border-purple-400', bg: 'bg-purple-400', hover: 'hover:border-purple-300' };
-      case 'memory':
-        return { border: 'border-amber-400', bg: 'bg-amber-400', hover: 'hover:border-amber-300' };
-      case 'tool':
-        return { border: 'border-emerald-400', bg: 'bg-emerald-400', hover: 'hover:border-emerald-300' };
-      case 'true':
-        return { border: 'border-emerald-400', bg: 'bg-emerald-400', hover: 'hover:border-emerald-300' };
-      case 'false':
-        return { border: 'border-rose-400', bg: 'bg-rose-400', hover: 'hover:border-rose-300' };
-      default:
-        return { border: 'border-cyan-400', bg: 'bg-cyan-400', hover: 'hover:border-cyan-300' };
-    }
-  };
 
   return (
     <div
@@ -240,7 +227,13 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       {/* SPECIAL AI AGENT SLOTS (n8n Style: Model, Memory, Tools) */}
       {isAiAgent && (
         <div className="px-3 pb-3 pt-1 border-t border-slate-800/60 flex flex-col gap-1.5 bg-slate-950/40 rounded-b-2xl">
-          <div className="flex items-center justify-between text-[10px] font-mono text-purple-300/90 bg-purple-950/30 px-2 py-1 rounded-lg border border-purple-800/40">
+          <div
+            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
+              activeConnectingPortType === 'model' && activeConnectingNodeId !== node.id
+                ? 'bg-purple-950/70 border-purple-400 ring-2 ring-purple-400/80 shadow-lg shadow-purple-500/30 text-purple-200 animate-pulse scale-[1.02]'
+                : 'text-purple-300/90 bg-purple-950/30 border-purple-800/40'
+            }`}
+          >
             <div className="flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-purple-400" />
               <span>Model (LLM Engine)</span>
@@ -257,7 +250,13 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] font-mono text-amber-300/90 bg-amber-950/30 px-2 py-1 rounded-lg border border-amber-800/40">
+          <div
+            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
+              activeConnectingPortType === 'memory' && activeConnectingNodeId !== node.id
+                ? 'bg-amber-950/70 border-amber-400 ring-2 ring-amber-400/80 shadow-lg shadow-amber-500/30 text-amber-200 animate-pulse scale-[1.02]'
+                : 'text-amber-300/90 bg-amber-950/30 border-amber-800/40'
+            }`}
+          >
             <div className="flex items-center gap-1.5">
               <History className="w-3 h-3 text-amber-400" />
               <span>Memory (Chat History)</span>
@@ -274,7 +273,13 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] font-mono text-emerald-300/90 bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-800/40">
+          <div
+            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
+              activeConnectingPortType === 'tool' && activeConnectingNodeId !== node.id
+                ? 'bg-emerald-950/70 border-emerald-400 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/30 text-emerald-200 animate-pulse scale-[1.02]'
+                : 'text-emerald-300/90 bg-emerald-950/30 border-emerald-800/40'
+            }`}
+          >
             <div className="flex items-center gap-1.5">
               <Wrench className="w-3 h-3 text-emerald-400" />
               <span>Tools (Calculator, Search, HTTP)</span>
@@ -349,29 +354,60 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       {/* Input Ports (Left) */}
       <div className="absolute top-1/2 -left-2.5 -translate-y-1/2 flex flex-col gap-2.5 z-10">
         {node.inputs.map((port) => {
-          const colors = getPortColors(port.type);
+          const colors = getPortColorDef(port.type);
+          const isConnectingActive = Boolean(activeConnectingPortType);
+          const isSelfNode = activeConnectingNodeId === node.id;
+          const isCompatible =
+            isConnectingActive &&
+            !isSelfNode &&
+            isPortCompatible(activeConnectingPortType!, port.type, false);
+          const isIncompatible = isConnectingActive && (!isCompatible || isSelfNode);
+
           return (
             <div
               key={port.id}
               id={`port-${node.id}-${port.id}`}
               data-port="true"
-              title={`Input: ${port.label || port.name} (Click or drop wire to connect)`}
-              className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} ${colors.hover} hover:scale-125 transition-all flex items-center justify-center cursor-pointer shadow-md shadow-black group/port relative`}
+              title={
+                isIncompatible
+                  ? `❌ Incompatible: Requires ${colors.name}`
+                  : isCompatible
+                  ? `✓ Compatible: Connect ${colors.name}`
+                  : `Input: ${port.label || port.name} (${colors.name})`
+              }
+              className={`w-5 h-5 rounded-full bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-md shadow-black group/port ${
+                isCompatible
+                  ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-140 z-30 cursor-pointer animate-pulse`
+                  : isIncompatible
+                  ? 'opacity-20 border-slate-700 cursor-not-allowed scale-90'
+                  : `${colors.border} ${colors.hover} hover:scale-125 cursor-pointer`
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isIncompatible) return;
                 onPortClick?.(node.id, port.id, false);
               }}
               onMouseUp={(e) => {
                 e.stopPropagation();
+                if (isIncompatible) return;
                 onPortMouseUp(node.id, port.id, false);
               }}
             >
-              <div className={`w-1.5 h-1.5 rounded-full ${colors.bg} group-hover/port:bg-white`} />
-              {port.label && (
-                <span className="absolute right-6 text-[9px] font-mono tracking-tight text-slate-300 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                  {port.label}
-                </span>
-              )}
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${colors.bg} ${
+                  isCompatible ? 'scale-125 bg-white' : ''
+                } group-hover/port:bg-white`}
+              />
+              {/* Port label badge */}
+              <span
+                className={`absolute right-6 text-[9px] font-mono tracking-tight px-2 py-0.5 rounded border transition-all whitespace-nowrap pointer-events-none z-30 shadow-lg ${
+                  isCompatible
+                    ? 'opacity-100 bg-slate-950 border-cyan-400 text-white font-bold scale-105 shadow-cyan-500/20'
+                    : 'opacity-0 group-hover/port:opacity-100 bg-slate-950/90 border-slate-800 text-slate-300'
+                }`}
+              >
+                {isCompatible ? `✓ ${port.label || port.name}` : port.label || port.name}
+              </span>
             </div>
           );
         })}
@@ -380,15 +416,24 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       {/* Output Ports (Right) with Quick-Add '+' Connector (n8n Style) */}
       <div className="absolute top-1/2 -right-2.5 -translate-y-1/2 flex flex-col gap-2.5 z-10">
         {node.outputs.map((port) => {
-          const colors = getPortColors(port.type);
+          const colors = getPortColorDef(port.type);
+          const isDraggingThis = isConnecting && activeConnectingNodeId === node.id;
+          const isConnectingActive = Boolean(activeConnectingPortType);
+
           return (
             <div key={port.id} className="relative flex items-center">
               {/* Output Port Dot */}
               <div
                 id={`port-${node.id}-${port.id}`}
                 data-port="true"
-                title={`Output: ${port.label || port.name} (Click or drag to connect)`}
-                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} ${colors.hover} hover:scale-125 transition-all flex items-center justify-center cursor-crosshair shadow-md shadow-black group/port relative`}
+                title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect`}
+                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-md shadow-black group/port relative ${
+                  isDraggingThis
+                    ? `ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-20`
+                    : isConnectingActive
+                    ? 'opacity-40 cursor-default'
+                    : `${colors.hover} hover:scale-125 cursor-crosshair`
+                }`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onPortClick?.(node.id, port.id, true);
@@ -404,7 +449,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${colors.bg} group-hover/port:bg-white`} />
                 {port.label && (
-                  <span className="absolute left-6 text-[9px] font-mono tracking-tight text-slate-300 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  <span className="absolute left-6 text-[9px] font-mono tracking-tight text-slate-300 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30">
                     {port.label}
                   </span>
                 )}
