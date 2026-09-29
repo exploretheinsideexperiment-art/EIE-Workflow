@@ -1255,62 +1255,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </div>
         </div>
 
-        {/* Floating Quick Action HUD (Bottom Center) */}
-        {selectedNodeIds.length > 0 && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-25 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150">
-            <span className="text-[11px] font-mono text-cyan-300 font-bold px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800">
-              {selectedNodeIds.length} {selectedNodeIds.length === 1 ? 'Event' : 'Events'} Selected
-            </span>
-
-            {selectedNodeIds.length === 1 && (
-              <button
-                onClick={() => setEditingNodeId(selectedNodeIds[0])}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
-                title="Configure Event"
-              >
-                <Settings className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Configure</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                selectedNodeIds.forEach((id) => handleDuplicateNode(id));
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
-              title="Duplicate Event"
-            >
-              <Copy className="w-3.5 h-3.5 text-slate-300" />
-              <span>Duplicate</span>
-            </button>
-
-            <button
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition cursor-pointer shadow-xs shadow-rose-500/20"
-              title="Delete Event(s) (Delete key)"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Delete Event</span>
-            </button>
-          </div>
-        )}
-
-        {selectedConnectionId && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-25 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150">
-            <span className="text-[11px] font-mono text-cyan-300 font-bold px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800">
-              Wire Connected
-            </span>
-            <button
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition cursor-pointer"
-              title="Delete Connection Wire"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Delete Wire</span>
-            </button>
-          </div>
-        )}
-
         {/* Mini Map HUD (Bottom Right, Tucked Away) */}
         {miniMapOpen && (
           <MiniMap
@@ -1323,6 +1267,78 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           />
         )}
       </div>
+
+      {/* Floating Quick Action HUD (Bottom Center - Outside canvas so touch doesn't pan) */}
+      {selectedNodeIds.length > 0 && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150"
+        >
+          <span className="text-[11px] font-mono text-cyan-300 font-bold px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800">
+            {selectedNodeIds.length} {selectedNodeIds.length === 1 ? 'Event' : 'Events'} Selected
+          </span>
+
+          {selectedNodeIds.length === 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingNodeId(selectedNodeIds[0]);
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setEditingNodeId(selectedNodeIds[0]);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition cursor-pointer active:scale-95 shadow-sm shadow-cyan-500/20"
+              title="Configure Event Settings"
+            >
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Configure</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              selectedNodeIds.forEach((id) => handleDuplicateNode(id));
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
+            title="Duplicate Event"
+          >
+            <Copy className="w-3.5 h-3.5 text-slate-300" />
+            <span>Duplicate</span>
+          </button>
+
+          <button
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition cursor-pointer shadow-xs shadow-rose-500/20"
+            title="Delete Event(s) (Delete key)"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>Delete Event</span>
+          </button>
+        </div>
+      )}
+
+      {selectedConnectionId && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150"
+        >
+          <span className="text-[11px] font-mono text-cyan-300 font-bold px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800">
+            Wire Connected
+          </span>
+          <button
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition cursor-pointer"
+            title="Delete Connection Wire"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>Delete Wire</span>
+          </button>
+        </div>
+      )}
 
       {/* Add Node Search Modal (with Auto-Connect Context support) */}
       <AddNodeModal

@@ -74,45 +74,61 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const fullWebhookUrl = `${window.location.origin}/api/webhook/${config.webhookPath || node.id}`;
 
   return (
-    <div className="absolute top-0 right-0 bottom-0 w-96 bg-slate-900 border-l border-slate-800 shadow-2xl z-30 flex flex-col text-slate-100 animate-in slide-in-from-right duration-200">
-      {/* Header */}
-      <div className="p-4 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-            <IconComponent className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <input
-              type="text"
-              value={node.name}
-              onChange={(e) => onUpdateConfig(node.id, { name: e.target.value })}
-              className="text-sm font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-cyan-500 focus:outline-none w-full truncate"
-            />
-            <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
-              {node.type}
-            </span>
-          </div>
-        </div>
+    <>
+      {/* Semi-transparent Backdrop overlay */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 transition-opacity animate-in fade-in duration-150"
+        onClick={onClose}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      />
 
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => onDeleteNode(node.id)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition cursor-pointer"
-            title="Delete this event from workflow"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Delete</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title="Close Panel"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      {/* Slide-in Drawer Container */}
+      <div
+        className="fixed top-0 right-0 bottom-0 w-full sm:w-[440px] max-w-full bg-slate-900 border-l border-slate-800 shadow-2xl z-55 flex flex-col text-slate-100 animate-in slide-in-from-right duration-200"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-slate-800/80 bg-slate-950/80 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shrink-0">
+              <IconComponent className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <input
+                type="text"
+                value={node.name}
+                onChange={(e) => onUpdateConfig(node.id, { name: e.target.value })}
+                className="text-sm font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-cyan-500 focus:outline-none w-full truncate"
+              />
+              <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
+                {node.type}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => onDeleteNode(node.id)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition cursor-pointer"
+              title="Delete this event from workflow"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Delete</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Close Panel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* Tabs */}
       <div className="flex items-center border-b border-slate-800 bg-slate-950/40 px-2 text-xs">
@@ -436,23 +452,264 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               </>
             )}
 
-            {/* 7. Generic Fallback for other nodes */}
-            {!['http_request', 'trigger_webhook', 'ai_agent', 'logic_if', 'data_code', 'comm_email'].includes(node.type) && (
-              <div className="space-y-3">
-                <p className="text-slate-400 text-xs">Configure properties for {node.name}:</p>
-                {Object.keys(config).map((key) => (
-                  <div key={key}>
-                    <label className="text-[11px] font-semibold text-slate-300 block mb-1 capitalize">
-                      {key}
-                    </label>
+            {/* 7. AI Models (Google Gemini, OpenAI, Claude) */}
+            {['ai_model_gemini', 'ai_model_openai', 'ai_model_claude'].includes(node.type) && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    {node.type === 'ai_model_gemini' ? 'Google Gemini Model' : 'Model Identifier'}
+                  </label>
+                  {node.type === 'ai_model_gemini' ? (
+                    <select
+                      value={config.model || 'gemini-3.8-flash'}
+                      onChange={(e) => handleConfigChange('model', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended, Fast & Intelligent)</option>
+                      <option value="gemini-flash-latest">gemini-flash-latest (General Multimodal)</option>
+                      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra Lightweight)</option>
+                    </select>
+                  ) : (
                     <input
                       type="text"
-                      value={typeof config[key] === 'object' ? JSON.stringify(config[key]) : config[key] || ''}
-                      onChange={(e) => handleConfigChange(key, e.target.value)}
+                      value={config.model || ''}
+                      onChange={(e) => handleConfigChange('model', e.target.value)}
+                      placeholder="gpt-4o or claude-3-5-sonnet"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Temperature ({config.temperature !== undefined ? config.temperature : 0.2})
+                    </label>
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      {(config.temperature ?? 0.2) <= 0.3 ? 'Deterministic' : (config.temperature ?? 0.2) >= 0.7 ? 'Creative' : 'Balanced'}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={config.temperature !== undefined ? config.temperature : 0.2}
+                    onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                    <span>0.0 (Precise / Code)</span>
+                    <span>1.0 (Creative / Exploratory)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Max Output Tokens</label>
+                  <select
+                    value={config.maxOutputTokens || 2048}
+                    onChange={(e) => handleConfigChange('maxOutputTokens', parseInt(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="512">512 tokens (~380 words)</option>
+                    <option value="1024">1,024 tokens (~750 words)</option>
+                    <option value="2048">2,048 tokens (Standard)</option>
+                    <option value="4096">4,096 tokens (Long Context)</option>
+                    <option value="8192">8,192 tokens (Full Generation)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">System Instructions / Persona</label>
+                  <textarea
+                    rows={3}
+                    value={config.systemPrompt || ''}
+                    onChange={(e) => handleConfigChange('systemPrompt', e.target.value)}
+                    placeholder="You are an autonomous AI Agent powered by Gemini. Solve workflow tasks with accuracy."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-sans focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 8. AI Memory (Window Buffer, Redis) */}
+            {['ai_memory_window', 'ai_memory_redis'].includes(node.type) && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Context Window Length (Turns)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={config.contextWindowLength ?? 10}
+                    onChange={(e) => handleConfigChange('contextWindowLength', parseInt(e.target.value) || 10)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Number of recent conversation turns to retain in Agent context.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Session Key Expression</label>
+                  <input
+                    type="text"
+                    value={config.sessionKey || 'user_session_default'}
+                    onChange={(e) => handleConfigChange('sessionKey', e.target.value)}
+                    placeholder="user_session_default or {{$json.userId}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 9. AI Agent Tools (Calculator, Web Search, HTTP Tool, Code Tool) */}
+            {node.type.startsWith('ai_tool_') && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Tool Name</label>
+                  <input
+                    type="text"
+                    value={config.toolName || node.name.toLowerCase().replace(/\s+/g, '_')}
+                    onChange={(e) => handleConfigChange('toolName', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                {node.type === 'ai_tool_search' && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Search Query Expression</label>
+                    <input
+                      type="text"
+                      value={config.query || '{{$json.query}}'}
+                      onChange={(e) => handleConfigChange('query', e.target.value)}
+                      placeholder="{{$json.query}}"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
-                ))}
+                )}
+
+                {node.type === 'ai_tool_http' && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Target API URL</label>
+                    <input
+                      type="text"
+                      value={config.endpointUrl || ''}
+                      onChange={(e) => handleConfigChange('endpointUrl', e.target.value)}
+                      placeholder="https://api.service.com/action"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Tool Description for Agent</label>
+                  <textarea
+                    rows={2}
+                    value={config.description || ''}
+                    onChange={(e) => handleConfigChange('description', e.target.value)}
+                    placeholder="Explain when the AI agent should call this tool..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-sans focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 10. Popular Applications (Slack, Google Sheets, etc.) */}
+            {node.type === 'app_slack' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Channel Name</label>
+                  <input
+                    type="text"
+                    value={config.channel || '#general'}
+                    onChange={(e) => handleConfigChange('channel', e.target.value)}
+                    placeholder="#general or #leads"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Message Text</label>
+                  <textarea
+                    rows={4}
+                    value={config.messageText || config.text || ''}
+                    onChange={(e) => handleConfigChange('messageText', e.target.value)}
+                    placeholder="New alert: {{$json.customer}} from {{$json.company}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'app_google_sheets' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                  <select
+                    value={config.operation || 'Append Row'}
+                    onChange={(e) => handleConfigChange('operation', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="Append Row">Append Row</option>
+                    <option value="Read Rows">Read Rows</option>
+                    <option value="Update Row">Update Row</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Spreadsheet ID</label>
+                  <input
+                    type="text"
+                    value={config.spreadsheetId || ''}
+                    onChange={(e) => handleConfigChange('spreadsheetId', e.target.value)}
+                    placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Sheet Tab Name</label>
+                  <input
+                    type="text"
+                    value={config.sheetName || 'Sheet1'}
+                    onChange={(e) => handleConfigChange('sheetName', e.target.value)}
+                    placeholder="Sheet1"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 11. Generic Fallback for other nodes */}
+            {!['http_request', 'trigger_webhook', 'ai_agent', 'logic_if', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
+              <div className="space-y-3">
+                <p className="text-slate-400 text-xs">Configure properties for {node.name}:</p>
+                {Object.keys(config).length === 0 ? (
+                  <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-center space-y-2">
+                    <p className="text-slate-400 text-xs">No default parameters configured.</p>
+                    <button
+                      type="button"
+                      onClick={() => handleConfigChange('customParam', 'value')}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-xs font-semibold hover:bg-cyan-500/25 transition cursor-pointer"
+                    >
+                      + Add Custom Property
+                    </button>
+                  </div>
+                ) : (
+                  Object.keys(config).map((key) => (
+                    <div key={key}>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1 capitalize">
+                        {key}
+                      </label>
+                      <input
+                        type="text"
+                        value={typeof config[key] === 'object' ? JSON.stringify(config[key]) : config[key] || ''}
+                        onChange={(e) => handleConfigChange(key, e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                      />
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -592,5 +849,6 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </button>
       </div>
     </div>
+    </>
   );
 };

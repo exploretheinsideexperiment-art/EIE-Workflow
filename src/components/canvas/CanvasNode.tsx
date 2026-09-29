@@ -126,13 +126,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       onMouseDown={(e) => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('[data-port="true"]')) return;
+        if (target.closest('button') || target.closest('[data-port="true"]')) {
+          e.stopPropagation();
+          return;
+        }
         e.stopPropagation();
         onStartDrag?.(node.id, e.clientX, e.clientY, e.shiftKey || e.metaKey || e.ctrlKey);
       }}
       onTouchStart={(e) => {
         const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('[data-port="true"]')) return;
+        if (target.closest('button') || target.closest('[data-port="true"]')) {
+          e.stopPropagation();
+          return;
+        }
         e.stopPropagation();
         if (e.touches.length === 1) {
           onStartDrag?.(node.id, e.touches[0].clientX, e.touches[0].clientY, false);
@@ -140,7 +146,11 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       }}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
+        if (isSelected) {
+          onOpenConfig(node.id);
+        } else {
+          onSelect(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
+        }
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
@@ -149,7 +159,14 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
     >
       {/* Node Header */}
       <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-slate-800/80">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div
+          className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenConfig(node.id);
+          }}
+          title="Click to open settings"
+        >
           <div className={`p-1.5 rounded-xl ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0`}>
             <IconComponent className="w-4 h-4" />
           </div>
@@ -163,8 +180,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           </div>
         </div>
 
-        {/* Header Right Actions: Status Badge + Delete Button */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Header Right Actions: Status Badge & Settings Icon */}
+        <div className="flex items-center gap-1 shrink-0">
           {/* Execution Status Badge */}
           {executionResult && (
             <div className="flex items-center">
@@ -189,18 +206,23 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             </div>
           )}
 
-          {/* Direct Delete Event Button on Node Card */}
+          {/* Quick Settings Button on Node Header */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDeleteNode(node.id);
+              onOpenConfig(node.id);
             }}
-            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 active:scale-90 transition cursor-pointer"
-            title="Delete this event from workflow"
-            aria-label="Delete event"
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onOpenConfig(node.id);
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
+            title="Configure settings"
+            aria-label="Settings"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -272,7 +294,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       )}
 
       {/* Floating Action Menu on Node Hover or when Selected */}
-      <div className={`absolute -top-3.5 right-2 transition-all flex items-center gap-1 bg-slate-850/95 border border-slate-700/90 rounded-lg p-0.5 shadow-lg backdrop-blur-md z-10 ${
+      <div className={`absolute -top-4 right-2 transition-all flex items-center gap-1 bg-slate-850/95 border border-slate-700/90 rounded-lg p-0.5 shadow-lg backdrop-blur-md z-15 ${
         isSelected
           ? 'opacity-100 ring-1 ring-cyan-500/60 shadow-cyan-500/20'
           : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
@@ -282,30 +304,45 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             e.stopPropagation();
             onOpenConfig(node.id);
           }}
-          className="p-1 hover:text-cyan-300 text-slate-400 rounded hover:bg-slate-700/60 cursor-pointer"
+          onTouchEnd={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onOpenConfig(node.id);
+          }}
+          className="p-1.5 hover:text-cyan-300 text-slate-300 rounded hover:bg-slate-700/60 cursor-pointer active:scale-90"
           title="Configure Event Settings"
         >
-          <Settings className="w-3 h-3" />
+          <Settings className="w-3.5 h-3.5 text-cyan-400" />
         </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDuplicateNode(node.id);
           }}
-          className="p-1 hover:text-cyan-300 text-slate-400 rounded hover:bg-slate-700/60 cursor-pointer"
+          onTouchEnd={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onDuplicateNode(node.id);
+          }}
+          className="p-1.5 hover:text-cyan-300 text-slate-300 rounded hover:bg-slate-700/60 cursor-pointer active:scale-90"
           title="Duplicate Event"
         >
-          <Copy className="w-3 h-3" />
+          <Copy className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDeleteNode(node.id);
           }}
-          className="p-1 hover:text-rose-400 text-rose-400/90 rounded hover:bg-rose-500/20 cursor-pointer"
+          onTouchEnd={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onDeleteNode(node.id);
+          }}
+          className="p-1.5 hover:text-rose-400 text-rose-400/90 rounded hover:bg-rose-500/20 cursor-pointer active:scale-90"
           title="Delete Event"
         >
-          <Trash2 className="w-3 h-3" />
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
 

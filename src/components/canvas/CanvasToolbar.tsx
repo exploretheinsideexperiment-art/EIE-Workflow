@@ -16,7 +16,8 @@ import {
   Hand,
   Sparkles,
   LayoutGrid,
-  Trash2
+  Trash2,
+  Settings
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -34,6 +35,7 @@ interface CanvasToolbarProps {
   canvasMode: 'select' | 'pan';
   selectedCount?: number;
   onDeleteSelected?: () => void;
+  onOpenSettings?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onChangeCanvasMode: (mode: 'select' | 'pan') => void;
@@ -69,6 +71,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   canvasMode,
   selectedCount = 0,
   onDeleteSelected,
+  onOpenSettings,
   isSidebarOpen = true,
   onToggleSidebar,
   onChangeCanvasMode,
@@ -114,6 +117,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Node</span>
           </button>
+
+          {/* Configure Selected Event Button */}
+          {selectedCount === 1 && onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold shadow-md shadow-cyan-500/20 active:scale-95 transition cursor-pointer whitespace-nowrap shrink-0 animate-in fade-in"
+              title="Configure selected event settings"
+            >
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Settings</span>
+            </button>
+          )}
 
           {/* Delete Selected Event(s) Button */}
           {selectedCount > 0 && onDeleteSelected && (
