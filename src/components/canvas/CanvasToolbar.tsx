@@ -15,7 +15,8 @@ import {
   MousePointer,
   Hand,
   Sparkles,
-  LayoutGrid
+  LayoutGrid,
+  Trash2
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -31,6 +32,8 @@ interface CanvasToolbarProps {
   hasUnsavedChanges: boolean;
   executionDrawerOpen: boolean;
   canvasMode: 'select' | 'pan';
+  selectedCount?: number;
+  onDeleteSelected?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onChangeCanvasMode: (mode: 'select' | 'pan') => void;
@@ -64,6 +67,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   hasUnsavedChanges,
   executionDrawerOpen,
   canvasMode,
+  selectedCount = 0,
+  onDeleteSelected,
   isSidebarOpen = true,
   onToggleSidebar,
   onChangeCanvasMode,
@@ -109,6 +114,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Node</span>
           </button>
+
+          {/* Delete Selected Event(s) Button */}
+          {selectedCount > 0 && onDeleteSelected && (
+            <button
+              onClick={onDeleteSelected}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold shadow-md shadow-rose-500/20 active:scale-95 transition cursor-pointer whitespace-nowrap shrink-0 animate-in fade-in"
+              title="Delete selected event/node from workflow"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Delete {selectedCount === 1 ? 'Event' : `(${selectedCount})`}</span>
+            </button>
+          )}
 
           {/* Mode Switcher: Select Tool vs Pan / Hand Tool */}
           <div className="flex items-center p-0.5 rounded-xl bg-slate-900/90 border border-slate-800 shrink-0">

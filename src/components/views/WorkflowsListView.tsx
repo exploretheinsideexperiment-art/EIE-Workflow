@@ -231,13 +231,13 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
                   <span>{wf.lastExecutedAt ? new Date(wf.lastExecutedAt).toLocaleDateString() : 'Never run'}</span>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-80 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleExportJSON(wf);
                     }}
-                    className="p-1.5 hover:text-slate-200 text-slate-400 rounded hover:bg-slate-800"
+                    className="p-1.5 hover:text-cyan-300 text-slate-400 rounded-lg hover:bg-slate-800 transition cursor-pointer"
                     title="Export JSON"
                   >
                     <Download className="w-3.5 h-3.5" />
@@ -247,7 +247,7 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
                       e.stopPropagation();
                       onDuplicateWorkflow(wf.id);
                     }}
-                    className="p-1.5 hover:text-slate-200 text-slate-400 rounded hover:bg-slate-800"
+                    className="p-1.5 hover:text-cyan-300 text-slate-400 rounded-lg hover:bg-slate-800 transition cursor-pointer"
                     title="Duplicate Workflow"
                   >
                     <Copy className="w-3.5 h-3.5" />
@@ -257,8 +257,9 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
                       e.stopPropagation();
                       onDeleteWorkflow(wf.id);
                     }}
-                    className="p-1.5 hover:text-rose-400 text-slate-400 rounded hover:bg-slate-800"
+                    className="p-1.5 hover:text-rose-400 text-slate-400 hover:bg-rose-500/15 rounded-lg transition cursor-pointer"
                     title="Delete Workflow"
+                    aria-label="Delete Workflow"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

@@ -5,7 +5,7 @@
       "email": "exploretheinsideexperiment@gmail.com",
       "name": "EIE Automation Engineer",
       "passwordHash": "d671f0551c6cd37059395d8650ffa160fcb6979e4257c8e5d07ec3acbd735536",
-      "avatar": "/avatar.svg",
+      "avatar": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><circle cx=\"20\" cy=\"20\" r=\"18\" fill=\"%2306b6d4\"/></svg>",
       "createdAt": "2026-09-26T03:23:13.181Z"
     }
   ],
@@ -20,6 +20,124 @@
   ],
   "workflows": [
     {
+      "id": "wf_tpl_n8n_ai_agent",
+      "name": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "nodes": [
+        {
+          "id": "agent_wh",
+          "type": "trigger_webhook",
+          "name": "Chat Inbound Trigger",
+          "category": "Triggers",
+          "icon": "Webhook",
+          "position": {
+            "x": 80,
+            "y": 240
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "config": {}
+        },
+        {
+          "id": "agent_model",
+          "type": "ai_model_gemini",
+          "name": "Google Gemini 3.8 Flash",
+          "category": "AI",
+          "icon": "Sparkles",
+          "position": {
+            "x": 120,
+            "y": 60
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_model",
+              "name": "model",
+              "type": "model"
+            }
+          ],
+          "config": {}
+        },
+        {
+          "id": "agent_calc",
+          "type": "ai_tool_calculator",
+          "name": "Calculator Tool",
+          "category": "AI Tools",
+          "icon": "Activity",
+          "position": {
+            "x": 120,
+            "y": 520
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_tool",
+              "name": "tool",
+              "type": "tool"
+            }
+          ],
+          "config": {}
+        },
+        {
+          "id": "agent_core",
+          "type": "ai_agent",
+          "name": "Autonomous AI Agent",
+          "category": "AI",
+          "icon": "Bot",
+          "position": {
+            "x": 440,
+            "y": 220
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "config": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "c1",
+          "fromNodeId": "agent_wh",
+          "fromPortId": "out_main",
+          "toNodeId": "agent_core",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c2",
+          "fromNodeId": "agent_model",
+          "fromPortId": "out_model",
+          "toNodeId": "agent_core",
+          "toPortId": "in_model"
+        },
+        {
+          "id": "c3",
+          "fromNodeId": "agent_calc",
+          "fromPortId": "out_tool",
+          "toNodeId": "agent_core",
+          "toPortId": "in_tools"
+        }
+      ],
+      "updatedAt": "2026-09-29T03:45:09.178Z",
+      "executionCount": 1,
+      "lastExecutedAt": "2026-09-29T03:45:09.179Z"
+    },
+    {
       "id": "wf_sample_ai_lead",
       "workspaceId": "ws_default_01",
       "name": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
@@ -32,8 +150,8 @@
       },
       "createdAt": "2026-09-24T03:23:13.182Z",
       "updatedAt": "2026-09-26T03:23:13.182Z",
-      "executionCount": 16,
-      "lastExecutedAt": "2026-09-26T03:24:35.744Z",
+      "executionCount": 17,
+      "lastExecutedAt": "2026-09-29T03:42:19.067Z",
       "nodes": [
         {
           "id": "node_1",
@@ -267,6 +385,282 @@
     }
   ],
   "executions": [
+    {
+      "id": "exec_1790653509179_a9b35d",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-09-29T03:45:09.179Z",
+      "nodeResults": {
+        "agent_wh": {
+          "nodeId": "agent_wh",
+          "nodeName": "Chat Inbound Trigger",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-29T03:45:09.180Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:45:09.180Z",
+          "durationMs": 0,
+          "output": {
+            "testRun": true
+          }
+        },
+        "agent_model": {
+          "nodeId": "agent_model",
+          "nodeName": "Google Gemini 3.8 Flash",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-09-29T03:45:09.180Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:45:09.180Z",
+          "durationMs": 0,
+          "output": {
+            "modelId": "gemini-3.8-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-09-29T03:45:09.180Z"
+          }
+        },
+        "agent_calc": {
+          "nodeId": "agent_calc",
+          "nodeName": "Calculator Tool",
+          "nodeType": "ai_tool_calculator",
+          "status": "success",
+          "startedAt": "2026-09-29T03:45:09.180Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:45:09.180Z",
+          "durationMs": 0,
+          "output": {
+            "toolName": "calculator",
+            "type": "math_tool",
+            "description": "Calculates mathematical equations and financial metrics with precision",
+            "status": "registered",
+            "sampleExecution": {
+              "expression": "1250 * 1.18",
+              "result": 1475
+            }
+          }
+        },
+        "agent_core": {
+          "nodeId": "agent_core",
+          "nodeName": "Autonomous AI Agent",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-29T03:45:09.180Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:45:14.039Z",
+          "durationMs": 4859,
+          "output": {
+            "summary": "Analysis of inquiry from Client (Organization): Enterprise automation event.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 82,
+            "recommendedNextSteps": [
+              "Schedule technical discovery call",
+              "Review API rate requirements and payload schema",
+              "Deploy high-throughput automation cluster"
+            ],
+            "aiNote": "Analysis completed successfully."
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-29T03:45:09.179Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-29T03:45:09.180Z",
+          "level": "info",
+          "message": "Node \"Chat Inbound Trigger\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "agent_wh"
+        },
+        {
+          "timestamp": "2026-09-29T03:45:09.180Z",
+          "level": "info",
+          "message": "Node \"Google Gemini 3.8 Flash\" (ai_model_gemini) executed successfully in 0ms.",
+          "nodeId": "agent_model"
+        },
+        {
+          "timestamp": "2026-09-29T03:45:09.180Z",
+          "level": "info",
+          "message": "Node \"Calculator Tool\" (ai_tool_calculator) executed successfully in 0ms.",
+          "nodeId": "agent_calc"
+        },
+        {
+          "timestamp": "2026-09-29T03:45:14.039Z",
+          "level": "info",
+          "message": "Node \"Autonomous AI Agent\" (ai_agent) executed successfully in 4859ms.",
+          "nodeId": "agent_core"
+        },
+        {
+          "timestamp": "2026-09-29T03:45:14.039Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 4860ms."
+        }
+      ],
+      "finishedAt": "2026-09-29T03:45:14.039Z",
+      "durationMs": 4860
+    },
+    {
+      "id": "exec_1790653339067_1316d6",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-09-29T03:42:19.067Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-29T03:42:19.068Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:42:19.068Z",
+          "durationMs": 0,
+          "output": {
+            "testRun": true
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-29T03:42:19.069Z",
+          "input": {
+            "testRun": true
+          },
+          "finishedAt": "2026-09-29T03:42:22.258Z",
+          "durationMs": 3189,
+          "output": {
+            "summary": "Analysis of inquiry from Client (Organization): Enterprise automation event.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 82,
+            "recommendedNextSteps": [
+              "Schedule technical discovery call",
+              "Review API rate requirements and payload schema",
+              "Deploy high-throughput automation cluster"
+            ],
+            "aiNote": "Analysis completed successfully."
+          }
+        },
+        "node_3": {
+          "nodeId": "node_3",
+          "nodeName": "Check High Urgency",
+          "nodeType": "logic_if",
+          "status": "success",
+          "startedAt": "2026-09-29T03:42:22.258Z",
+          "input": {
+            "summary": "Analysis of inquiry from Client (Organization): Enterprise automation event.",
+            "estimatedContractTier": "Tier 1",
+            "urgencyScore": 82,
+            "recommendedNextSteps": [
+              "Schedule technical discovery call",
+              "Review API rate requirements and payload schema",
+              "Deploy high-throughput automation cluster"
+            ],
+            "aiNote": "Analysis completed successfully."
+          },
+          "finishedAt": "2026-09-29T03:42:22.258Z",
+          "durationMs": 0,
+          "output": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 82,
+            "targetValue": "50",
+            "isTrue": true
+          }
+        },
+        "node_5": {
+          "nodeId": "node_5",
+          "nodeName": "Post to #leads-feed",
+          "nodeType": "comm_slack",
+          "status": "skipped"
+        },
+        "node_4": {
+          "nodeId": "node_4",
+          "nodeName": "Urgent Alert to VP Sales",
+          "nodeType": "comm_email",
+          "status": "success",
+          "startedAt": "2026-09-29T03:42:22.258Z",
+          "input": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 82,
+            "targetValue": "50",
+            "isTrue": true
+          },
+          "finishedAt": "2026-09-29T03:42:22.258Z",
+          "durationMs": 0,
+          "output": {
+            "sent": true,
+            "recipient": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
+            "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Anal",
+            "sentAt": "2026-09-29T03:42:22.258Z",
+            "messageId": "msg_1790653342258_a43743da"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-29T03:42:19.067Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-29T03:42:19.068Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-09-29T03:42:22.258Z",
+          "level": "info",
+          "message": "Node \"Gemini AI Lead Analyst\" (ai_agent) executed successfully in 3189ms.",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-09-29T03:42:22.258Z",
+          "level": "info",
+          "message": "Node \"Check High Urgency\" (logic_if) executed successfully in 0ms.",
+          "nodeId": "node_3"
+        },
+        {
+          "timestamp": "2026-09-29T03:42:22.258Z",
+          "level": "info",
+          "message": "Node \"Urgent Alert to VP Sales\" (comm_email) executed successfully in 0ms.",
+          "nodeId": "node_4"
+        },
+        {
+          "timestamp": "2026-09-29T03:42:22.258Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 3191ms."
+        }
+      ],
+      "finishedAt": "2026-09-29T03:42:22.258Z",
+      "durationMs": 3191
+    },
     {
       "id": "exec_1790393075741_33e5ec",
       "workflowId": "wf_sample_ai_lead",
@@ -999,6 +1393,26 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1790653522523",
+      "workspaceId": "ws_default_01",
+      "action": "Avatar Updated",
+      "details": "User profile picture changed",
+      "timestamp": "2026-09-29T03:45:22.523Z"
+    },
+    {
+      "id": "aud_1790653514039",
+      "action": "Execution exec_1790653509179_a9b35d",
+      "details": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" completed: SUCCESS (4860ms)",
+      "timestamp": "2026-09-29T03:45:14.039Z"
+    },
+    {
+      "id": "aud_1790653342258",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1790653339067_1316d6",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (3191ms)",
+      "timestamp": "2026-09-29T03:42:22.258Z"
+    },
     {
       "id": "aud_1790395743676",
       "workspaceId": "ws_default_01",

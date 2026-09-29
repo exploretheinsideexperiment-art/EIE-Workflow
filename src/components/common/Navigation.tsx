@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { User, Workspace } from '../../types/workflow';
 import { PWAInstallButton } from './PWAInstallButton';
+import { compressImageForAvatar } from '../../utils/imageUtils';
 
 interface NavigationProps {
   currentView: string;
@@ -87,38 +88,35 @@ export const Navigation: React.FC<NavigationProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Please upload an image smaller than 5MB.');
-      return;
-    }
-
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      try {
-        const res = await fetch('/api/user/avatar', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ avatar: dataUrl }),
-        });
+    try {
+      const dataUrl = await compressImageForAvatar(file, 256, 0.88);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user && onUpdateUser) {
-            onUpdateUser(data.user);
-          }
-          setUploadSuccess(true);
-          setTimeout(() => setUploadSuccess(false), 3000);
-        }
-      } catch (err) {
-        console.error('Failed to update avatar:', err);
-      } finally {
-        setIsUploading(false);
+      // Optimistic update
+      if (user && onUpdateUser) {
+        onUpdateUser({ ...user, avatar: dataUrl });
       }
-    };
-    reader.readAsDataURL(file);
+
+      const res = await fetch('/api/user/avatar', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: dataUrl }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user && onUpdateUser) {
+          onUpdateUser(data.user);
+        }
+      }
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to update avatar:', err);
+    } finally {
+      setIsUploading(false);
+      if (event.target) event.target.value = '';
+    }
   };
 
   // Preset avatar switch

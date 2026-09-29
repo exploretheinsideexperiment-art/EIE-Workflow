@@ -163,29 +163,46 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           </div>
         </div>
 
-        {/* Execution Status Badge */}
-        {executionResult && (
-          <div className="flex items-center">
-            {executionResult.status === 'running' && (
-              <span className="flex items-center gap-1 text-[9px] text-cyan-400 font-mono bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800 animate-pulse">
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                <span>Running</span>
-              </span>
-            )}
-            {executionResult.status === 'success' && (
-              <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
-                <Check className="w-2.5 h-2.5" />
-                <span>{executionResult.durationMs ? `${executionResult.durationMs}ms` : 'Done'}</span>
-              </span>
-            )}
-            {executionResult.status === 'failed' && (
-              <span className="flex items-center gap-1 text-[9px] text-rose-400 font-mono bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-800">
-                <X className="w-2.5 h-2.5" />
-                <span>Error</span>
-              </span>
-            )}
-          </div>
-        )}
+        {/* Header Right Actions: Status Badge + Delete Button */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Execution Status Badge */}
+          {executionResult && (
+            <div className="flex items-center">
+              {executionResult.status === 'running' && (
+                <span className="flex items-center gap-1 text-[9px] text-cyan-400 font-mono bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800 animate-pulse">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  <span>Running</span>
+                </span>
+              )}
+              {executionResult.status === 'success' && (
+                <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
+                  <Check className="w-2.5 h-2.5" />
+                  <span>{executionResult.durationMs ? `${executionResult.durationMs}ms` : 'Done'}</span>
+                </span>
+              )}
+              {executionResult.status === 'failed' && (
+                <span className="flex items-center gap-1 text-[9px] text-rose-400 font-mono bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-800">
+                  <X className="w-2.5 h-2.5" />
+                  <span>Error</span>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Direct Delete Event Button on Node Card */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteNode(node.id);
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 active:scale-90 transition cursor-pointer"
+            title="Delete this event from workflow"
+            aria-label="Delete event"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Node Body & Subtitle */}
@@ -254,15 +271,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* Floating Action Menu on Node Hover */}
-      <div className="absolute -top-3.5 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-slate-800/95 border border-slate-700/80 rounded-lg p-0.5 shadow-lg backdrop-blur-md z-10">
+      {/* Floating Action Menu on Node Hover or when Selected */}
+      <div className={`absolute -top-3.5 right-2 transition-all flex items-center gap-1 bg-slate-850/95 border border-slate-700/90 rounded-lg p-0.5 shadow-lg backdrop-blur-md z-10 ${
+        isSelected
+          ? 'opacity-100 ring-1 ring-cyan-500/60 shadow-cyan-500/20'
+          : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+      }`}>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onOpenConfig(node.id);
           }}
           className="p-1 hover:text-cyan-300 text-slate-400 rounded hover:bg-slate-700/60 cursor-pointer"
-          title="Configure Node"
+          title="Configure Event Settings"
         >
           <Settings className="w-3 h-3" />
         </button>
@@ -272,7 +293,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             onDuplicateNode(node.id);
           }}
           className="p-1 hover:text-cyan-300 text-slate-400 rounded hover:bg-slate-700/60 cursor-pointer"
-          title="Duplicate Node"
+          title="Duplicate Event"
         >
           <Copy className="w-3 h-3" />
         </button>
@@ -281,8 +302,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             e.stopPropagation();
             onDeleteNode(node.id);
           }}
-          className="p-1 hover:text-rose-400 text-slate-400 rounded hover:bg-slate-700/60 cursor-pointer"
-          title="Delete Node"
+          className="p-1 hover:text-rose-400 text-rose-400/90 rounded hover:bg-rose-500/20 cursor-pointer"
+          title="Delete Event"
         >
           <Trash2 className="w-3 h-3" />
         </button>

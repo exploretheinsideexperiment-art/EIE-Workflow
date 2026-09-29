@@ -94,17 +94,20 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={() => onDeleteNode(node.id)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition"
-            title="Delete Node"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition cursor-pointer"
+            title="Delete this event from workflow"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Delete</span>
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            title="Close Panel"
           >
             <X className="w-4 h-4" />
           </button>
@@ -567,15 +570,25 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         )}
       </div>
 
-      {/* Footer Quick Action: Execute Single Node */}
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950/80 flex items-center justify-between">
+      {/* Footer Quick Action: Execute Single Node & Delete Node */}
+      <div className="p-4 border-t border-slate-800/80 bg-slate-950/80 flex items-center justify-between gap-2.5">
+        <button
+          type="button"
+          onClick={() => onDeleteNode(node.id)}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/35 hover:border-rose-500/60 font-bold transition cursor-pointer text-xs shrink-0"
+          title="Delete this event from workflow"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Delete Event</span>
+        </button>
+
         <button
           onClick={handleRunSingleTest}
           disabled={isTesting}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25 hover:text-white font-bold transition cursor-pointer"
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25 hover:text-white font-bold transition cursor-pointer text-xs"
         >
           <Play className={`w-3.5 h-3.5 fill-current ${isTesting ? 'animate-spin' : ''}`} />
-          <span>{isTesting ? 'Testing Node...' : 'Test Node'}</span>
+          <span>{isTesting ? 'Testing Step...' : 'Test Step'}</span>
         </button>
       </div>
     </div>

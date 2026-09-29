@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Settings, User, Building, Shield, Bell, Check, Key, Camera, Upload } from 'lucide-react';
+import { Settings, User, Building, Shield, Bell, Check, Key, Camera, Upload, AlertCircle } from 'lucide-react';
 import { User as UserType, Workspace } from '../../types/workflow';
+import { compressImageForAvatar } from '../../utils/imageUtils';
 
 interface SettingsViewProps {
   user: UserType | null;
@@ -18,43 +19,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, workspace, onU
   const [failureAlerts, setFailureAlerts] = useState(true);
   const [savedNotice, setSavedNotice] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      try {
-        const res = await fetch('/api/user/avatar', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ avatar: dataUrl }),
-        });
-        if (res.ok) {
-          onUpdateAvatar?.(dataUrl);
-        }
-      } catch (err) {
-        console.error('Failed to update avatar:', err);
-      } finally {
-        setIsUploading(false);
+    setUploadError(null);
+
+    try {
+      // Auto-compress and square-crop image into clean lightweight data URL
+      const dataUrl = await compressImageForAvatar(file, 256, 0.88);
+
+      // Instantly update UI optimistically
+      onUpdateAvatar?.(dataUrl);
+
+      // Persist to server
+      const res = await fetch('/api/user/avatar', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar: dataUrl }),
+      });
+
+      if (!res.ok) {
+        console.warn('Server avatar update status:', res.status);
       }
-    };
-    reader.readAsDataURL(file);
+
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Failed to update avatar:', err);
+      setUploadError(err.message || 'Could not upload photo');
+      setTimeout(() => setUploadError(null), 4000);
+    } finally {
+      setIsUploading(false);
+      // Reset input value so same file can be re-selected if desired
+      if (e.target) e.target.value = '';
+    }
   };
 
   const handleSelectPreset = async (presetUrl: string) => {
+    onUpdateAvatar?.(presetUrl);
     try {
-      const res = await fetch('/api/user/avatar', {
+      await fetch('/api/user/avatar', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatar: presetUrl }),
       });
-      if (res.ok) {
-        onUpdateAvatar?.(presetUrl);
-      }
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 2500);
     } catch (err) {
       console.error('Failed to select preset:', err);
     }
@@ -187,6 +203,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, workspace, onU
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploading ? 'Uploading...' : 'Change Photo'}</span>
                 </button>
+                {uploadSuccess && (
+                  <span className="flex items-center gap-1 text-[10px] text-emerald-400 mt-1 font-medium animate-in fade-in">
+                    <Check className="w-3 h-3" /> Photo updated!
+                  </span>
+                )}
+                {uploadError && (
+                  <span className="flex items-center gap-1 text-[10px] text-rose-400 mt-1 font-medium animate-in fade-in">
+                    <AlertCircle className="w-3 h-3" /> {uploadError}
+                  </span>
+                )}
               </div>
             </div>
 

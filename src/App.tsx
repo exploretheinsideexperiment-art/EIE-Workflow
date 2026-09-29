@@ -530,6 +530,7 @@ export default function App() {
     if (user) {
       const updated = { ...user, name, email };
       setUser(updated);
+      try { localStorage.setItem('eie_user', JSON.stringify(updated)); } catch {}
       try {
         await fetch('/api/user/profile', {
           method: 'PUT',
@@ -540,6 +541,15 @@ export default function App() {
         console.error('Failed to save profile changes:', err);
       }
     }
+  };
+
+  const handleUpdateAvatar = (avatar: string) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, avatar };
+      try { localStorage.setItem('eie_user', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   };
 
   const handleRenameActiveWorkflow = (newName: string) => {
@@ -707,7 +717,7 @@ export default function App() {
               user={user}
               workspace={workspace}
               onUpdateProfile={handleUpdateProfile}
-              onUpdateAvatar={(avatar) => setUser((prev) => (prev ? { ...prev, avatar } : null))}
+              onUpdateAvatar={handleUpdateAvatar}
             />
           )}
         </main>
