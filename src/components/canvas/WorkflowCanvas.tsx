@@ -1090,6 +1090,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         canvasMode={canvasMode}
         selectedCount={selectedNodeIds.length + (selectedConnectionId ? 1 : 0)}
         onDeleteSelected={handleDeleteSelected}
+        onOpenSettings={() => selectedNodeIds[0] && setEditingNodeId(selectedNodeIds[0])}
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar}
         onChangeCanvasMode={(mode) => setCanvasMode(mode)}
