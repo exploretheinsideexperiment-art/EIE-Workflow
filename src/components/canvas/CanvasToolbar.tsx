@@ -17,7 +17,8 @@ import {
   Sparkles,
   LayoutGrid,
   Trash2,
-  Settings
+  Settings,
+  Stethoscope
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -54,6 +55,7 @@ interface CanvasToolbarProps {
   onRunWorkflow: () => void;
   onSaveWorkflow: () => void;
   onToggleActive: () => void;
+  onOpenEiDoctor?: () => void;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -90,6 +92,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onRunWorkflow,
   onSaveWorkflow,
   onToggleActive,
+  onOpenEiDoctor,
 }) => {
   return (
     <>
@@ -198,6 +201,16 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           >
             <TerminalSquare className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Logs</span>
+          </button>
+
+          {/* Ei-Doctor Quick Launch Button */}
+          <button
+            onClick={onOpenEiDoctor}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 text-xs font-semibold shadow-sm hover:border-cyan-400 transition cursor-pointer whitespace-nowrap shrink-0 group"
+            title="Open Ei-Doctor (AI Workflow Troubleshooter & Auto-Repair)"
+          >
+            <Stethoscope className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+            <span className="font-bold">Ei-Doctor</span>
           </button>
         </div>
 
