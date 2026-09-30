@@ -174,16 +174,18 @@ export class WorkflowEngine {
     }
 
     // 2. Identify start action nodes
-    // Look for explicit Triggers first
-    let startNodes = workflow.nodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_'));
+    // Find all root nodes that have 0 incoming execution connections (e.g. Schedule Trigger, Google Sheets, Webhook, etc.)
+    const mainTargetNodeIds = new Set(
+      workflow.connections
+        .filter((c) => !['in_model', 'in_memory', 'in_tools'].includes(c.toPortId))
+        .map((c) => c.toNodeId)
+    );
+    const rootNodes = workflow.nodes.filter((n) => !isProviderNode(n) && !mainTargetNodeIds.has(n.id));
 
-    // If no triggers, find root action nodes (nodes with 0 incoming main execution connections)
-    if (startNodes.length === 0) {
-      const mainTargetNodeIds = new Set(
-        workflow.connections.filter((c) => c.toPortId === 'in_main').map((c) => c.toNodeId)
-      );
-      startNodes = workflow.nodes.filter((n) => !isProviderNode(n) && !mainTargetNodeIds.has(n.id));
-    }
+    // Sort triggers first, then other root inputs (like Google Sheets)
+    const triggers = rootNodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_'));
+    const otherRoots = rootNodes.filter((n) => !triggers.some((t) => t.id === n.id));
+    let startNodes = [...triggers, ...otherRoots];
 
     // Fallback if still empty: take the first non-provider node
     if (startNodes.length === 0 && workflow.nodes.length > 0) {
@@ -199,12 +201,40 @@ export class WorkflowEngine {
     let overallSuccess = true;
     let executionError: string | undefined;
 
-    while (queue.length > 0) {
+    let iterations = 0;
+    const maxIterations = (workflow.nodes.length * 4) + 10;
+
+    while (queue.length > 0 && iterations < maxIterations) {
+      iterations++;
       const currentItem = queue.shift()!;
       const currentNode = currentItem.node;
 
       if (executedNodeIds.has(currentNode.id)) {
         continue;
+      }
+
+      // Check if all non-provider upstream dependencies for this node have executed
+      const incomingConns = workflow.connections.filter(
+        (c) => c.toNodeId === currentNode.id && !['in_model', 'in_memory', 'in_tools'].includes(c.toPortId)
+      );
+      const pendingUpstream = incomingConns.some((c) => !executedNodeIds.has(c.fromNodeId));
+
+      // If upstream nodes haven't finished yet and there are still other nodes in queue, push back to end
+      if (pendingUpstream && queue.length > 0) {
+        queue.push(currentItem);
+        continue;
+      }
+
+      // Merge inputs from all incoming connections
+      let resolvedInput = { ...(currentItem.incomingData || {}) };
+      for (const ic of incomingConns) {
+        if (nodeOutputs[ic.fromNodeId]) {
+          const upOutput = nodeOutputs[ic.fromNodeId];
+          resolvedInput = { ...resolvedInput, ...upOutput };
+          if (upOutput.rows) resolvedInput.rows = upOutput.rows;
+          if (upOutput.data) resolvedInput.data = upOutput.data;
+          if (upOutput.text) resolvedInput.text = upOutput.text;
+        }
       }
 
       // Mark running
@@ -215,7 +245,7 @@ export class WorkflowEngine {
         nodeType: currentNode.type,
         status: 'running',
         startedAt: new Date(nodeStart).toISOString(),
-        input: currentItem.incomingData,
+        input: resolvedInput,
       };
 
       execution.nodeResults[currentNode.id] = nodeResult;
@@ -229,11 +259,11 @@ export class WorkflowEngine {
       // Execute node logic
       try {
         const context = {
-          json: currentItem.incomingData || {},
+          json: resolvedInput || {},
           nodes: nodeOutputsByName,
         };
 
-        const outputData = await this.executeNode(currentNode, context, currentItem.incomingData, workflow, providerOutputs);
+        const outputData = await this.executeNode(currentNode, context, resolvedInput, workflow, providerOutputs);
         const nodeDuration = Date.now() - nodeStart;
 
         nodeResult.status = 'success';
@@ -312,8 +342,6 @@ export class WorkflowEngine {
         if (!executionError) {
           executionError = `Node "${currentNode.name}" failed: ${nodeResult.error}`;
         }
-
-        // Continue running remaining independent steps in test mode
       }
     }
 
@@ -432,9 +460,28 @@ export class WorkflowEngine {
 
     switch (node.type) {
       // 1. Trigger nodes
+      case 'trigger_schedule': {
+        const schedTime = new Date().toISOString();
+        const schedData = {
+          scheduledTime: schedTime,
+          cron: config.cron || '0 9 * * 1-5',
+          interval: config.interval || 'Every weekday morning at 09:00 AM',
+          triggeredAt: schedTime,
+          event: 'scheduled_trigger',
+          status: 'success',
+          text: `Schedule Trigger activated for morning automation run (Cron: ${config.cron || '0 9 * * 1-5'}).`,
+          timestamp: schedTime,
+          output: {
+            timestamp: schedTime,
+            cron: config.cron || '0 9 * * 1-5',
+            interval: config.interval || 'Every weekday at 09:00 AM',
+            status: 'active'
+          }
+        };
+        return schedData;
+      }
       case 'trigger_manual':
       case 'trigger_webhook':
-      case 'trigger_schedule':
       case 'trigger_email':
       case 'trigger_app': {
         const payload = incomingData && Object.keys(incomingData).length > 0
@@ -586,25 +633,39 @@ export class WorkflowEngine {
         }
 
         // Resilient intelligent AI Agent reasoning engine
-        const clientName = incomingData?.customer || incomingData?.name || 'Customer';
-        const summaryText = `AI Agent analyzed workflow input cleanly using ${modelName}. Inquiry from ${clientName} categorized with high confidence.`;
-        return {
-          text: summaryText,
-          output: {
+        const hasRows = incomingData?.rows && Array.isArray(incomingData.rows) && incomingData.rows.length > 0;
+        let summaryText = '';
+        let structuredAnalysis: any = {};
+
+        if (hasRows) {
+          const rowsList = incomingData.rows.slice(0, 3).map((r: any) => `• ${r.customer || r.name || 'Account'}: ${r.revenue || r.amount || '$15k'} (${r.priority || r.status || 'Active'})`).join('\n');
+          summaryText = `📊 Operations Intelligence Briefing (${modelName})\n\nProcessed ${incomingData.rows.length} enterprise records from Google Sheets:\n${rowsList}\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.`;
+          structuredAnalysis = {
+            briefing: summaryText,
+            recordsAnalyzed: incomingData.rows.length,
+            accounts: incomingData.rows.map((r: any) => r.customer || r.name),
+            urgencyScore: 88,
+            priorityTier: 'Tier 1 Critical',
+            recommendedAction: 'Dispatch instant summary to team Telegram channel',
+          };
+        } else {
+          const clientName = incomingData?.customer || incomingData?.name || 'Customer';
+          summaryText = `AI Agent analyzed workflow input cleanly using ${modelName}. Inquiry from ${clientName} categorized with high confidence.`;
+          structuredAnalysis = {
             summary: summaryText,
             customer: clientName,
             urgencyScore: 85,
             estimatedContractTier: 'Tier 1',
             status: 'approved',
-            recommendedNextSteps: [
-              'Execute downstream automated notifications',
-              'Archive lead in central database',
-              'Dispatch confirmation alert to team channel',
-            ],
-          },
+          };
+        }
+
+        return {
+          text: summaryText,
+          output: structuredAnalysis,
           result: summaryText,
           summary: summaryText,
-          urgencyScore: 85,
+          urgencyScore: 88,
           estimatedContractTier: 'Tier 1',
           data: incomingData || {},
           status: 'success',
@@ -714,16 +775,28 @@ export class WorkflowEngine {
       }
 
       // 9. Communication: Telegram
+      case 'app_telegram':
       case 'comm_telegram': {
         const chatId = evaluateExpressions(config.chatId || '@alerts_channel', context);
-        const message = evaluateExpressions(config.message || 'Workflow alert: ' + JSON.stringify(incomingData), context);
+        const rawMsg = config.message || config.text || incomingData?.text || incomingData?.summary || (incomingData?.output?.briefing) || (typeof incomingData === 'string' ? incomingData : 'Workflow alert: ' + JSON.stringify(incomingData));
+        const message = evaluateExpressions(rawMsg, context);
 
         return {
           sent: true,
           platform: 'Telegram',
           chatId,
-          messageLength: message.length,
-          deliveredAt: new Date().toISOString()
+          message,
+          text: message,
+          messageId: Math.floor(10000 + Math.random() * 90000),
+          deliveredAt: new Date().toISOString(),
+          status: 'success',
+          output: {
+            delivered: true,
+            chatId,
+            messagePreview: message.slice(0, 160),
+            messageId: Math.floor(10000 + Math.random() * 90000),
+            status: 'sent'
+          }
         };
       }
 
@@ -882,20 +955,30 @@ export class WorkflowEngine {
       // 17. Application Integrations (Google Suite, Slack, Stripe, Notion, GitHub, Discord, etc.)
       case 'app_google_sheets': {
         const sheet = config.sheetName || 'Sheet1';
+        const operation = config.operation || (incomingData && Object.keys(incomingData).length > 0 && !incomingData.cron ? 'appendRow' : 'readRows');
+
+        const sampleRows = [
+          { id: '1', customer: 'Nexus Global', revenue: '$32,500', status: 'Active', priority: 'Critical', region: 'APAC' },
+          { id: '2', customer: 'Aura Logistics', revenue: '$14,200', status: 'Pending Review', priority: 'High', region: 'EMEA' },
+          { id: '3', customer: 'Vortex Labs', revenue: '$21,000', status: 'In Progress', priority: 'High', region: 'NA' },
+          { id: '4', customer: 'Apex Dynamics', revenue: '$5,400', status: 'Completed', priority: 'Medium', region: 'EU' },
+        ];
+
         const result = {
-          action: config.operation || 'Append Row',
+          action: operation,
           spreadsheetId: config.spreadsheetId || '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-          sheet,
-          rowInserted: true,
-          values: incomingData,
-          updatedCells: Object.keys(incomingData || {}).length,
+          sheetName: sheet,
+          rowCount: sampleRows.length,
+          rows: sampleRows,
+          data: sampleRows,
+          updatedCells: operation === 'appendRow' ? Object.keys(incomingData || {}).length : sampleRows.length * 5,
           timestamp: new Date().toISOString(),
           status: 'success',
         };
         return {
           ...result,
           output: result,
-          text: `Google Sheets row appended to ${sheet}`,
+          text: `Google Sheets ${operation === 'readRows' ? 'read' : 'updated'} ${sampleRows.length} rows in "${sheet}".`,
         };
       }
 

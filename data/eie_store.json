@@ -20,6 +20,187 @@
   ],
   "workflows": [
     {
+      "id": "test_screenshot_wf",
+      "name": "Screenshot Workflow",
+      "nodes": [
+        {
+          "id": "n_model",
+          "name": "Google Gemini Chat Model",
+          "type": "ai_model_gemini",
+          "category": "AI",
+          "position": {
+            "x": 100,
+            "y": 100
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_model",
+              "name": "model",
+              "type": "model"
+            }
+          ]
+        },
+        {
+          "id": "n_mem",
+          "name": "Window Buffer Memory",
+          "type": "ai_memory_window",
+          "category": "AI",
+          "position": {
+            "x": 100,
+            "y": 200
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_memory",
+              "name": "memory",
+              "type": "memory"
+            }
+          ]
+        },
+        {
+          "id": "n_sheets",
+          "name": "Google Sheets",
+          "type": "app_google_sheets",
+          "category": "Applications",
+          "position": {
+            "x": 100,
+            "y": 300
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ]
+        },
+        {
+          "id": "n_sched",
+          "name": "Schedule Trigger",
+          "type": "trigger_schedule",
+          "category": "Triggers",
+          "position": {
+            "x": 100,
+            "y": 400
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ]
+        },
+        {
+          "id": "n_agent",
+          "name": "AI Agent",
+          "type": "ai_agent",
+          "category": "AI",
+          "position": {
+            "x": 450,
+            "y": 250
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main"
+            },
+            {
+              "id": "in_model",
+              "name": "model",
+              "type": "model"
+            },
+            {
+              "id": "in_memory",
+              "name": "memory",
+              "type": "memory"
+            },
+            {
+              "id": "in_tools",
+              "name": "tool",
+              "type": "tool"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ]
+        },
+        {
+          "id": "n_tele",
+          "name": "Telegram",
+          "type": "app_telegram",
+          "category": "Applications",
+          "position": {
+            "x": 800,
+            "y": 250
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "id": "c1",
+          "fromNodeId": "n_model",
+          "fromPortId": "out_model",
+          "toNodeId": "n_agent",
+          "toPortId": "in_model"
+        },
+        {
+          "id": "c2",
+          "fromNodeId": "n_mem",
+          "fromPortId": "out_memory",
+          "toNodeId": "n_agent",
+          "toPortId": "in_memory"
+        },
+        {
+          "id": "c3",
+          "fromNodeId": "n_sheets",
+          "fromPortId": "out_main",
+          "toNodeId": "n_agent",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c4",
+          "fromNodeId": "n_sched",
+          "fromPortId": "out_main",
+          "toNodeId": "n_agent",
+          "toPortId": "in_main"
+        },
+        {
+          "id": "c5",
+          "fromNodeId": "n_agent",
+          "fromPortId": "out_main",
+          "toNodeId": "n_tele",
+          "toPortId": "in_main"
+        }
+      ],
+      "updatedAt": "2026-09-30T19:21:33.649Z",
+      "executionCount": 1,
+      "lastExecutedAt": "2026-09-30T19:21:33.651Z"
+    },
+    {
       "id": "wf_tpl_n8n_ai_agent",
       "name": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
       "nodes": [
@@ -385,6 +566,643 @@
     }
   ],
   "executions": [
+    {
+      "id": "exec_1790796093651_ebb653",
+      "workflowId": "test_screenshot_wf",
+      "workflowName": "Screenshot Workflow",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-09-30T19:21:33.651Z",
+      "nodeResults": {
+        "n_model": {
+          "nodeId": "n_model",
+          "nodeName": "Google Gemini Chat Model",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:33.653Z",
+          "finishedAt": "2026-09-30T19:21:33.653Z",
+          "durationMs": 15,
+          "output": {
+            "modelId": "gemini-3.8-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-09-30T19:21:33.653Z"
+          }
+        },
+        "n_mem": {
+          "nodeId": "n_mem",
+          "nodeName": "Window Buffer Memory",
+          "nodeType": "ai_memory_window",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:33.653Z",
+          "finishedAt": "2026-09-30T19:21:33.653Z",
+          "durationMs": 15,
+          "output": {
+            "memoryType": "Window Buffer Memory",
+            "sessionKey": "user_session_default",
+            "windowSize": 10,
+            "currentTurns": 2,
+            "history": [
+              {
+                "role": "user",
+                "content": "Inbound customer trigger initialized"
+              },
+              {
+                "role": "assistant",
+                "content": "Agent ready to process data with active tools"
+              }
+            ],
+            "status": "initialized"
+          }
+        },
+        "n_sched": {
+          "nodeId": "n_sched",
+          "nodeName": "Schedule Trigger",
+          "nodeType": "trigger_schedule",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:33.653Z",
+          "input": {},
+          "finishedAt": "2026-09-30T19:21:33.653Z",
+          "durationMs": 0,
+          "output": {
+            "scheduledTime": "2026-09-30T19:21:33.653Z",
+            "cron": "0 9 * * 1-5",
+            "interval": "Every weekday morning at 09:00 AM",
+            "triggeredAt": "2026-09-30T19:21:33.653Z",
+            "event": "scheduled_trigger",
+            "status": "success",
+            "text": "Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).",
+            "timestamp": "2026-09-30T19:21:33.653Z",
+            "output": {
+              "timestamp": "2026-09-30T19:21:33.653Z",
+              "cron": "0 9 * * 1-5",
+              "interval": "Every weekday at 09:00 AM",
+              "status": "active"
+            }
+          }
+        },
+        "n_sheets": {
+          "nodeId": "n_sheets",
+          "nodeName": "Google Sheets",
+          "nodeType": "app_google_sheets",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:33.653Z",
+          "input": {},
+          "finishedAt": "2026-09-30T19:21:33.653Z",
+          "durationMs": 0,
+          "output": {
+            "action": "readRows",
+            "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+            "sheetName": "Sheet1",
+            "rowCount": 4,
+            "rows": [
+              {
+                "id": "1",
+                "customer": "Nexus Global",
+                "revenue": "$32,500",
+                "status": "Active",
+                "priority": "Critical",
+                "region": "APAC"
+              },
+              {
+                "id": "2",
+                "customer": "Aura Logistics",
+                "revenue": "$14,200",
+                "status": "Pending Review",
+                "priority": "High",
+                "region": "EMEA"
+              },
+              {
+                "id": "3",
+                "customer": "Vortex Labs",
+                "revenue": "$21,000",
+                "status": "In Progress",
+                "priority": "High",
+                "region": "NA"
+              },
+              {
+                "id": "4",
+                "customer": "Apex Dynamics",
+                "revenue": "$5,400",
+                "status": "Completed",
+                "priority": "Medium",
+                "region": "EU"
+              }
+            ],
+            "data": [
+              {
+                "id": "1",
+                "customer": "Nexus Global",
+                "revenue": "$32,500",
+                "status": "Active",
+                "priority": "Critical",
+                "region": "APAC"
+              },
+              {
+                "id": "2",
+                "customer": "Aura Logistics",
+                "revenue": "$14,200",
+                "status": "Pending Review",
+                "priority": "High",
+                "region": "EMEA"
+              },
+              {
+                "id": "3",
+                "customer": "Vortex Labs",
+                "revenue": "$21,000",
+                "status": "In Progress",
+                "priority": "High",
+                "region": "NA"
+              },
+              {
+                "id": "4",
+                "customer": "Apex Dynamics",
+                "revenue": "$5,400",
+                "status": "Completed",
+                "priority": "Medium",
+                "region": "EU"
+              }
+            ],
+            "updatedCells": 20,
+            "timestamp": "2026-09-30T19:21:33.653Z",
+            "status": "success",
+            "output": {
+              "action": "readRows",
+              "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+              "sheetName": "Sheet1",
+              "rowCount": 4,
+              "rows": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "data": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "updatedCells": 20,
+              "timestamp": "2026-09-30T19:21:33.653Z",
+              "status": "success"
+            },
+            "text": "Google Sheets read 4 rows in \"Sheet1\"."
+          }
+        },
+        "n_agent": {
+          "nodeId": "n_agent",
+          "nodeName": "AI Agent",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:33.654Z",
+          "input": {
+            "scheduledTime": "2026-09-30T19:21:33.653Z",
+            "cron": "0 9 * * 1-5",
+            "interval": "Every weekday morning at 09:00 AM",
+            "triggeredAt": "2026-09-30T19:21:33.653Z",
+            "event": "scheduled_trigger",
+            "status": "success",
+            "text": "Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).",
+            "timestamp": "2026-09-30T19:21:33.653Z",
+            "output": {
+              "timestamp": "2026-09-30T19:21:33.653Z",
+              "cron": "0 9 * * 1-5",
+              "interval": "Every weekday at 09:00 AM",
+              "status": "active"
+            },
+            "action": "readRows",
+            "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+            "sheetName": "Sheet1",
+            "rowCount": 4,
+            "rows": [
+              {
+                "id": "1",
+                "customer": "Nexus Global",
+                "revenue": "$32,500",
+                "status": "Active",
+                "priority": "Critical",
+                "region": "APAC"
+              },
+              {
+                "id": "2",
+                "customer": "Aura Logistics",
+                "revenue": "$14,200",
+                "status": "Pending Review",
+                "priority": "High",
+                "region": "EMEA"
+              },
+              {
+                "id": "3",
+                "customer": "Vortex Labs",
+                "revenue": "$21,000",
+                "status": "In Progress",
+                "priority": "High",
+                "region": "NA"
+              },
+              {
+                "id": "4",
+                "customer": "Apex Dynamics",
+                "revenue": "$5,400",
+                "status": "Completed",
+                "priority": "Medium",
+                "region": "EU"
+              }
+            ],
+            "data": [
+              {
+                "id": "1",
+                "customer": "Nexus Global",
+                "revenue": "$32,500",
+                "status": "Active",
+                "priority": "Critical",
+                "region": "APAC"
+              },
+              {
+                "id": "2",
+                "customer": "Aura Logistics",
+                "revenue": "$14,200",
+                "status": "Pending Review",
+                "priority": "High",
+                "region": "EMEA"
+              },
+              {
+                "id": "3",
+                "customer": "Vortex Labs",
+                "revenue": "$21,000",
+                "status": "In Progress",
+                "priority": "High",
+                "region": "NA"
+              },
+              {
+                "id": "4",
+                "customer": "Apex Dynamics",
+                "revenue": "$5,400",
+                "status": "Completed",
+                "priority": "Medium",
+                "region": "EU"
+              }
+            ],
+            "updatedCells": 20
+          },
+          "finishedAt": "2026-09-30T19:21:35.657Z",
+          "durationMs": 2003,
+          "output": {
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "output": {
+              "briefing": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+              "recordsAnalyzed": 4,
+              "accounts": [
+                "Nexus Global",
+                "Aura Logistics",
+                "Vortex Labs",
+                "Apex Dynamics"
+              ],
+              "urgencyScore": 88,
+              "priorityTier": "Tier 1 Critical",
+              "recommendedAction": "Dispatch instant summary to team Telegram channel"
+            },
+            "result": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "summary": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "urgencyScore": 88,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "scheduledTime": "2026-09-30T19:21:33.653Z",
+              "cron": "0 9 * * 1-5",
+              "interval": "Every weekday morning at 09:00 AM",
+              "triggeredAt": "2026-09-30T19:21:33.653Z",
+              "event": "scheduled_trigger",
+              "status": "success",
+              "text": "Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).",
+              "timestamp": "2026-09-30T19:21:33.653Z",
+              "output": {
+                "timestamp": "2026-09-30T19:21:33.653Z",
+                "cron": "0 9 * * 1-5",
+                "interval": "Every weekday at 09:00 AM",
+                "status": "active"
+              },
+              "action": "readRows",
+              "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+              "sheetName": "Sheet1",
+              "rowCount": 4,
+              "rows": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "data": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "updatedCells": 20
+            },
+            "status": "success",
+            "modelUsed": "Google Gemini Chat Model",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": []
+          }
+        },
+        "n_tele": {
+          "nodeId": "n_tele",
+          "nodeName": "Telegram",
+          "nodeType": "app_telegram",
+          "status": "success",
+          "startedAt": "2026-09-30T19:21:35.658Z",
+          "input": {
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "output": {
+              "briefing": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+              "recordsAnalyzed": 4,
+              "accounts": [
+                "Nexus Global",
+                "Aura Logistics",
+                "Vortex Labs",
+                "Apex Dynamics"
+              ],
+              "urgencyScore": 88,
+              "priorityTier": "Tier 1 Critical",
+              "recommendedAction": "Dispatch instant summary to team Telegram channel"
+            },
+            "result": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "summary": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "urgencyScore": 88,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "scheduledTime": "2026-09-30T19:21:33.653Z",
+              "cron": "0 9 * * 1-5",
+              "interval": "Every weekday morning at 09:00 AM",
+              "triggeredAt": "2026-09-30T19:21:33.653Z",
+              "event": "scheduled_trigger",
+              "status": "success",
+              "text": "Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).",
+              "timestamp": "2026-09-30T19:21:33.653Z",
+              "output": {
+                "timestamp": "2026-09-30T19:21:33.653Z",
+                "cron": "0 9 * * 1-5",
+                "interval": "Every weekday at 09:00 AM",
+                "status": "active"
+              },
+              "action": "readRows",
+              "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+              "sheetName": "Sheet1",
+              "rowCount": 4,
+              "rows": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "data": [
+                {
+                  "id": "1",
+                  "customer": "Nexus Global",
+                  "revenue": "$32,500",
+                  "status": "Active",
+                  "priority": "Critical",
+                  "region": "APAC"
+                },
+                {
+                  "id": "2",
+                  "customer": "Aura Logistics",
+                  "revenue": "$14,200",
+                  "status": "Pending Review",
+                  "priority": "High",
+                  "region": "EMEA"
+                },
+                {
+                  "id": "3",
+                  "customer": "Vortex Labs",
+                  "revenue": "$21,000",
+                  "status": "In Progress",
+                  "priority": "High",
+                  "region": "NA"
+                },
+                {
+                  "id": "4",
+                  "customer": "Apex Dynamics",
+                  "revenue": "$5,400",
+                  "status": "Completed",
+                  "priority": "Medium",
+                  "region": "EU"
+                }
+              ],
+              "updatedCells": 20
+            },
+            "status": "success",
+            "modelUsed": "Google Gemini Chat Model",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": []
+          },
+          "finishedAt": "2026-09-30T19:21:35.658Z",
+          "durationMs": 0,
+          "output": {
+            "sent": true,
+            "platform": "Telegram",
+            "chatId": "@alerts_channel",
+            "message": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "messageId": 57287,
+            "deliveredAt": "2026-09-30T19:21:35.658Z",
+            "status": "success",
+            "output": {
+              "delivered": true,
+              "chatId": "@alerts_channel",
+              "messagePreview": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Log",
+              "messageId": 27243,
+              "status": "sent"
+            }
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-30T19:21:33.651Z",
+          "level": "info",
+          "message": "Workflow \"Screenshot Workflow\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-30T19:21:33.653Z",
+          "level": "info",
+          "message": "Node \"Schedule Trigger\" (trigger_schedule) executed successfully in 0ms.",
+          "nodeId": "n_sched"
+        },
+        {
+          "timestamp": "2026-09-30T19:21:33.653Z",
+          "level": "info",
+          "message": "Node \"Google Sheets\" (app_google_sheets) executed successfully in 0ms.",
+          "nodeId": "n_sheets"
+        },
+        {
+          "timestamp": "2026-09-30T19:21:35.657Z",
+          "level": "info",
+          "message": "Node \"AI Agent\" (ai_agent) executed successfully in 2003ms.",
+          "nodeId": "n_agent"
+        },
+        {
+          "timestamp": "2026-09-30T19:21:35.658Z",
+          "level": "info",
+          "message": "Node \"Telegram\" (app_telegram) executed successfully in 0ms.",
+          "nodeId": "n_tele"
+        },
+        {
+          "timestamp": "2026-09-30T19:21:35.658Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 2007ms."
+        }
+      ],
+      "finishedAt": "2026-09-30T19:21:35.658Z",
+      "durationMs": 2007
+    },
     {
       "id": "exec_1790795377850_b4ca35",
       "workflowId": "wf_tpl_n8n_ai_agent",
@@ -1807,6 +2625,12 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1790796095658",
+      "action": "Execution exec_1790796093651_ebb653",
+      "details": "Workflow \"Screenshot Workflow\" completed: SUCCESS (2007ms)",
+      "timestamp": "2026-09-30T19:21:35.658Z"
+    },
     {
       "id": "aud_1790795379857",
       "action": "Execution exec_1790795377850_b4ca35",
