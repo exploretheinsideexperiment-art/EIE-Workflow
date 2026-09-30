@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, Settings, Copy, AlertCircle } from 'lucide-react';
+import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles } from 'lucide-react';
 import {
   Workflow,
   WorkflowNodeData,
@@ -15,6 +15,7 @@ import { MiniMap } from './MiniMap';
 import { AddNodeModal } from '../panels/AddNodeModal';
 import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
+import { EieBuddyDrawer } from '../panels/EieBuddyDrawer';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 import {
   validateConnection,
