@@ -130,6 +130,36 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           </div>
         </div>
 
+        {/* Live Execution Status Alert Banner */}
+        {executionResult && (
+          <div className="px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between gap-2 text-xs">
+            {executionResult.status === 'failed' ? (
+              <div className="flex items-center gap-2 text-rose-400 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-ping" />
+                <span className="font-bold shrink-0">Step Error:</span>
+                <span className="truncate text-rose-300 font-mono text-[11px]">{executionResult.error || 'Execution failed'}</span>
+              </div>
+            ) : executionResult.status === 'success' ? (
+              <div className="flex items-center gap-2 text-emerald-400 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="font-bold">Step Completed ({executionResult.durationMs ? `${executionResult.durationMs}ms` : 'Ready'})</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-cyan-400">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0 animate-pulse" />
+                <span>Running Step...</span>
+              </div>
+            )}
+
+            <button
+              onClick={() => setActiveTab('test')}
+              className="text-[11px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20 transition cursor-pointer shrink-0"
+            >
+              View JSON Output
+            </button>
+          </div>
+        )}
+
       {/* Tabs */}
       <div className="flex items-center border-b border-slate-800 bg-slate-950/40 px-2 text-xs">
         <button

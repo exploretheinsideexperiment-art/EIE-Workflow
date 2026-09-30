@@ -1,6 +1,23 @@
 import React, { useRef } from 'react';
 import * as Icons from 'lucide-react';
-import { Plus, Bot, Sparkles, BrainCircuit, History, Wrench, Shield, Check, Loader2, X, Settings, Copy, Trash2, KeyRound } from 'lucide-react';
+import {
+  Plus,
+  Bot,
+  Sparkles,
+  BrainCircuit,
+  History,
+  Wrench,
+  Shield,
+  Check,
+  Loader2,
+  X,
+  Settings,
+  Copy,
+  Trash2,
+  KeyRound,
+  Stethoscope,
+  AlertCircle
+} from 'lucide-react';
 import { WorkflowNodeData, ExecutionNodeResult, NodePort } from '../../types/workflow';
 import { getPortColorDef, isPortCompatible } from '../../utils/portValidation';
 
@@ -22,6 +39,7 @@ interface CanvasNodeProps {
   onDeleteNode: (nodeId: string) => void;
   onDuplicateNode: (nodeId: string) => void;
   onOpenConfig: (nodeId: string) => void;
+  onOpenDoctorForNode?: (nodeId: string) => void;
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -42,6 +60,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onDeleteNode,
   onDuplicateNode,
   onOpenConfig,
+  onOpenDoctorForNode,
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -223,6 +242,54 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           </span>
         )}
       </div>
+
+      {/* Visual Live Output or Error Pill on Node */}
+      {executionResult && (
+        <div className="px-3 pb-2.5">
+          {executionResult.status === 'failed' ? (
+            <div className="p-2 rounded-xl bg-rose-950/70 border border-rose-500/50 text-[10px] text-rose-200">
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <div className="flex items-center gap-1 font-bold text-rose-300">
+                  <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                  <span>Error Detected</span>
+                </div>
+                {onOpenDoctorForNode && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDoctorForNode(node.id);
+                    }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold cursor-pointer transition"
+                    title="Fix this error with Ei-Doctor"
+                  >
+                    <Stethoscope className="w-2.5 h-2.5 text-cyan-400" />
+                    <span>Ei-Doctor</span>
+                  </button>
+                )}
+              </div>
+              <p className="line-clamp-2 text-[10px] text-rose-300/90 leading-tight">
+                {executionResult.error || 'Execution failed'}
+              </p>
+            </div>
+          ) : executionResult.status === 'success' && executionResult.output ? (
+            <div
+              className="p-1.5 px-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-[10px] font-mono text-emerald-300 flex items-center justify-between gap-1.5 cursor-pointer hover:bg-emerald-950/60 transition"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenConfig(node.id);
+              }}
+              title="Click to view full output data"
+            >
+              <span className="truncate">
+                ✓ {typeof executionResult.output === 'object'
+                  ? (executionResult.output.summary || executionResult.output.text || executionResult.output.result || (executionResult.output.data ? JSON.stringify(executionResult.output.data).slice(0, 30) : 'Output ready'))
+                  : String(executionResult.output)}
+              </span>
+              <span className="text-[9px] text-emerald-400 shrink-0 font-sans font-semibold underline">View</span>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* SPECIAL AI AGENT SLOTS (n8n Style: Model, Memory, Tools) */}
       {isAiAgent && (

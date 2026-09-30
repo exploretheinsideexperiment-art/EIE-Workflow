@@ -1324,6 +1324,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 onQuickAddSubNode={handleQuickAddSubNode}
                 onDeleteNode={handleDeleteNode}
                 onDuplicateNode={handleDuplicateNode}
+                onOpenDoctorForNode={(id) => {
+                  setSelectedNodeIds([id]);
+                  setEiDoctorOpen(true);
+                }}
                 onOpenConfig={(id) => {
                   setSelectedNodeIds([id]);
                   setEditingNodeId(id);
@@ -1450,6 +1454,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         execution={latestExecution}
         onClose={() => setExecutionDrawerOpen(false)}
         onReRun={handleTestWorkflow}
+        onOpenEiDoctor={() => setEiDoctorOpen(true)}
       />
 
       {/* Floating Ei-Doctor Launcher Button (Bottom Right) */}

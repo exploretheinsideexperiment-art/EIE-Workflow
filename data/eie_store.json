@@ -134,8 +134,8 @@
         }
       ],
       "updatedAt": "2026-09-29T03:45:09.178Z",
-      "executionCount": 1,
-      "lastExecutedAt": "2026-09-29T03:45:09.179Z"
+      "executionCount": 5,
+      "lastExecutedAt": "2026-09-30T19:09:37.850Z"
     },
     {
       "id": "wf_sample_ai_lead",
@@ -385,6 +385,420 @@
     }
   ],
   "executions": [
+    {
+      "id": "exec_1790795377850_b4ca35",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-09-30T19:09:37.850Z",
+      "nodeResults": {
+        "agent_model": {
+          "nodeId": "agent_model",
+          "nodeName": "Google Gemini 3.8 Flash",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-09-30T19:09:37.852Z",
+          "finishedAt": "2026-09-30T19:09:37.852Z",
+          "durationMs": 15,
+          "output": {
+            "modelId": "gemini-3.8-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-09-30T19:09:37.852Z"
+          }
+        },
+        "agent_calc": {
+          "nodeId": "agent_calc",
+          "nodeName": "Calculator Tool",
+          "nodeType": "ai_tool_calculator",
+          "status": "success",
+          "startedAt": "2026-09-30T19:09:37.852Z",
+          "finishedAt": "2026-09-30T19:09:37.852Z",
+          "durationMs": 15,
+          "output": {
+            "toolName": "calculator",
+            "type": "math_tool",
+            "description": "Calculates mathematical equations and financial metrics with precision",
+            "status": "registered",
+            "sampleExecution": {
+              "expression": "1250 * 1.18",
+              "result": 1475
+            }
+          }
+        },
+        "agent_wh": {
+          "nodeId": "agent_wh",
+          "nodeName": "Chat Inbound Trigger",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-30T19:09:37.852Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:09:37.852Z",
+          "durationMs": 0,
+          "output": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution",
+            "triggered": true,
+            "status": "success",
+            "text": "Trigger event initialized with 3 attributes",
+            "output": {
+              "customer": "Test Customer",
+              "company": "Test Corp",
+              "inquiry": "Test workflow execution"
+            }
+          }
+        },
+        "agent_core": {
+          "nodeId": "agent_core",
+          "nodeName": "Autonomous AI Agent",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-09-30T19:09:37.852Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution",
+            "triggered": true,
+            "status": "success",
+            "text": "Trigger event initialized with 3 attributes",
+            "output": {
+              "customer": "Test Customer",
+              "company": "Test Corp",
+              "inquiry": "Test workflow execution"
+            }
+          },
+          "finishedAt": "2026-09-30T19:09:39.856Z",
+          "durationMs": 2004,
+          "output": {
+            "text": "AI Agent analyzed workflow input cleanly using Google Gemini 3.8 Flash. Inquiry from Test Customer categorized with high confidence.",
+            "output": {
+              "summary": "AI Agent analyzed workflow input cleanly using Google Gemini 3.8 Flash. Inquiry from Test Customer categorized with high confidence.",
+              "customer": "Test Customer",
+              "urgencyScore": 85,
+              "estimatedContractTier": "Tier 1",
+              "status": "approved",
+              "recommendedNextSteps": [
+                "Execute downstream automated notifications",
+                "Archive lead in central database",
+                "Dispatch confirmation alert to team channel"
+              ]
+            },
+            "result": "AI Agent analyzed workflow input cleanly using Google Gemini 3.8 Flash. Inquiry from Test Customer categorized with high confidence.",
+            "summary": "AI Agent analyzed workflow input cleanly using Google Gemini 3.8 Flash. Inquiry from Test Customer categorized with high confidence.",
+            "urgencyScore": 85,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "customer": "Test Customer",
+              "company": "Test Corp",
+              "inquiry": "Test workflow execution",
+              "triggered": true,
+              "status": "success",
+              "text": "Trigger event initialized with 3 attributes",
+              "output": {
+                "customer": "Test Customer",
+                "company": "Test Corp",
+                "inquiry": "Test workflow execution"
+              }
+            },
+            "status": "success",
+            "modelUsed": "Google Gemini 3.8 Flash",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": [
+              "Calculator Tool"
+            ]
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-30T19:09:37.850Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-30T19:09:37.852Z",
+          "level": "info",
+          "message": "Node \"Chat Inbound Trigger\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "agent_wh"
+        },
+        {
+          "timestamp": "2026-09-30T19:09:39.856Z",
+          "level": "info",
+          "message": "Node \"Autonomous AI Agent\" (ai_agent) executed successfully in 2004ms.",
+          "nodeId": "agent_core"
+        },
+        {
+          "timestamp": "2026-09-30T19:09:39.856Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 2006ms."
+        }
+      ],
+      "finishedAt": "2026-09-30T19:09:39.856Z",
+      "durationMs": 2006
+    },
+    {
+      "id": "exec_1790795363697_79f80c",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "manual",
+      "status": "running",
+      "startedAt": "2026-09-30T19:09:23.697Z",
+      "nodeResults": {},
+      "logs": [
+        {
+          "timestamp": "2026-09-30T19:09:23.697Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via manual trigger."
+        }
+      ]
+    },
+    {
+      "id": "exec_1790795298236_2f4ccf",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "manual",
+      "status": "running",
+      "startedAt": "2026-09-30T19:08:18.236Z",
+      "nodeResults": {
+        "agent_wh": {
+          "nodeId": "agent_wh",
+          "nodeName": "Chat Inbound Trigger",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-30T19:08:18.237Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:08:18.237Z",
+          "durationMs": 0,
+          "output": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          }
+        },
+        "agent_model": {
+          "nodeId": "agent_model",
+          "nodeName": "Google Gemini 3.8 Flash",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-09-30T19:08:18.237Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:08:18.237Z",
+          "durationMs": 0,
+          "output": {
+            "modelId": "gemini-3.8-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-09-30T19:08:18.237Z"
+          }
+        },
+        "agent_calc": {
+          "nodeId": "agent_calc",
+          "nodeName": "Calculator Tool",
+          "nodeType": "ai_tool_calculator",
+          "status": "success",
+          "startedAt": "2026-09-30T19:08:18.237Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:08:18.237Z",
+          "durationMs": 0,
+          "output": {
+            "toolName": "calculator",
+            "type": "math_tool",
+            "description": "Calculates mathematical equations and financial metrics with precision",
+            "status": "registered",
+            "sampleExecution": {
+              "expression": "1250 * 1.18",
+              "result": 1475
+            }
+          }
+        },
+        "agent_core": {
+          "nodeId": "agent_core",
+          "nodeName": "Autonomous AI Agent",
+          "nodeType": "ai_agent",
+          "status": "running",
+          "startedAt": "2026-09-30T19:08:18.237Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-30T19:08:18.236Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-30T19:08:18.237Z",
+          "level": "info",
+          "message": "Node \"Chat Inbound Trigger\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "agent_wh"
+        },
+        {
+          "timestamp": "2026-09-30T19:08:18.237Z",
+          "level": "info",
+          "message": "Node \"Google Gemini 3.8 Flash\" (ai_model_gemini) executed successfully in 0ms.",
+          "nodeId": "agent_model"
+        },
+        {
+          "timestamp": "2026-09-30T19:08:18.237Z",
+          "level": "info",
+          "message": "Node \"Calculator Tool\" (ai_tool_calculator) executed successfully in 0ms.",
+          "nodeId": "agent_calc"
+        }
+      ]
+    },
+    {
+      "id": "exec_1790795251879_ea827c",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "manual",
+      "status": "running",
+      "startedAt": "2026-09-30T19:07:31.879Z",
+      "nodeResults": {
+        "agent_wh": {
+          "nodeId": "agent_wh",
+          "nodeName": "Chat Inbound Trigger",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-09-30T19:07:31.880Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:07:31.881Z",
+          "durationMs": 1,
+          "output": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          }
+        },
+        "agent_model": {
+          "nodeId": "agent_model",
+          "nodeName": "Google Gemini 3.8 Flash",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-09-30T19:07:31.881Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:07:31.881Z",
+          "durationMs": 0,
+          "output": {
+            "modelId": "gemini-3.8-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-09-30T19:07:31.881Z"
+          }
+        },
+        "agent_calc": {
+          "nodeId": "agent_calc",
+          "nodeName": "Calculator Tool",
+          "nodeType": "ai_tool_calculator",
+          "status": "success",
+          "startedAt": "2026-09-30T19:07:31.881Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          },
+          "finishedAt": "2026-09-30T19:07:31.881Z",
+          "durationMs": 0,
+          "output": {
+            "toolName": "calculator",
+            "type": "math_tool",
+            "description": "Calculates mathematical equations and financial metrics with precision",
+            "status": "registered",
+            "sampleExecution": {
+              "expression": "1250 * 1.18",
+              "result": 1475
+            }
+          }
+        },
+        "agent_core": {
+          "nodeId": "agent_core",
+          "nodeName": "Autonomous AI Agent",
+          "nodeType": "ai_agent",
+          "status": "running",
+          "startedAt": "2026-09-30T19:07:31.881Z",
+          "input": {
+            "customer": "Test Customer",
+            "company": "Test Corp",
+            "inquiry": "Test workflow execution"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-09-30T19:07:31.879Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-09-30T19:07:31.881Z",
+          "level": "info",
+          "message": "Node \"Chat Inbound Trigger\" (trigger_webhook) executed successfully in 1ms.",
+          "nodeId": "agent_wh"
+        },
+        {
+          "timestamp": "2026-09-30T19:07:31.881Z",
+          "level": "info",
+          "message": "Node \"Google Gemini 3.8 Flash\" (ai_model_gemini) executed successfully in 0ms.",
+          "nodeId": "agent_model"
+        },
+        {
+          "timestamp": "2026-09-30T19:07:31.881Z",
+          "level": "info",
+          "message": "Node \"Calculator Tool\" (ai_tool_calculator) executed successfully in 0ms.",
+          "nodeId": "agent_calc"
+        }
+      ]
+    },
     {
       "id": "exec_1790653509179_a9b35d",
       "workflowId": "wf_tpl_n8n_ai_agent",
@@ -1393,6 +1807,12 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1790795379857",
+      "action": "Execution exec_1790795377850_b4ca35",
+      "details": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" completed: SUCCESS (2006ms)",
+      "timestamp": "2026-09-30T19:09:39.857Z"
+    },
     {
       "id": "aud_1790653522523",
       "workspaceId": "ws_default_01",

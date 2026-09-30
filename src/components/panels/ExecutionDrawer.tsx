@@ -10,7 +10,8 @@ import {
   Terminal,
   Activity,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Stethoscope
 } from 'lucide-react';
 import { Execution, ExecutionNodeResult } from '../../types/workflow';
 
@@ -19,6 +20,7 @@ interface ExecutionDrawerProps {
   execution: Execution | null;
   onClose: () => void;
   onReRun?: () => void;
+  onOpenEiDoctor?: () => void;
 }
 
 export const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({
@@ -26,6 +28,7 @@ export const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({
   execution,
   onClose,
   onReRun,
+  onOpenEiDoctor,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'output' | 'input' | 'logs'>('output');
@@ -91,6 +94,16 @@ export const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onOpenEiDoctor && (
+            <button
+              onClick={onOpenEiDoctor}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-semibold text-xs shadow-sm transition cursor-pointer"
+              title="Inspect and repair workflow issues with Ei-Doctor"
+            >
+              <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Fix with Ei-Doctor</span>
+            </button>
+          )}
           {onReRun && (
             <button
               onClick={onReRun}
