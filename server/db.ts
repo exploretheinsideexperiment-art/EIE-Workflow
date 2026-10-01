@@ -22,8 +22,9 @@ export interface Workspace {
 export interface NodePort {
   id: string;
   name: string;
-  type: 'main' | 'true' | 'false' | 'error' | 'branch';
+  type: 'main' | 'true' | 'false' | 'error' | 'branch' | 'model' | 'memory' | 'tool' | 'outputParser';
   label?: string;
+  color?: string;
 }
 
 export interface WorkflowNodeData {

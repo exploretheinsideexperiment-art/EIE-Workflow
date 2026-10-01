@@ -683,6 +683,7 @@ export default function App() {
               onToggleSidebar={toggleSidebar}
               onSave={handleSaveWorkflow}
               onToggleActive={() => handleToggleActive(activeWorkflow.id)}
+              onCreateNewWorkflow={handleCreateNewWorkflow}
             />
           )}
 

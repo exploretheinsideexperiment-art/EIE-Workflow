@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import { db, hashPassword, Workflow, Webhook, Credential, ApiKey, AuditLog } from '../db';
 import { WorkflowEngine, executionEvents } from '../engine/workflowEngine';
+import { handleEiDoctorChat } from '../engine/workflowAiArchitect';
 
 export const router = express.Router();
 
@@ -584,77 +585,25 @@ router.get('/stats', (req: Request, res: Response) => {
   });
 });
 
-// --- EIE BUDDY AI CHAT & TROUBLESHOOTER ---
+// --- EI-DOCTOR AI CHAT, TROUBLESHOOTER & AUTONOMOUS WORKFLOW ARCHITECT ---
 router.post('/buddy/chat', async (req: Request, res: Response) => {
   const { message, workflow, latestExecution } = req.body;
 
-  if (!message) {
+  if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required.' });
   }
 
-  const nodes = workflow?.nodes || [];
-  const connections = workflow?.connections || [];
-  const executionStatus = latestExecution?.status || 'none';
-  const nodeCount = nodes.length;
-  const connectionCount = connections.length;
-
-  // Check if Gemini API Key is available
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey) {
-    try {
-      const { GoogleGenAI } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey });
-
-      const systemPrompt = `You are "EIE Buddy", a friendly, warm, and highly capable AI workflow engineer inside the EIE-Workflow automation platform.
-The user speaks to you in Hindi, Hinglish, or English. You should reply in the same language they use (default to helpful, natural Hindi/Hinglish with English technical terms).
-Your job:
-1. Help users diagnose and fix mistakes, broken connections, or failing executions in their workflow.
-2. Explain what is missing (e.g. triggers, missing Gemini Chat model, missing memory on AI agent, empty URLs).
-3. If they ask to fix the problem ("thik kar do", "fix this", "solve problem"), encourage them that you can auto-repair it, and explain what steps you are going to repair.
-Keep responses concise, polite, and directly actionable (max 3-4 bullet points or short paragraphs).
-
-Current Workflow State:
-- Workflow Name: "${workflow?.name || 'Untitled'}"
-- Nodes (${nodeCount}): ${nodes.map((n: any) => `${n.name} (${n.type})`).join(', ')}
-- Connections (${connectionCount}): ${connections.map((c: any) => `${c.fromNodeId} -> ${c.toNodeId}`).join(', ')}
-- Latest Execution Status: ${executionStatus}
-${latestExecution?.error ? `- Latest Error: ${latestExecution.error}` : ''}`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [
-          { role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question: ${message}` }] },
-        ],
-      });
-
-      const replyText = response.text || '';
-      return res.json({ reply: replyText, source: 'gemini' });
-    } catch (genAiError: any) {
-      console.warn('[EIE Buddy] Gemini API error, falling back to local diagnostic engine:', genAiError?.message || genAiError);
-    }
+  try {
+    const aiResult = await handleEiDoctorChat(message, workflow, latestExecution);
+    return res.json(aiResult);
+  } catch (err: any) {
+    console.error('[Ei-Doctor Error]', err);
+    return res.json({
+      action: 'chat',
+      reply: 'An error occurred while processing your request. Please try again.',
+      source: 'local_architect',
+      language: 'en',
+    });
   }
-
-  // Autonomous fallback contextual response
-  const lowerMsg = (message || '').toLowerCase();
-  let reply = '';
-
-  if (lowerMsg.includes('thik') || lowerMsg.includes('fix') || lowerMsg.includes('solve') || lowerMsg.includes('galti') || lowerMsg.includes('problem')) {
-    reply = `Namaste! Maine aapke "${workflow?.name || 'workflow'}" ka inspection kiya hai. 
-Aapke workflow me ${nodeCount} nodes aur ${connectionCount} connections hain. 
-
-Aap niche diye gaye **"Auto-Fix Workflow Internally"** button par click karke sabhi issues (jaise disconnected nodes, missing AI models ya empty configs) ko ek click me turant thik karwa sakte hain!`;
-  } else if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
-    reply = `AI Agent ko sahi se execute karne ke liye **Chat Model (Purple port)** ki zaroorat hoti hai. 
-Aap **Google Gemini Chat Model** connect kar sakte hain jisse agent queries ko samajhkar intelligent answers de sake. 
-Kya aap chahte hain ki main ise automatically connect kar doon?`;
-  } else if (lowerMsg.includes('test') || lowerMsg.includes('run') || lowerMsg.includes('chalao')) {
-    reply = `Workflow ko test karne ke liye aap canvas ke top bar me **"Test Run"** button daba sakte hain, ya specific node ke inspect panel se individual test chala sakte hain!`;
-  } else {
-    reply = `Namaste! Main hoon **EIE Buddy**, aapka AI workflow assistant. 
-Agar aapke workflow me koi galti hai, wire connect nahi ho rahi, ya execution fail ho raha hai — to main ise diagnose karke internally thik kar sakta hoon. 
-Aap mujhse koi bhi sawal pooch sakte hain ya "Auto-Fix" chala sakte hain!`;
-  }
-
-  return res.json({ reply, source: 'local_engine' });
 });
 

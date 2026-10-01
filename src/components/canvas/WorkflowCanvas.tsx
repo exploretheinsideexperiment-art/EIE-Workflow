@@ -32,6 +32,12 @@ interface WorkflowCanvasProps {
   onToggleSidebar?: () => void;
   onSave: (wf: Workflow) => Promise<void>;
   onToggleActive: () => Promise<void>;
+  onCreateNewWorkflow?: (
+    name?: string,
+    description?: string,
+    starterNodes?: WorkflowNodeData[],
+    starterConnections?: WorkflowConnection[]
+  ) => Promise<void>;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
@@ -41,6 +47,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onToggleSidebar,
   onSave,
   onToggleActive,
+  onCreateNewWorkflow,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(initialWorkflow);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -1850,6 +1857,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           setHasUnsavedChanges(true);
         }}
         onTestWorkflow={handleTestWorkflow}
+        onCreateNewWorkflow={onCreateNewWorkflow}
       />
     </div>
   );
