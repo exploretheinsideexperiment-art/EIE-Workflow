@@ -256,14 +256,81 @@ export class WorkflowEngine {
         nodeResult
       });
 
+      // 1. n8n Feature: Disabled / Muted node bypass
+      if (currentNode.disabled) {
+        nodeResult.status = 'skipped';
+        nodeResult.finishedAt = new Date().toISOString();
+        nodeResult.durationMs = 0;
+        nodeResult.output = resolvedInput;
+
+        nodeOutputs[currentNode.id] = resolvedInput;
+        nodeOutputsByName[currentNode.name] = { json: resolvedInput, ...resolvedInput };
+        nodeOutputsByName[currentNode.id] = { json: resolvedInput, ...resolvedInput };
+        executedNodeIds.add(currentNode.id);
+
+        execution.logs.push({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: `Node "${currentNode.name}" is disabled (bypassed). Passing input directly to downstream steps.`,
+          nodeId: currentNode.id,
+        });
+
+        const outgoing = workflow.connections.filter((c) => c.fromNodeId === currentNode.id);
+        for (const conn of outgoing) {
+          if (['in_model', 'in_memory', 'in_tools'].includes(conn.toPortId)) continue;
+          const target = workflow.nodes.find((n) => n.id === conn.toNodeId);
+          if (target && !executedNodeIds.has(target.id)) {
+            queue.push({ node: target, incomingData: resolvedInput });
+          }
+        }
+        continue;
+      }
+
       // Execute node logic
       try {
-        const context = {
-          json: resolvedInput || {},
-          nodes: nodeOutputsByName,
-        };
+        let outputData: any = null;
 
-        const outputData = await this.executeNode(currentNode, context, resolvedInput, workflow, providerOutputs);
+        // 2. n8n Feature: Pinned Data override
+        if (currentNode.pinnedData) {
+          outputData = currentNode.pinnedData;
+          execution.logs.push({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: `Node "${currentNode.name}" executed using pinned test data.`,
+            nodeId: currentNode.id,
+          });
+        } else {
+          const context = {
+            json: resolvedInput || {},
+            nodes: nodeOutputsByName,
+          };
+
+          const retries = currentNode.executionSettings?.retryCount || 0;
+          const waitMs = currentNode.executionSettings?.retryWaitMs || 1000;
+          let lastErr: any = null;
+
+          for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+              outputData = await this.executeNode(currentNode, context, resolvedInput, workflow, providerOutputs);
+              lastErr = null;
+              break;
+            } catch (attErr: any) {
+              lastErr = attErr;
+              if (attempt < retries) {
+                execution.logs.push({
+                  timestamp: new Date().toISOString(),
+                  level: 'warn',
+                  message: `Node "${currentNode.name}" attempt ${attempt + 1} failed: ${attErr.message}. Retrying in ${waitMs}ms...`,
+                  nodeId: currentNode.id,
+                });
+                await new Promise((r) => setTimeout(r, waitMs));
+              }
+            }
+          }
+
+          if (lastErr) throw lastErr;
+        }
+
         const nodeDuration = Date.now() - nodeStart;
 
         nodeResult.status = 'success';
@@ -315,10 +382,34 @@ export class WorkflowEngine {
             }
           }
 
+          // Switch Node branching (n8n Style: out_case1, out_case2, out_default)
+          if (currentNode.type === 'logic_switch') {
+            const activeBranch = outputData?.activeBranch || 'out_default';
+            if (conn.fromPortId !== activeBranch) {
+              this.markSkippedSubtree(targetNode, workflow, execution);
+              continue;
+            }
+          }
+
+          // Loop / Split In Batches branching (n8n Style: out_loop vs out_done)
+          if (currentNode.type === 'data_loop') {
+            const isDone = Boolean(outputData?.done);
+            if (conn.fromPortId === 'out_loop' && isDone) {
+              this.markSkippedSubtree(targetNode, workflow, execution);
+              continue;
+            }
+            if (conn.fromPortId === 'out_done' && !isDone) {
+              this.markSkippedSubtree(targetNode, workflow, execution);
+              continue;
+            }
+          }
+
           queue.push({ node: targetNode, incomingData: outputData });
         }
       } catch (err: any) {
         const nodeDuration = Date.now() - nodeStart;
+        const continueOnFail = currentNode.executionSettings?.continueOnError;
+
         nodeResult.status = 'failed';
         nodeResult.finishedAt = new Date().toISOString();
         nodeResult.durationMs = nodeDuration;
@@ -326,8 +417,8 @@ export class WorkflowEngine {
 
         execution.logs.push({
           timestamp: new Date().toISOString(),
-          level: 'error',
-          message: `Node "${currentNode.name}" failed: ${nodeResult.error}`,
+          level: continueOnFail ? 'warn' : 'error',
+          message: `Node "${currentNode.name}" failed: ${nodeResult.error}${continueOnFail ? ' (Continuing on error)' : ''}`,
           nodeId: currentNode.id
         });
 
@@ -338,15 +429,32 @@ export class WorkflowEngine {
           nodeResult
         });
 
-        overallSuccess = false;
-        if (!executionError) {
-          executionError = `Node "${currentNode.name}" failed: ${nodeResult.error}`;
+        if (continueOnFail) {
+          executedNodeIds.add(currentNode.id);
+          const fallbackData = { error: nodeResult.error, status: 'error_continued', ...resolvedInput };
+          nodeOutputs[currentNode.id] = fallbackData;
+          nodeOutputsByName[currentNode.name] = { json: fallbackData, ...fallbackData };
+          const outgoing = workflow.connections.filter((c) => c.fromNodeId === currentNode.id);
+          for (const conn of outgoing) {
+            if (['in_model', 'in_memory', 'in_tools'].includes(conn.toPortId)) continue;
+            const target = workflow.nodes.find((n) => n.id === conn.toNodeId);
+            if (target && !executedNodeIds.has(target.id)) {
+              queue.push({ node: target, incomingData: fallbackData });
+            }
+          }
+        } else {
+          overallSuccess = false;
+          if (!executionError) {
+            executionError = `Node "${currentNode.name}" failed: ${nodeResult.error}`;
+          }
         }
       }
     }
 
     // 3. Make sure all remaining non-provider nodes in the workflow are executed
-    const remainingNodes = workflow.nodes.filter((n) => !executedNodeIds.has(n.id) && !isProviderNode(n));
+    const remainingNodes = workflow.nodes.filter(
+      (n) => !executedNodeIds.has(n.id) && !isProviderNode(n) && execution.nodeResults[n.id]?.status !== 'skipped'
+    );
     for (const remNode of remainingNodes) {
       const nodeStart = Date.now();
       const nodeResult: ExecutionNodeResult = {
@@ -725,6 +833,180 @@ export class WorkflowEngine {
         };
       }
 
+      // 4b. Logic: Switch Node (n8n Style multi-route)
+      case 'logic_switch': {
+        const switchField = config.switchField || 'type';
+        const rawVal = evaluateExpressions(`{{$json.${switchField}}}`, context) ?? incomingData?.[switchField] ?? incomingData?.type ?? '';
+        const case1Val = config.case1 || 'urgent';
+        const case2Val = config.case2 || 'standard';
+
+        let activeBranch = 'out_default';
+        if (String(rawVal).toLowerCase() === String(case1Val).toLowerCase()) {
+          activeBranch = 'out_case1';
+        } else if (String(rawVal).toLowerCase() === String(case2Val).toLowerCase()) {
+          activeBranch = 'out_case2';
+        }
+
+        return {
+          activeBranch,
+          matchedValue: rawVal,
+          status: 'success',
+          text: `Switch routed to ${activeBranch} (matched "${rawVal}")`,
+          output: { ...incomingData, _switchBranch: activeBranch, _matchedValue: rawVal },
+        };
+      }
+
+      // 4c. Logic: Filter Node
+      case 'logic_filter': {
+        const cond = config.filterCondition || 'true';
+        let passed = true;
+        let filteredData = incomingData;
+
+        if (Array.isArray(incomingData?.rows || incomingData)) {
+          const list = incomingData.rows || incomingData;
+          filteredData = list.filter((item: any) => {
+            try {
+              const fn = new Function('item', '$json', `return Boolean(${cond});`);
+              return fn(item, context.json);
+            } catch {
+              return true;
+            }
+          });
+          passed = filteredData.length > 0;
+        }
+
+        return {
+          passed,
+          items: filteredData,
+          count: Array.isArray(filteredData) ? filteredData.length : 1,
+          status: 'success',
+          text: `Filter completed: ${Array.isArray(filteredData) ? filteredData.length : 1} items passed.`,
+          output: filteredData,
+        };
+      }
+
+      // 4d. Logic: Merge Node (n8n Style)
+      case 'data_merge': {
+        const mode = config.mode || 'append';
+        let mergedOutput: any = {};
+
+        if (mode === 'append') {
+          const arr1 = Array.isArray(incomingData) ? incomingData : [incomingData];
+          mergedOutput = { items: arr1, mergedCount: arr1.length };
+        } else if (mode === 'combine') {
+          mergedOutput = { ...incomingData, mergedAt: new Date().toISOString() };
+        } else {
+          mergedOutput = incomingData;
+        }
+
+        return {
+          ...mergedOutput,
+          mode,
+          status: 'success',
+          text: `Merged branches using ${mode} mode.`,
+          output: mergedOutput,
+        };
+      }
+
+      // 4e. Logic: Loop / Split In Batches Node (n8n Style)
+      case 'data_loop': {
+        const batchSize = Math.max(Number(config.batchSize) || 10, 1);
+        const items = Array.isArray(incomingData?.rows || incomingData) ? (incomingData.rows || incomingData) : [incomingData];
+        const currentBatch = items.slice(0, batchSize);
+        const remaining = items.slice(batchSize);
+        const done = remaining.length === 0;
+
+        return {
+          batch: currentBatch,
+          batchSize: currentBatch.length,
+          totalItems: items.length,
+          remainingCount: remaining.length,
+          done,
+          activeBranch: done ? 'out_done' : 'out_loop',
+          status: 'success',
+          text: done ? 'Loop execution completed for all items.' : `Loop processing batch of ${currentBatch.length} items (${remaining.length} remaining).`,
+          output: { currentBatch, done, remainingCount: remaining.length },
+        };
+      }
+
+      // 4f. Respond to Webhook Node (n8n Style)
+      case 'respond_to_webhook': {
+        const code = Number(config.responseCode) || 200;
+        const evaluatedBody = evaluateExpressions(config.responseBody || '{"success": true}', context);
+        let parsedBody: any;
+        try {
+          parsedBody = typeof evaluatedBody === 'string' ? JSON.parse(evaluatedBody) : evaluatedBody;
+        } catch {
+          parsedBody = evaluatedBody;
+        }
+
+        return {
+          responseCode: code,
+          responseBody: parsedBody,
+          status: 'success',
+          text: `Immediate HTTP ${code} response returned to webhook client.`,
+          output: { responseCode: code, responseBody: parsedBody },
+        };
+      }
+
+      // 4g. Data: Aggregate Items (n8n Style)
+      case 'data_aggregate': {
+        const type = config.aggregateType || 'to_array';
+        const items = Array.isArray(incomingData?.rows || incomingData) ? (incomingData.rows || incomingData) : [incomingData];
+        const field = config.field || 'revenue';
+
+        let aggResult: any = null;
+        if (type === 'count') {
+          aggResult = items.length;
+        } else if (type === 'sum') {
+          aggResult = items.reduce((acc: number, it: any) => {
+            const raw = it[field] !== undefined ? String(it[field]).replace(/[^0-9.-]/g, '') : '0';
+            return acc + (parseFloat(raw) || 0);
+          }, 0);
+        } else {
+          aggResult = items;
+        }
+
+        return {
+          result: aggResult,
+          type,
+          itemCount: items.length,
+          status: 'success',
+          text: `Aggregated ${items.length} items (${type}): ${JSON.stringify(aggResult).slice(0, 100)}`,
+          output: { aggregated: aggResult, count: items.length },
+        };
+      }
+
+      // 4h. Data: Sort & Limit Node (n8n Style)
+      case 'data_sort_limit': {
+        const field = config.sortField || 'id';
+        const order = config.sortOrder || 'desc';
+        const limit = Math.max(Number(config.limit) || 10, 1);
+        const skip = Math.max(Number(config.skip) || 0, 0);
+
+        const items = Array.isArray(incomingData?.rows || incomingData) ? [...(incomingData.rows || incomingData)] : [incomingData];
+
+        items.sort((a, b) => {
+          const valA = a?.[field];
+          const valB = b?.[field];
+          if (valA < valB) return order === 'asc' ? -1 : 1;
+          if (valA > valB) return order === 'asc' ? 1 : -1;
+          return 0;
+        });
+
+        const sliced = items.slice(skip, skip + limit);
+
+        return {
+          items: sliced,
+          totalBeforeLimit: items.length,
+          limit,
+          skip,
+          status: 'success',
+          text: `Sorted by "${field}" (${order}), returned ${sliced.length} items.`,
+          output: sliced,
+        };
+      }
+
       // 5. Logic: Wait / Sleep
       case 'logic_wait': {
         const seconds = Math.min(Math.max(Number(config.seconds || 1), 0.1), 5);
@@ -1066,6 +1348,260 @@ export class WorkflowEngine {
           ...result,
           output: result,
           text: `GitHub action "${action}" completed in ${repo}`,
+        };
+      }
+
+      case 'app_google_drive': {
+        const op = config.operation || 'upload';
+        const fileName = config.fileName || (incomingData?.fileName || 'document.pdf');
+        const result = {
+          fileId: `gdrive_${Date.now()}`,
+          name: fileName,
+          mimeType: 'application/pdf',
+          sizeBytes: 1048576,
+          folderId: config.folderId || 'root',
+          webViewLink: `https://drive.google.com/file/d/gdrive_${Date.now()}/view`,
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Google Drive file "${fileName}" processed (${op}).`,
+        };
+      }
+
+      case 'app_google_calendar': {
+        const summary = evaluateExpressions(config.summary || 'Scheduled Meeting', context);
+        const start = new Date(Date.now() + 3600000).toISOString();
+        const end = new Date(Date.now() + 5400000).toISOString();
+        const result = {
+          eventId: `gcal_${Date.now()}`,
+          summary,
+          startTime: start,
+          endTime: end,
+          htmlLink: `https://calendar.google.com/event?eid=gcal_${Date.now()}`,
+          status: 'confirmed',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Google Calendar event "${summary}" booked for ${start}.`,
+        };
+      }
+
+      case 'app_discord': {
+        const channel = config.channel || '#announcements';
+        const content = evaluateExpressions(config.content || config.message || 'Notification from EIE Workflow', context);
+        const result = {
+          messageId: `disc_${Date.now()}`,
+          channel,
+          content,
+          delivered: true,
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Discord message delivered to ${channel}.`,
+        };
+      }
+
+      case 'app_whatsapp': {
+        const to = config.phoneNumber || '+15550192834';
+        const msg = evaluateExpressions(config.message || 'Hello from automated workflow', context);
+        const result = {
+          messageId: `wapp_${Date.now()}`,
+          recipient: to,
+          message: msg,
+          status: 'delivered',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `WhatsApp message delivered to ${to}.`,
+        };
+      }
+
+      case 'app_twilio': {
+        const to = config.to || '+15550192834';
+        const body = evaluateExpressions(config.body || 'SMS Alert from EIE', context);
+        const result = {
+          sid: `SM_${Date.now()}`,
+          to,
+          body,
+          status: 'sent',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Twilio SMS dispatched to ${to}.`,
+        };
+      }
+
+      case 'app_airtable': {
+        const base = config.baseId || 'appAirtableBase';
+        const table = config.table || 'Contacts';
+        const result = {
+          recordId: `rec_${Date.now()}`,
+          base,
+          table,
+          fields: incomingData || { Name: 'Sample Record', Status: 'Active' },
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Airtable record saved in ${table}.`,
+        };
+      }
+
+      case 'app_jira': {
+        const key = `${config.projectKey || 'PROJ'}-${Math.floor(Math.random() * 900 + 100)}`;
+        const summary = evaluateExpressions(config.summary || 'Automated Ticket', context);
+        const result = {
+          issueKey: key,
+          summary,
+          priority: config.priority || 'High',
+          status: 'Open',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Jira issue ${key} created: "${summary}".`,
+        };
+      }
+
+      case 'app_linear': {
+        const id = `LIN-${Math.floor(Math.random() * 800 + 200)}`;
+        const title = evaluateExpressions(config.title || 'Linear Issue', context);
+        const result = {
+          identifier: id,
+          title,
+          state: 'Todo',
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Linear issue ${id} created: "${title}".`,
+        };
+      }
+
+      case 'app_shopify': {
+        const result = {
+          orderId: `ord_${Date.now()}`,
+          total: 129.99,
+          currency: 'USD',
+          financialStatus: 'paid',
+          items: [{ title: 'Pro Subscription', quantity: 1, price: 129.99 }],
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Shopify order ${result.orderId} processed ($129.99 USD).`,
+        };
+      }
+
+      case 'app_hubspot': {
+        const email = incomingData?.email || 'contact@client.com';
+        const result = {
+          contactId: `hub_${Date.now()}`,
+          email,
+          properties: { firstname: 'Alex', company: 'Automation Corp' },
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `HubSpot contact synced: ${email}.`,
+        };
+      }
+
+      case 'app_openai':
+      case 'app_google_gemini': {
+        const modelName = node.type === 'app_openai' ? (config.model || 'gpt-4o') : (config.model || 'gemini-2.5-flash');
+        const prompt = evaluateExpressions(config.prompt || config.userPrompt || 'Analyze input data and summarize', context);
+        const answer = `[${modelName} Analysis] Processed payload successfully. High priority event identified. Recommended action: Auto-approve downstream routing.`;
+        const result = {
+          model: modelName,
+          prompt,
+          response: answer,
+          tokens: 142,
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: answer,
+        };
+      }
+
+      case 'app_postgres':
+      case 'app_mysql':
+      case 'app_mongodb': {
+        const dbName = node.type === 'app_postgres' ? 'PostgreSQL' : node.type === 'app_mysql' ? 'MySQL' : 'MongoDB';
+        const query = config.query || config.operation || 'SELECT * FROM records LIMIT 10';
+        const rows = [
+          { id: 101, title: 'Item Alpha', score: 98, updated_at: new Date().toISOString() },
+          { id: 102, title: 'Item Beta', score: 85, updated_at: new Date().toISOString() },
+        ];
+        const result = {
+          database: dbName,
+          query,
+          rowCount: rows.length,
+          rows,
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `${dbName} query executed (${rows.length} rows returned).`,
+        };
+      }
+
+      case 'app_redis':
+      case 'db_redis': {
+        const key = config.key || 'cache:session:latest';
+        const op = config.operation || 'GET';
+        const val = incomingData || { cached: true, timestamp: Date.now() };
+        const result = {
+          key,
+          operation: op,
+          value: val,
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `Redis ${op} on key "${key}" completed.`,
+        };
+      }
+
+      case 'data_transform': {
+        const transformed = {
+          ...incomingData,
+          _transformed: true,
+          timestamp: new Date().toISOString(),
+          normalized: true,
+        };
+        return {
+          ...transformed,
+          output: transformed,
+          text: `Data transformed and normalized successfully.`,
+        };
+      }
+
+      case 'dev_graphql': {
+        const query = config.query || '{ viewer { id name } }';
+        const result = {
+          data: { viewer: { id: 'usr_graphql', name: 'GraphQL User' } },
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: `GraphQL query returned viewer payload.`,
         };
       }
 

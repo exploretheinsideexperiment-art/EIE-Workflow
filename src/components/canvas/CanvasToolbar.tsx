@@ -18,10 +18,14 @@ import {
   LayoutGrid,
   Trash2,
   Settings,
-  Stethoscope
+  Stethoscope,
+  Edit3,
+  Check
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
+  workflowName: string;
+  onUpdateWorkflowName: (name: string) => void;
   zoom: number;
   gridEnabled: boolean;
   snapEnabled: boolean;
@@ -59,6 +63,8 @@ interface CanvasToolbarProps {
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
+  workflowName,
+  onUpdateWorkflowName,
   zoom,
   gridEnabled,
   snapEnabled,
@@ -94,6 +100,13 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onToggleActive,
   onOpenEiDoctor,
 }) => {
+  const [isEditingName, setIsEditingName] = React.useState(false);
+  const [nameValue, setNameValue] = React.useState(workflowName);
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setNameValue(workflowName);
+  }, [workflowName]);
   return (
     <>
       {/* Top Dedicated Workflow Action Bar - Clean, Non-overlapping, Above Canvas */}
@@ -214,7 +227,69 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           </button>
         </div>
 
-        {/* Center Section: Auto-Arrange / Separate Overlapping Nodes & Fit View */}
+        {/* Center: Editable Workflow Title & Rename Input (n8n Style) */}
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/80 border border-slate-700/80 hover:border-cyan-500/50 transition min-w-0 max-w-[200px] xs:max-w-[260px] sm:max-w-xs md:max-w-md shrink">
+          {isEditingName ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = nameValue.trim();
+                if (trimmed) onUpdateWorkflowName(trimmed);
+                setIsEditingName(false);
+              }}
+              className="flex items-center gap-1.5 w-full min-w-0"
+            >
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={nameValue}
+                onChange={(e) => {
+                  setNameValue(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setNameValue(workflowName);
+                    setIsEditingName(false);
+                  }
+                }}
+                onBlur={() => {
+                  const trimmed = nameValue.trim();
+                  if (trimmed) onUpdateWorkflowName(trimmed);
+                  setIsEditingName(false);
+                }}
+                className="bg-slate-950 border border-cyan-500 rounded px-2 py-0.5 text-xs font-bold text-white focus:outline-none w-full"
+                autoFocus
+                placeholder="Workflow Name..."
+              />
+              <button
+                type="submit"
+                className="p-1 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 cursor-pointer shrink-0"
+                title="Save name"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+            </form>
+          ) : (
+            <div
+              onClick={() => setIsEditingName(true)}
+              className="flex items-center gap-2 cursor-pointer group min-w-0 w-full"
+              title="Click to change or rename workflow name"
+            >
+              <span className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 truncate transition">
+                {workflowName || 'Untitled Workflow'}
+              </span>
+              <button
+                type="button"
+                className="p-1 rounded-md bg-slate-800/80 text-slate-400 group-hover:text-cyan-300 group-hover:bg-cyan-500/15 transition shrink-0"
+                title="Change workflow name"
+              >
+                <Edit3 className="w-3 h-3 text-cyan-400" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Center-Right Section: Auto-Arrange / Separate Overlapping Nodes & Fit View */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onSeparateNodes}

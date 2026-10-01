@@ -229,8 +229,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         const rawWorldX = (e.clientX - containerRect.left - viewport.x) / viewport.zoom;
         const rawWorldY = (e.clientY - containerRect.top - viewport.y) / viewport.zoom;
 
-        const targetX = snapVal(rawWorldX - dragOffsetRef.current.x);
-        const targetY = snapVal(rawWorldY - dragOffsetRef.current.y);
+        const targetX = rawWorldX - dragOffsetRef.current.x;
+        const targetY = rawWorldY - dragOffsetRef.current.y;
 
         const primaryInitial = initialDragPositionsRef.current[draggingNodeId];
         const deltaX = primaryInitial ? targetX - primaryInitial.x : 0;
@@ -246,7 +246,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const init = initialDragPositionsRef.current[n.id];
               return {
                 ...n,
-                position: { x: snapVal(init.x + deltaX), y: snapVal(init.y + deltaY) },
+                position: { x: init.x + deltaX, y: init.y + deltaY },
               };
             }
             return n;
@@ -280,6 +280,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         setIsPanning(false);
       }
       if (draggingNodeId) {
+        if (snapEnabled) {
+          setWorkflow((prev) => ({
+            ...prev,
+            nodes: prev.nodes.map((n) => ({
+              ...n,
+              position: {
+                x: snapVal(n.position.x),
+                y: snapVal(n.position.y),
+              },
+            })),
+          }));
+        }
         setDraggingNodeId(null);
         pushHistory(workflow);
       }
@@ -337,6 +349,43 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   useEffect(() => {
     const handleWindowTouchMove = (e: TouchEvent) => {
+      // 1. Touch Dragging of Nodes (Mobile Firefox & Phones)
+      if (e.touches.length === 1 && draggingNodeId) {
+        if (e.cancelable) e.preventDefault();
+        const touch = e.touches[0];
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
+
+        const rawWorldX = (touch.clientX - containerRect.left - viewport.x) / viewport.zoom;
+        const rawWorldY = (touch.clientY - containerRect.top - viewport.y) / viewport.zoom;
+
+        const targetX = rawWorldX - dragOffsetRef.current.x;
+        const targetY = rawWorldY - dragOffsetRef.current.y;
+
+        const deltaX = targetX - (initialDragPositionsRef.current[draggingNodeId]?.x || targetX);
+        const deltaY = targetY - (initialDragPositionsRef.current[draggingNodeId]?.y || targetY);
+
+        setWorkflow((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) => {
+            if (n.id === draggingNodeId) {
+              return { ...n, position: { x: targetX, y: targetY } };
+            }
+            if (selectedNodeIds.includes(n.id) && initialDragPositionsRef.current[n.id]) {
+              const init = initialDragPositionsRef.current[n.id];
+              return {
+                ...n,
+                position: { x: init.x + deltaX, y: init.y + deltaY },
+              };
+            }
+            return n;
+          }),
+        }));
+        setHasUnsavedChanges(true);
+        return;
+      }
+
+      // 2. Touch Canvas Panning
       if (e.touches.length === 1 && isPanning) {
         setViewport((prev) => ({
           ...prev,
@@ -363,11 +412,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     const handleWindowTouchEnd = () => {
       if (isPanning) setIsPanning(false);
+      if (draggingNodeId) {
+        if (snapEnabled) {
+          setWorkflow((prev) => ({
+            ...prev,
+            nodes: prev.nodes.map((n) => ({
+              ...n,
+              position: {
+                x: snapVal(n.position.x),
+                y: snapVal(n.position.y),
+              },
+            })),
+          }));
+        }
+        setDraggingNodeId(null);
+        pushHistory(workflow);
+      }
       touchDistanceRef.current = null;
     };
 
-    if (isPanning || touchDistanceRef.current !== null) {
-      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+    if (isPanning || draggingNodeId || touchDistanceRef.current !== null) {
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
       window.addEventListener('touchend', handleWindowTouchEnd);
       window.addEventListener('touchcancel', handleWindowTouchEnd);
       return () => {
@@ -376,7 +441,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         window.removeEventListener('touchcancel', handleWindowTouchEnd);
       };
     }
-  }, [isPanning, viewport]);
+  }, [isPanning, draggingNodeId, viewport, workflow, pushHistory, snapEnabled, selectedNodeIds]);
 
   // Zoom Handler with Mouse Wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -441,6 +506,54 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       });
       initialDragPositionsRef.current = initialPos;
     }
+  };
+
+  // --- TOGGLE EXPAND / COLLAPSE NODE (n8n Style) ---
+  const handleToggleExpandNode = (nodeId: string) => {
+    setWorkflow((prev) => {
+      const updated = {
+        ...prev,
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, isExpanded: !n.isExpanded } : n)),
+      };
+      pushHistory(updated);
+      return updated;
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  // --- TOGGLE DISABLE / MUTE NODE (n8n Style) ---
+  const handleToggleDisableNode = (nodeId: string) => {
+    setWorkflow((prev) => {
+      const updated = {
+        ...prev,
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, disabled: !n.disabled } : n)),
+      };
+      pushHistory(updated);
+      return updated;
+    });
+    setHasUnsavedChanges(true);
+  };
+
+  // --- PIN / UNPIN TEST DATA (n8n Style) ---
+  const handlePinDataNode = (nodeId: string) => {
+    const result = latestExecution?.nodeResults[nodeId]?.output;
+    setWorkflow((prev) => {
+      const updated = {
+        ...prev,
+        nodes: prev.nodes.map((n) => {
+          if (n.id === nodeId) {
+            return {
+              ...n,
+              pinnedData: n.pinnedData ? undefined : (result || { pinned: true, sample: 'Pinned test payload' }),
+            };
+          }
+          return n;
+        }),
+      };
+      pushHistory(updated);
+      return updated;
+    });
+    setHasUnsavedChanges(true);
   };
 
   // --- AUTO-SEPARATE OVERLAPPING NODES ---
@@ -1329,8 +1442,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return { x: 0, y: 0 };
 
-    const nodeWidth = node.type === 'ai_agent' ? 280 : 264;
-    const nodeHeight = node.type === 'ai_agent' ? 204 : 84;
+    const isExpanded = Boolean(node.isExpanded);
+    const nodeWidth = isExpanded ? (node.type === 'ai_agent' ? 420 : 390) : (node.type === 'ai_agent' ? 280 : 264);
+    const nodeHeight = isExpanded ? (node.type === 'ai_agent' ? 240 : 160) : (node.type === 'ai_agent' ? 204 : 84);
     const ports = isOutput ? node.outputs : node.inputs;
     const portIndex = ports.findIndex((p) => p.id === portId);
     const totalPorts = Math.max(ports.length, 1);
@@ -1355,6 +1469,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     <div className="relative w-full h-full flex flex-col bg-[#070b14] overflow-hidden select-none">
       {/* Top Dedicated Action Subheader Strip - Completely Non-Overlapping */}
       <CanvasToolbar
+        workflowName={workflow.name}
+        onUpdateWorkflowName={(name) => {
+          setWorkflow((prev) => ({ ...prev, name }));
+          setHasUnsavedChanges(true);
+        }}
         zoom={viewport.zoom}
         gridEnabled={gridEnabled}
         snapEnabled={snapEnabled}
@@ -1567,6 +1686,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   setSelectedNodeIds([id]);
                   setEditingNodeId(id);
                 }}
+                onToggleExpandNode={handleToggleExpandNode}
+                onToggleDisableNode={handleToggleDisableNode}
+                onTestSingleNode={handleTestSingleNode}
+                onPinDataNode={handlePinDataNode}
               />
             ))}
           </div>

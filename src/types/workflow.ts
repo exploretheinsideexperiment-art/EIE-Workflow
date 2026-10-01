@@ -32,10 +32,18 @@ export interface WorkflowNodeData {
   outputs: NodePort[];
   config: Record<string, any>;
   credentialId?: string;
+  disabled?: boolean; // n8n: disabled / muted node
+  pinnedData?: any; // n8n: pinned test data
+  notes?: string; // n8n: custom documentation note
+  isExpanded?: boolean; // expandable card view on canvas
   executionSettings?: {
     continueOnError?: boolean;
     retryCount?: number;
+    retryWaitMs?: number;
+    executeOnce?: boolean;
+    alwaysOutputData?: boolean;
     timeoutMs?: number;
+    onError?: 'stop' | 'continue' | 'continueErrorOutput';
   };
 }
 

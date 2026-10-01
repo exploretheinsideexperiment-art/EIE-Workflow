@@ -13,18 +13,22 @@ import {
   FileCode,
   Download,
   Upload,
-  LayoutTemplate
+  LayoutTemplate,
+  Edit3
 } from 'lucide-react';
-import { Workflow } from '../../types/workflow';
+import { Workflow, WorkflowNodeData, WorkflowConnection } from '../../types/workflow';
+import { CreateWorkflowModal } from '../modals/CreateWorkflowModal';
+import { RenameWorkflowModal } from '../modals/RenameWorkflowModal';
 
 interface WorkflowsListViewProps {
   workflows: Workflow[];
   onOpenWorkflow: (wfId: string) => void;
-  onCreateWorkflow: () => void;
+  onCreateWorkflow: (name?: string, description?: string, starterNodes?: WorkflowNodeData[], starterConnections?: WorkflowConnection[]) => void;
   onOpenTemplates: () => void;
   onToggleActive: (wfId: string) => void;
   onDuplicateWorkflow: (wfId: string) => void;
   onDeleteWorkflow: (wfId: string) => void;
+  onRenameWorkflow?: (wfId: string, newName: string) => void;
   onImportWorkflow: (importedWf: any) => void;
 }
 
@@ -36,10 +40,13 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
   onToggleActive,
   onDuplicateWorkflow,
   onDeleteWorkflow,
+  onRenameWorkflow,
   onImportWorkflow,
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [renamingWf, setRenamingWf] = useState<Workflow | null>(null);
 
   const filtered = workflows.filter((wf) => {
     const matchesSearch =
@@ -102,7 +109,7 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
           </button>
 
           <button
-            onClick={onCreateWorkflow}
+            onClick={() => setIsCreateModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -166,15 +173,15 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
           </div>
           <div className="flex items-center justify-center gap-3 pt-2">
             <button
-              onClick={onCreateWorkflow}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 transition"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>+ Create Workflow</span>
             </button>
             <button
               onClick={onOpenTemplates}
-              className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition"
+              className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition cursor-pointer"
             >
               Browse Templates
             </button>
@@ -215,9 +222,21 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
                 </div>
 
                 {/* Workflow Title & Description */}
-                <h3 className="text-sm font-bold text-white group-hover:text-cyan-400 transition tracking-tight line-clamp-1">
-                  {wf.name}
-                </h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-bold text-white group-hover:text-cyan-400 transition tracking-tight line-clamp-1">
+                    {wf.name}
+                  </h3>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingWf(wf);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-cyan-300 transition shrink-0"
+                    title="Rename Workflow"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 <p className="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
                   {wf.description || 'No description provided.'}
                 </p>
@@ -232,6 +251,16 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-80 sm:group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingWf(wf);
+                    }}
+                    className="p-1.5 hover:text-cyan-300 text-slate-400 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                    title="Rename Workflow"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -268,6 +297,30 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Create Workflow Modal */}
+      <CreateWorkflowModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={(name, desc, nodes, conns) => {
+          onCreateWorkflow(name, desc, nodes, conns);
+        }}
+      />
+
+      {/* Rename Workflow Modal */}
+      {renamingWf && (
+        <RenameWorkflowModal
+          isOpen={Boolean(renamingWf)}
+          currentName={renamingWf.name}
+          onClose={() => setRenamingWf(null)}
+          onRename={(newName) => {
+            if (onRenameWorkflow) {
+              onRenameWorkflow(renamingWf.id, newName);
+            }
+            setRenamingWf(null);
+          }}
+        />
       )}
     </div>
   );

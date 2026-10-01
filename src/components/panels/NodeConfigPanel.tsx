@@ -427,6 +427,269 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               </>
             )}
 
+            {/* 4b. Switch Case (n8n Style) */}
+            {node.type === 'logic_switch' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field to Match</label>
+                  <input
+                    type="text"
+                    value={config.switchField || 'type'}
+                    onChange={(e) => handleConfigChange('switchField', e.target.value)}
+                    placeholder="type or category"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Case 1 Value (out_case1)</label>
+                    <input
+                      type="text"
+                      value={config.case1 || 'urgent'}
+                      onChange={(e) => handleConfigChange('case1', e.target.value)}
+                      placeholder="urgent"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Case 2 Value (out_case2)</label>
+                    <input
+                      type="text"
+                      value={config.case2 || 'standard'}
+                      onChange={(e) => handleConfigChange('case2', e.target.value)}
+                      placeholder="standard"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Unmatched values will automatically flow along the <strong>Default</strong> route port.
+                </p>
+              </div>
+            )}
+
+            {/* 4c. Filter Items */}
+            {node.type === 'logic_filter' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Filter Condition (JavaScript)</label>
+                  <input
+                    type="text"
+                    value={config.filterCondition || 'item.urgencyScore > 50'}
+                    onChange={(e) => handleConfigChange('filterCondition', e.target.value)}
+                    placeholder="item.score > 50 || item.status === 'active'"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Evaluated for every incoming item. Items returning truthy pass through downstream.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 4d. Merge Node (n8n Style) */}
+            {node.type === 'data_merge' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Merge Mode</label>
+                  <select
+                    value={config.mode || 'append'}
+                    onChange={(e) => handleConfigChange('mode', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="append">Append (Concatenate Lists)</option>
+                    <option value="combine">Combine (Merge Object Fields)</option>
+                    <option value="merge_by_key">Merge by Key (Join on ID)</option>
+                    <option value="choose_branch">Choose Branch</option>
+                  </select>
+                </div>
+                {config.mode === 'merge_by_key' && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Join Key</label>
+                    <input
+                      type="text"
+                      value={config.joinKey || 'id'}
+                      onChange={(e) => handleConfigChange('joinKey', e.target.value)}
+                      placeholder="id or email"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 4e. Loop / Split in Batches (n8n Style) */}
+            {node.type === 'data_loop' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Batch Size (N items per loop)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={config.batchSize || 10}
+                    onChange={(e) => handleConfigChange('batchSize', parseInt(e.target.value) || 10)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Outputs items in groups of {config.batchSize || 10} on port <strong>loop</strong>, then fires port <strong>done</strong> when finished.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 4f. Respond to Webhook (n8n Style) */}
+            {node.type === 'respond_to_webhook' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">HTTP Response Code</label>
+                  <select
+                    value={config.responseCode || 200}
+                    onChange={(e) => handleConfigChange('responseCode', parseInt(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="200">200 OK</option>
+                    <option value="201">201 Created</option>
+                    <option value="202">202 Accepted</option>
+                    <option value="400">400 Bad Request</option>
+                    <option value="404">404 Not Found</option>
+                    <option value="500">500 Server Error</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Response Body (JSON / Template)</label>
+                  <textarea
+                    rows={4}
+                    value={config.responseBody || ''}
+                    onChange={(e) => handleConfigChange('responseBody', e.target.value)}
+                    placeholder='{\n  "success": true,\n  "data": "{{$json}}"\n}'
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 4g. Aggregate Items */}
+            {node.type === 'data_aggregate' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Aggregation Type</label>
+                  <select
+                    value={config.aggregateType || 'to_array'}
+                    onChange={(e) => handleConfigChange('aggregateType', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="to_array">Combine into Array List</option>
+                    <option value="count">Count Items</option>
+                    <option value="sum">Sum Numeric Field</option>
+                  </select>
+                </div>
+                {config.aggregateType === 'sum' && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field to Sum</label>
+                    <input
+                      type="text"
+                      value={config.field || 'revenue'}
+                      onChange={(e) => handleConfigChange('field', e.target.value)}
+                      placeholder="revenue or amount"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 4h. Sort & Limit */}
+            {node.type === 'data_sort_limit' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Sort Field</label>
+                    <input
+                      type="text"
+                      value={config.sortField || 'id'}
+                      onChange={(e) => handleConfigChange('sortField', e.target.value)}
+                      placeholder="id, score, date"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Sort Order</label>
+                    <select
+                      value={config.sortOrder || 'desc'}
+                      onChange={(e) => handleConfigChange('sortOrder', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value="desc">Descending (Z-A / High-Low)</option>
+                      <option value="asc">Ascending (A-Z / Low-High)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Limit (Top N)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={config.limit || 10}
+                      onChange={(e) => handleConfigChange('limit', parseInt(e.target.value) || 10)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Skip (Offset)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={config.skip || 0}
+                      onChange={(e) => handleConfigChange('skip', parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4i. Schedule Trigger (Cron / Interval) */}
+            {node.type === 'trigger_schedule' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Schedule Interval</label>
+                  <select
+                    value={config.intervalPreset || 'custom'}
+                    onChange={(e) => {
+                      const preset = e.target.value;
+                      handleConfigChange('intervalPreset', preset);
+                      if (preset === 'every_minute') handleConfigChange('cron', '* * * * *');
+                      else if (preset === 'hourly') handleConfigChange('cron', '0 * * * *');
+                      else if (preset === 'daily_9am') handleConfigChange('cron', '0 9 * * *');
+                      else if (preset === 'weekday_9am') handleConfigChange('cron', '0 9 * * 1-5');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="weekday_9am">Every weekday at 09:00 AM</option>
+                    <option value="daily_9am">Daily at 09:00 AM</option>
+                    <option value="hourly">Every Hour</option>
+                    <option value="every_minute">Every Minute</option>
+                    <option value="custom">Custom Cron Expression</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression</label>
+                  <input
+                    type="text"
+                    value={config.cron || '0 9 * * 1-5'}
+                    onChange={(e) => handleConfigChange('cron', e.target.value)}
+                    placeholder="0 9 * * 1-5"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Format: minute hour day-of-month month day-of-week
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* 5. Code Sandbox */}
             {node.type === 'data_code' && (
               <div>
@@ -711,7 +974,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             )}
 
             {/* 11. Generic Fallback for other nodes */}
-            {!['http_request', 'trigger_webhook', 'ai_agent', 'logic_if', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
+            {!['http_request', 'trigger_webhook', 'trigger_schedule', 'ai_agent', 'logic_if', 'logic_switch', 'logic_filter', 'data_merge', 'data_loop', 'respond_to_webhook', 'data_aggregate', 'data_sort_limit', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
               <div className="space-y-3">
                 <p className="text-slate-400 text-xs">Configure properties for {node.name}:</p>
                 {Object.keys(config).length === 0 ? (

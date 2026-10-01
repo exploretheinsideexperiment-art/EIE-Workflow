@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import * as Icons from 'lucide-react';
 import {
   Plus,
@@ -16,7 +16,17 @@ import {
   Trash2,
   KeyRound,
   Stethoscope,
-  AlertCircle
+  AlertCircle,
+  Maximize2,
+  Minimize2,
+  Power,
+  Pin,
+  Play,
+  FileText,
+  Table,
+  Code2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { WorkflowNodeData, ExecutionNodeResult, NodePort } from '../../types/workflow';
 import { getPortColorDef, isPortCompatible } from '../../utils/portValidation';
@@ -40,6 +50,10 @@ interface CanvasNodeProps {
   onDuplicateNode: (nodeId: string) => void;
   onOpenConfig: (nodeId: string) => void;
   onOpenDoctorForNode?: (nodeId: string) => void;
+  onToggleExpandNode?: (nodeId: string) => void;
+  onToggleDisableNode?: (nodeId: string) => void;
+  onTestSingleNode?: (node: WorkflowNodeData) => void;
+  onPinDataNode?: (nodeId: string) => void;
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -61,14 +75,20 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onDuplicateNode,
   onOpenConfig,
   onOpenDoctorForNode,
+  onToggleExpandNode,
+  onToggleDisableNode,
+  onTestSingleNode,
+  onPinDataNode,
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
+  const [dataTab, setDataTab] = useState<'table' | 'json'>('table');
 
   // Dynamic Lucide icon lookup with safe fallback
   const IconComponent = ((Icons as any)[node.icon] || Icons.Box) as React.ComponentType<{ className?: string }>;
 
   const isAiAgent = node.type === 'ai_agent';
   const isAiTool = node.category === 'AI Tools';
+  const isExpanded = Boolean(node.isExpanded);
 
   // Category badge colors
   const categoryColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -94,7 +114,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
     ? 'ring-2 ring-cyan-400 shadow-xl shadow-cyan-500/25 border-cyan-400/80'
     : 'border-slate-800 hover:border-slate-700 shadow-lg';
 
-  if (isPendingSource) {
+  if (node.disabled) {
+    borderGlowClass = 'opacity-60 border-dashed border-amber-500/60 shadow-none';
+  } else if (isPendingSource) {
     borderGlowClass = 'ring-2 ring-cyan-400 border-cyan-400 shadow-2xl shadow-cyan-500/40 animate-pulse';
   } else if (executionResult?.status === 'running') {
     borderGlowClass = 'ring-2 ring-cyan-400 shadow-xl shadow-cyan-500/40 border-cyan-400 animate-pulse';
@@ -114,11 +136,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
     subtitle = `${node.config?.method || 'GET'} ${node.config?.url || ''}`.slice(0, 30);
   } else if (node.type === 'trigger_webhook') {
     subtitle = `/api/webhook/${node.config?.webhookPath || 'inbound'}`;
+  } else if (node.type === 'trigger_schedule') {
+    subtitle = `Cron: ${node.config?.cron || '0 9 * * 1-5'}`;
   } else if (node.type === 'logic_if') {
     subtitle = `${node.config?.fieldPath || 'data'} ${node.config?.operator || '=='} ${node.config?.value || ''}`;
   } else if (node.type === 'comm_email') {
     subtitle = node.config?.to || 'recipient@domain';
+  } else if (node.type === 'app_google_sheets') {
+    subtitle = `Sheet: ${node.config?.sheetName || 'Sheet1'} (${node.config?.operation || 'Read Rows'})`;
+  } else if (node.type === 'app_telegram' || node.type === 'comm_telegram') {
+    subtitle = `Chat: ${node.config?.chatId || '@alerts_channel'}`;
   }
+
+  const outputPayload = node.pinnedData || executionResult?.output;
 
   return (
     <div
@@ -126,13 +156,14 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       id={`node-${node.id}`}
       style={{
         transform: `translate(${node.position.x}px, ${node.position.y}px)`,
-        width: isAiAgent ? '280px' : '264px',
+        width: isExpanded ? (isAiAgent ? '420px' : '390px') : isAiAgent ? '280px' : '264px',
+        touchAction: 'none',
       }}
-      className={`absolute select-none rounded-2xl bg-slate-900/95 backdrop-blur-xl border transition-all duration-150 group cursor-move ${borderGlowClass}`}
+      className={`absolute select-none rounded-2xl bg-slate-900/98 backdrop-blur-xl border transition-colors duration-150 group cursor-move ${borderGlowClass}`}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('[data-port="true"]')) {
+        if (target.closest('button') || target.closest('[data-port="true"]') || target.closest('input')) {
           e.stopPropagation();
           return;
         }
@@ -141,7 +172,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       }}
       onTouchStart={(e) => {
         const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('[data-port="true"]')) {
+        if (target.closest('button') || target.closest('[data-port="true"]') || target.closest('input')) {
           e.stopPropagation();
           return;
         }
@@ -163,6 +194,92 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         onOpenConfig(node.id);
       }}
     >
+      {/* n8n Floating Hover Action Bar */}
+      <div className="absolute -top-9 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-between pointer-events-none z-30">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/95 border border-slate-700/90 shadow-xl pointer-events-auto">
+          {onTestSingleNode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTestSingleNode(node);
+              }}
+              className="p-1 rounded-lg hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition cursor-pointer"
+              title="Execute / Test Step (n8n)"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+            </button>
+          )}
+
+          {onToggleDisableNode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleDisableNode(node.id);
+              }}
+              className={`p-1 rounded-lg transition cursor-pointer ${
+                node.disabled ? 'text-amber-400 hover:bg-amber-500/20' : 'text-slate-300 hover:text-amber-300 hover:bg-slate-800'
+              }`}
+              title={node.disabled ? 'Enable Node' : 'Disable / Mute Node (Bypass)'}
+            >
+              <Power className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {onPinDataNode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPinDataNode(node.id);
+              }}
+              className={`p-1 rounded-lg transition cursor-pointer ${
+                node.pinnedData ? 'text-purple-400 bg-purple-500/20' : 'text-slate-300 hover:text-purple-300 hover:bg-slate-800'
+              }`}
+              title={node.pinnedData ? 'Unpin Data' : 'Pin Test Data (n8n)'}
+            >
+              <Pin className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {onToggleExpandNode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpandNode(node.id);
+              }}
+              className={`p-1 rounded-lg transition cursor-pointer ${
+                isExpanded ? 'text-cyan-400 bg-cyan-500/20' : 'text-slate-300 hover:text-cyan-300 hover:bg-slate-800'
+              }`}
+              title={isExpanded ? 'Collapse Node Card' : 'Expand Node Card Details'}
+            >
+              {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/95 border border-slate-700/90 shadow-xl pointer-events-auto">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicateNode(node.id);
+            }}
+            className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            title="Duplicate Node"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteNode(node.id);
+            }}
+            className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition cursor-pointer"
+            title="Delete Node"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
       {/* Node Header */}
       <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-slate-800/80">
         <div
@@ -171,7 +288,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             e.stopPropagation();
             onOpenConfig(node.id);
           }}
-          title="Click to open settings"
+          title="Click to open full settings"
         >
           <div className={`p-1.5 rounded-xl ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0`}>
             <IconComponent className="w-4 h-4" />
@@ -180,15 +297,26 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             <h4 className="text-xs font-bold text-slate-100 truncate tracking-tight flex items-center gap-1.5">
               <span>{node.name}</span>
             </h4>
-            <span className={`text-[9px] font-mono uppercase tracking-wider ${catStyle.text}`}>
-              {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Agent Tool' : node.category}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[9px] font-mono uppercase tracking-wider ${catStyle.text}`}>
+                {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Agent Tool' : node.category}
+              </span>
+              {node.disabled && (
+                <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-600/40">
+                  Disabled
+                </span>
+              )}
+              {node.pinnedData && (
+                <span className="text-[9px] font-bold text-purple-300 bg-purple-950/80 px-1.5 py-0.2 rounded border border-purple-600/40">
+                  📌 Pinned
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Header Right Actions: Status Badge & Settings Icon */}
+        {/* Header Right Actions */}
         <div className="flex items-center gap-1 shrink-0">
-          {/* Execution Status Badge */}
           {executionResult && (
             <div className="flex items-center">
               {executionResult.status === 'running' && (
@@ -200,7 +328,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               {executionResult.status === 'success' && (
                 <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
                   <Check className="w-2.5 h-2.5" />
-                  <span>{executionResult.durationMs ? `${executionResult.durationMs}ms` : 'Done'}</span>
+                  <span>{executionResult.durationMs !== undefined ? `${executionResult.durationMs}ms` : 'Done'}</span>
                 </span>
               )}
               {executionResult.status === 'failed' && (
@@ -209,23 +337,38 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                   <span>Error</span>
                 </span>
               )}
+              {executionResult.status === 'skipped' && (
+                <span className="text-[9px] text-slate-400 font-mono bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800">
+                  Skipped
+                </span>
+              )}
             </div>
           )}
 
-          {/* Quick Settings Button on Node Header */}
+          {/* Expand/Collapse Toggle on Header */}
+          {onToggleExpandNode && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpandNode(node.id);
+              }}
+              className="p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer"
+              title={isExpanded ? 'Collapse' : 'Expand Node Details'}
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {/* Quick Settings Gear */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onOpenConfig(node.id);
             }}
-            onTouchEnd={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              onOpenConfig(node.id);
-            }}
             className="p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
-            title="Configure settings"
+            title="Configure parameters & settings"
             aria-label="Settings"
           >
             <Settings className="w-3.5 h-3.5" />
@@ -234,7 +377,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       </div>
 
       {/* Node Body & Subtitle */}
-      <div className="px-3.5 py-2.5 text-[11px] text-slate-400 font-mono truncate flex items-center justify-between">
+      <div className="px-3.5 py-2 text-[11px] text-slate-400 font-mono truncate flex items-center justify-between">
         <span className="truncate" title={subtitle}>{subtitle}</span>
         {node.credentialId && (
           <span title="Credential Connected">
@@ -243,8 +386,132 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         )}
       </div>
 
-      {/* Visual Live Output or Error Pill on Node */}
-      {executionResult && (
+      {/* Note Pill (n8n feature) */}
+      {node.notes && (
+        <div className="mx-3 mb-2 p-1.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[10px] text-amber-300 flex items-start gap-1.5">
+          <FileText className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+          <span className="line-clamp-2 leading-tight">{node.notes}</span>
+        </div>
+      )}
+
+      {/* EXPANDED IN-CANVAS VIEW (n8n Style) */}
+      {isExpanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 space-y-2 bg-slate-950/60 rounded-b-2xl">
+          {/* Quick Parameters & Operations Summary */}
+          <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 space-y-1">
+            <div className="flex items-center justify-between text-slate-400 font-bold border-b border-slate-800 pb-1">
+              <span>Configuration Parameters</span>
+              <span className="text-cyan-400 lowercase">{node.type}</span>
+            </div>
+            {Object.keys(node.config || {}).slice(0, 4).map((k) => (
+              <div key={k} className="flex items-center justify-between gap-2 truncate">
+                <span className="text-slate-500 truncate">{k}:</span>
+                <span className="text-slate-200 truncate font-semibold">
+                  {typeof node.config[k] === 'object' ? JSON.stringify(node.config[k]) : String(node.config[k])}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* In-Node Live Data / Table Inspector */}
+          {outputPayload && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Output Data
+                </span>
+                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-md border border-slate-800">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDataTab('table');
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                      dataTab === 'table' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Table
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDataTab('json');
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                      dataTab === 'json' ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    JSON
+                  </button>
+                </div>
+              </div>
+
+              {dataTab === 'table' ? (
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-mono max-h-36 overflow-y-auto space-y-1">
+                  {Array.isArray(outputPayload.rows || outputPayload) ? (
+                    (outputPayload.rows || outputPayload).slice(0, 3).map((item: any, idx: number) => (
+                      <div key={idx} className="p-1.5 rounded bg-slate-950 border border-slate-800/80 text-[10px] text-slate-300">
+                        {Object.entries(item).slice(0, 3).map(([key, val]) => (
+                          <div key={key} className="flex justify-between gap-1 truncate">
+                            <span className="text-slate-500">{key}:</span>
+                            <span className="text-slate-200 truncate">{String(val)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))
+                  ) : typeof outputPayload === 'object' ? (
+                    Object.entries(outputPayload).slice(0, 5).map(([key, val]) => (
+                      <div key={key} className="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-0.5">
+                        <span className="text-slate-500 truncate">{key}:</span>
+                        <span className="text-slate-200 truncate font-semibold">
+                          {typeof val === 'object' ? JSON.stringify(val).slice(0, 40) : String(val)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-slate-300">{String(outputPayload)}</div>
+                  )}
+                </div>
+              ) : (
+                <pre className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[9px] font-mono text-cyan-200 overflow-x-auto max-h-36 whitespace-pre-wrap">
+                  {JSON.stringify(outputPayload, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Quick Node Actions */}
+          <div className="flex items-center gap-1.5 pt-1">
+            {onTestSingleNode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTestSingleNode(node);
+                }}
+                className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
+              >
+                <Play className="w-2.5 h-2.5 fill-current" />
+                <span>Test Step</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenConfig(node.id);
+              }}
+              className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold transition cursor-pointer"
+            >
+              Full Config
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visual Live Output or Error Pill on Node (when collapsed) */}
+      {!isExpanded && executionResult && (
         <div className="px-3 pb-2.5">
           {executionResult.status === 'failed' ? (
             <div className="p-2 rounded-xl bg-rose-950/70 border border-rose-500/50 text-[10px] text-rose-200">
@@ -276,16 +543,16 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               className="p-1.5 px-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-[10px] font-mono text-emerald-300 flex items-center justify-between gap-1.5 cursor-pointer hover:bg-emerald-950/60 transition"
               onClick={(e) => {
                 e.stopPropagation();
-                onOpenConfig(node.id);
+                onToggleExpandNode ? onToggleExpandNode(node.id) : onOpenConfig(node.id);
               }}
-              title="Click to view full output data"
+              title="Click to expand full output data"
             >
               <span className="truncate">
                 ✓ {typeof executionResult.output === 'object'
                   ? (executionResult.output.summary || executionResult.output.text || executionResult.output.result || (executionResult.output.data ? JSON.stringify(executionResult.output.data).slice(0, 30) : 'Output ready'))
                   : String(executionResult.output)}
               </span>
-              <span className="text-[9px] text-emerald-400 shrink-0 font-sans font-semibold underline">View</span>
+              <span className="text-[9px] text-emerald-400 shrink-0 font-sans font-semibold underline">Expand</span>
             </div>
           ) : null}
         </div>
@@ -305,16 +572,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               <Sparkles className="w-3 h-3 text-purple-400" />
               <span>Model (LLM Engine)</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onQuickAddSubNode?.(node.id, 'model');
-              }}
-              className="text-[10px] font-bold text-purple-300 hover:text-white bg-purple-900/60 hover:bg-purple-800 px-1.5 py-0.5 rounded transition cursor-pointer"
-              title="Connect Gemini or OpenAI Model"
-            >
-              + Model
-            </button>
+            {onQuickAddSubNode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickAddSubNode(node.id, 'model');
+                }}
+                className="text-[9px] bg-purple-800/60 hover:bg-purple-700 text-purple-200 px-1.5 py-0.5 rounded cursor-pointer transition"
+                title="Attach Chat Model"
+              >
+                + Model
+              </button>
+            )}
           </div>
 
           <div
@@ -328,16 +598,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               <History className="w-3 h-3 text-amber-400" />
               <span>Memory (Chat History)</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onQuickAddSubNode?.(node.id, 'memory');
-              }}
-              className="text-[10px] font-bold text-amber-300 hover:text-white bg-amber-900/60 hover:bg-amber-800 px-1.5 py-0.5 rounded transition cursor-pointer"
-              title="Connect Window Buffer Memory"
-            >
-              + Memory
-            </button>
+            {onQuickAddSubNode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickAddSubNode(node.id, 'memory');
+                }}
+                className="text-[9px] bg-amber-800/60 hover:bg-amber-700 text-amber-200 px-1.5 py-0.5 rounded cursor-pointer transition"
+                title="Attach Buffer Memory"
+              >
+                + Memory
+              </button>
+            )}
           </div>
 
           <div
@@ -351,72 +624,22 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               <Wrench className="w-3 h-3 text-emerald-400" />
               <span>Tools (Calculator, Search, HTTP)</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onQuickAddSubNode?.(node.id, 'tool');
-              }}
-              className="text-[10px] font-bold text-emerald-300 hover:text-white bg-emerald-900/60 hover:bg-emerald-800 px-1.5 py-0.5 rounded transition cursor-pointer"
-              title="Connect Agent Tools"
-            >
-              + Tool
-            </button>
+            {onQuickAddSubNode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickAddSubNode(node.id, 'tool');
+                }}
+                className="text-[9px] bg-emerald-800/60 hover:bg-emerald-700 text-emerald-200 px-1.5 py-0.5 rounded cursor-pointer transition"
+                title="Attach Agent Tool"
+              >
+                + Tool
+              </button>
+            )}
           </div>
         </div>
       )}
-
-      {/* Floating Action Menu on Node Hover or when Selected */}
-      <div className={`absolute -top-4 right-2 transition-all flex items-center gap-1 bg-slate-850/95 border border-slate-700/90 rounded-lg p-0.5 shadow-lg backdrop-blur-md z-15 ${
-        isSelected
-          ? 'opacity-100 ring-1 ring-cyan-500/60 shadow-cyan-500/20'
-          : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
-      }`}>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenConfig(node.id);
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onOpenConfig(node.id);
-          }}
-          className="p-1.5 hover:text-cyan-300 text-slate-300 rounded hover:bg-slate-700/60 cursor-pointer active:scale-90"
-          title="Configure Event Settings"
-        >
-          <Settings className="w-3.5 h-3.5 text-cyan-400" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDuplicateNode(node.id);
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onDuplicateNode(node.id);
-          }}
-          className="p-1.5 hover:text-cyan-300 text-slate-300 rounded hover:bg-slate-700/60 cursor-pointer active:scale-90"
-          title="Duplicate Event"
-        >
-          <Copy className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteNode(node.id);
-          }}
-          onTouchEnd={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onDeleteNode(node.id);
-          }}
-          className="p-1.5 hover:text-rose-400 text-rose-400/90 rounded hover:bg-rose-500/20 cursor-pointer active:scale-90"
-          title="Delete Event"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* Input Ports (Left) */}
       <div className="absolute top-1/2 -left-2.5 -translate-y-1/2 flex flex-col gap-2.5 z-10">

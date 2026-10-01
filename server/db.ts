@@ -37,10 +37,18 @@ export interface WorkflowNodeData {
   outputs: NodePort[];
   config: Record<string, any>;
   credentialId?: string;
+  disabled?: boolean;
+  pinnedData?: any;
+  notes?: string;
+  isExpanded?: boolean;
   executionSettings?: {
     continueOnError?: boolean;
     retryCount?: number;
+    retryWaitMs?: number;
+    executeOnce?: boolean;
+    alwaysOutputData?: boolean;
     timeoutMs?: number;
+    onError?: 'stop' | 'continue' | 'continueErrorOutput';
   };
 }
 

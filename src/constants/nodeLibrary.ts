@@ -1199,6 +1199,86 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       filterCondition: 'item.score > 50'
     }
   },
+  {
+    type: 'data_merge',
+    name: 'Merge (Combine Branches)',
+    description: 'Combines data from two or more branches using Append, Merge by Key, or Choose Branch.',
+    category: 'Logic',
+    icon: 'GitMerge',
+    accentColor: '#8b5cf6',
+    inputs: [
+      { id: 'in_input1', name: 'input1', type: 'main', label: 'Input 1' },
+      { id: 'in_input2', name: 'input2', type: 'main', label: 'Input 2' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Merged Output' }],
+    defaultConfig: {
+      mode: 'append', // 'append' | 'merge_by_key' | 'choose_branch' | 'combine'
+      joinKey: 'id',
+      chosenInput: 'input1'
+    }
+  },
+  {
+    type: 'data_loop',
+    name: 'Loop (Split In Batches)',
+    description: 'Loops over an array of items in batches of size N until all items are processed.',
+    category: 'Logic',
+    icon: 'Repeat',
+    accentColor: '#06b6d4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Items to Loop' }],
+    outputs: [
+      { id: 'out_loop', name: 'loop', type: 'branch', label: 'Loop Step' },
+      { id: 'out_done', name: 'done', type: 'branch', label: 'Done' }
+    ],
+    defaultConfig: {
+      batchSize: 10,
+      reset: false
+    }
+  },
+  {
+    type: 'respond_to_webhook',
+    name: 'Respond to Webhook',
+    description: 'Sends an immediate HTTP status code, headers, and body back to the caller of Webhook Trigger.',
+    category: 'Triggers',
+    icon: 'Reply',
+    accentColor: '#10b981',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Response Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Next' }],
+    defaultConfig: {
+      responseCode: 200,
+      responseBody: '{\n  "success": true,\n  "received": "{{$json}}"\n}',
+      responseMode: 'json'
+    }
+  },
+  {
+    type: 'data_aggregate',
+    name: 'Aggregate Items',
+    description: 'Aggregates multiple items or table rows into a single list, count, or summary calculation.',
+    category: 'Data',
+    icon: 'Layers',
+    accentColor: '#3b82f6',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Items' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Aggregated Data' }],
+    defaultConfig: {
+      aggregateType: 'to_array', // 'to_array' | 'count' | 'sum' | 'join_string'
+      field: 'revenue'
+    }
+  },
+  {
+    type: 'data_sort_limit',
+    name: 'Sort & Limit',
+    description: 'Sorts items ascending/descending by a field and keeps top N items (n8n Limit node).',
+    category: 'Data',
+    icon: 'ArrowUpDown',
+    accentColor: '#f59e0b',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Items' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sorted Output' }],
+    defaultConfig: {
+      sortField: 'urgencyScore',
+      sortOrder: 'desc',
+      limit: 10,
+      skip: 0
+    }
+  },
 
   // 5. DATA TRANSFORMATION
   {

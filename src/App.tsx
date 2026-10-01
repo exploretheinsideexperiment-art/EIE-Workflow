@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
 import {
   Workflow,
+  WorkflowNodeData,
+  WorkflowConnection,
   Credential,
   Execution,
   Webhook,
@@ -29,6 +31,7 @@ import { SettingsView } from './components/views/SettingsView';
 import { LandingView } from './components/views/LandingView';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { CreateWorkflowModal } from './components/modals/CreateWorkflowModal';
 
 const DEFAULT_USER: User = {
   id: 'usr_explore',
@@ -157,6 +160,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<string>('workflows');
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [isGlobalCreateModalOpen, setIsGlobalCreateModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('eie_sidebar_open');
@@ -300,14 +304,24 @@ export default function App() {
   }, []);
 
   // --- ACTIONS ---
-  const handleCreateNewWorkflow = async () => {
+  const handleCreateNewWorkflow = async (
+    name?: string,
+    description?: string,
+    starterNodes?: WorkflowNodeData[],
+    starterConnections?: WorkflowConnection[]
+  ) => {
+    const finalName = name?.trim() || 'Untitled Automation Workflow';
+    const finalDesc = description?.trim() || 'Visually connects APIs, triggers, AI models, and communication channels.';
+    const finalNodes = starterNodes || [];
+    const finalConns = starterConnections || [];
+
     const fallbackNewWf: Workflow = {
       id: `wf_${Date.now()}`,
-      name: 'Untitled Automation Workflow',
-      description: 'Visually connects APIs, triggers, AI models, and communication channels.',
+      name: finalName,
+      description: finalDesc,
       active: false,
-      nodes: [],
-      connections: [],
+      nodes: finalNodes,
+      connections: finalConns,
       viewport: { x: 120, y: 120, zoom: 1 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -552,11 +566,32 @@ export default function App() {
     });
   };
 
+  const handleRenameWorkflow = async (wfId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setWorkflows((prev) => {
+      const updated = prev.map((w) => (w.id === wfId ? { ...w, name: trimmed, updatedAt: new Date().toISOString() } : w));
+      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    try {
+      const target = workflows.find((w) => w.id === wfId);
+      if (target) {
+        await fetch(`/api/workflows/${wfId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...target, name: trimmed }),
+        });
+      }
+    } catch {
+      // Local fallback saved
+    }
+  };
+
   const handleRenameActiveWorkflow = (newName: string) => {
     if (!activeWorkflowId) return;
-    setWorkflows((prev) =>
-      prev.map((w) => (w.id === activeWorkflowId ? { ...w, name: newName } : w))
-    );
+    handleRenameWorkflow(activeWorkflowId, newName);
   };
 
   // If still checking authentication, show clean loader
@@ -621,7 +656,7 @@ export default function App() {
           workflowCount={workflows.length}
           activeWorkflowsCount={workflows.filter((w) => w.active).length}
           onNavigate={(view) => setCurrentView(view)}
-          onCreateWorkflow={handleCreateNewWorkflow}
+          onCreateWorkflow={() => setIsGlobalCreateModalOpen(true)}
         />
 
         {/* View Switcher */}
@@ -663,6 +698,7 @@ export default function App() {
               onToggleActive={handleToggleActive}
               onDuplicateWorkflow={handleDuplicateWorkflow}
               onDeleteWorkflow={handleDeleteWorkflow}
+              onRenameWorkflow={handleRenameWorkflow}
               onImportWorkflow={handleImportWorkflow}
             />
           )}
@@ -735,6 +771,16 @@ export default function App() {
           setCurrentView('editor');
         }}
         onNavigate={(view) => setCurrentView(view)}
+      />
+
+      {/* Create Workflow Modal with customizable name & template */}
+      <CreateWorkflowModal
+        isOpen={isGlobalCreateModalOpen}
+        onClose={() => setIsGlobalCreateModalOpen(false)}
+        onCreate={(name, description, starterNodes, starterConnections) => {
+          handleCreateNewWorkflow(name, description, starterNodes, starterConnections);
+          setIsGlobalCreateModalOpen(false);
+        }}
       />
 
       {/* PWA Offline Indicator */}
