@@ -29,17 +29,19 @@ if (fs.existsSync(distDir)) {
   copyRecursiveSync(distDir, docsDir);
   console.log('[prepare-docs] Copied dist/ to docs/ successfully.');
 
-  // Create .nojekyll in docs/ to disable Jekyll on GitHub Pages
+  // Create .nojekyll in dist/ and docs/ to disable Jekyll on GitHub Pages
+  fs.writeFileSync(path.join(distDir, '.nojekyll'), '');
   fs.writeFileSync(path.join(docsDir, '.nojekyll'), '');
-  console.log('[prepare-docs] Created docs/.nojekyll');
-
-  // Also create .nojekyll in root
   fs.writeFileSync(path.resolve(process.cwd(), '.nojekyll'), '');
+  console.log('[prepare-docs] Created .nojekyll in dist, docs, and root');
 
-  // Create 404.html as a fallback to index.html for SPA routing
+  // Create 404.html as a fallback to index.html for SPA routing on GitHub Pages
+  if (fs.existsSync(path.join(distDir, 'index.html'))) {
+    fs.copyFileSync(path.join(distDir, 'index.html'), path.join(distDir, '404.html'));
+  }
   if (fs.existsSync(path.join(docsDir, 'index.html'))) {
     fs.copyFileSync(path.join(docsDir, 'index.html'), path.join(docsDir, '404.html'));
-    console.log('[prepare-docs] Created docs/404.html');
+    console.log('[prepare-docs] Created 404.html in dist and docs');
   }
 } else {
   console.error('[prepare-docs] dist directory not found! Run vite build first.');
