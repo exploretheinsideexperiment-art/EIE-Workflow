@@ -56,13 +56,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         {
           id: 'agent_model',
           type: 'ai_model_gemini',
-          name: 'Google Gemini 3.8 Flash',
+          name: 'Google Gemini 2.5 Flash',
           category: 'AI',
           icon: 'Sparkles',
           position: { x: 120, y: 60 },
           inputs: [],
           outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
-          config: { model: 'gemini-3.8-flash' }
+          config: { model: 'gemini-2.5-flash' }
         },
         {
           id: 'agent_mem',
@@ -156,7 +156,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Analysis' }],
           config: {
-            model: 'gemini-3.8-flash',
+            model: 'gemini-2.5-flash',
             systemPrompt: 'You are an enterprise sales qualification AI. Return JSON with leadScore (1-100), urgencyLevel (Critical, High, Medium, Low), and executiveSummary.',
             userPromptTemplate: 'Analyze enterprise lead:\nName: {{$json.leadName}}\nCompany: {{$json.company}}\nRequirement: {{$json.requirement}}\nBudget: {{$json.budget}}',
             temperature: 0.1,

@@ -11,10 +11,25 @@ import {
   Code2,
   Trash2,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Layers,
+  Table as TableIcon,
+  FileCode,
+  ArrowDownCircle,
+  Eye,
+  EyeOff,
+  Send,
+  MessageSquare,
+  Globe,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
+import { NodeDataInspector } from '../common/NodeDataInspector';
 
 interface NodeConfigPanelProps {
   node: WorkflowNodeData | null;
@@ -24,6 +39,7 @@ interface NodeConfigPanelProps {
   onUpdateConfig: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
   onDeleteNode: (nodeId: string) => void;
   onTestNode: (node: WorkflowNodeData) => Promise<any>;
+  onOpenLiveChat?: () => void;
 }
 
 export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
@@ -34,19 +50,31 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   onUpdateConfig,
   onDeleteNode,
   onTestNode,
+  onOpenLiveChat,
 }) => {
-  const [activeTab, setActiveTab] = useState<'params' | 'credentials' | 'settings' | 'test'>('params');
+  const [activeTab, setActiveTab] = useState<'table' | 'json' | 'schema' | 'params' | 'credentials' | 'settings' | 'output'>('params');
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [copiedTelegramWebhook, setCopiedTelegramWebhook] = useState(false);
+  const [copiedWhatsAppWebhook, setCopiedWhatsAppWebhook] = useState(false);
+  const [copiedWhatsAppVerifyToken, setCopiedWhatsAppVerifyToken] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
-  if (!node) return null;
+  // Token ID / Outside connection states
+  const [showSecretToken, setShowSecretToken] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{ loading: boolean; success?: boolean; message?: string } | null>(null);
 
-  const IconComponent = ((Icons as any)[node.icon] || Icons.Box) as React.ComponentType<{ className?: string }>;
-  const config = node.config || {};
+  // Chat Trigger Inline Testing
+  const [chatTestMsg, setChatTestMsg] = useState('');
+  const [chatTestResponse, setChatTestResponse] = useState<string | null>(null);
+  const [isChatTesting, setIsChatTesting] = useState(false);
+
+  const IconComponent = (((Icons as any)[node?.icon || ''] || Icons.Box)) as React.ComponentType<{ className?: string }>;
+  const config = node?.config || {};
 
   const handleConfigChange = (key: string, value: any) => {
+    if (!node) return;
     onUpdateConfig(node.id, {
       config: {
         ...node.config,
@@ -56,22 +84,191 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   };
 
   const handleRunSingleTest = async () => {
+    if (!node) return;
     setIsTesting(true);
     setTestError(null);
     try {
       const res = await onTestNode(node);
       setTestResult(res);
-      setActiveTab('test');
+      setActiveTab('output');
     } catch (err: any) {
       setTestError(err.message || 'Test execution failed');
-      setActiveTab('test');
+      setActiveTab('output');
     } finally {
       setIsTesting(false);
     }
   };
 
+  // Connection Test: Telegram Bot Token
+  const handleTestTelegramToken = async () => {
+    const token = config.botToken || config.tokenId;
+    if (!token) {
+      setConnectionStatus({ loading: false, success: false, message: 'Please enter a Telegram Bot Token ID first.' });
+      return;
+    }
+    setConnectionStatus({ loading: true });
+    try {
+      const res = await fetch('/api/integrations/telegram/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: token }),
+      });
+      const data = await res.json();
+      setConnectionStatus({
+        loading: false,
+        success: data.ok,
+        message: data.message || data.error || (data.ok ? 'Telegram Bot Connected successfully!' : 'Connection failed'),
+      });
+    } catch (err: any) {
+      setConnectionStatus({
+        loading: false,
+        success: false,
+        message: err.message || 'Error testing Telegram connection',
+      });
+    }
+  };
+
+  // Register Telegram Webhook with Bot API
+  const handleRegisterTelegramWebhook = async () => {
+    const token = config.botToken || config.tokenId;
+    const webhookUrl = `${window.location.origin}/api/webhooks/telegram`;
+    if (!token) {
+      setConnectionStatus({ loading: false, success: false, message: 'Bot Token is required to configure Telegram Webhook.' });
+      return;
+    }
+    setConnectionStatus({ loading: true });
+    try {
+      const res = await fetch('/api/integrations/telegram/set-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: token, webhookUrl }),
+      });
+      const data = await res.json();
+      setConnectionStatus({
+        loading: false,
+        success: data.ok,
+        message: data.description || 'Webhook URL registered with Telegram Bot API!',
+      });
+    } catch (err: any) {
+      setConnectionStatus({
+        loading: false,
+        success: false,
+        message: err.message || 'Error configuring Telegram webhook',
+      });
+    }
+  };
+
+  // Connection Test: WhatsApp Cloud API Access Token
+  const handleTestWhatsAppToken = async () => {
+    const token = config.tokenId || config.accessToken;
+    const phoneId = config.phoneNumberId;
+    if (!token || !phoneId) {
+      setConnectionStatus({ loading: false, success: false, message: 'Please provide both Access Token ID and Phone Number ID.' });
+      return;
+    }
+    setConnectionStatus({ loading: true });
+    try {
+      const res = await fetch('/api/integrations/whatsapp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: token, phoneNumberId: phoneId }),
+      });
+      const data = await res.json();
+      setConnectionStatus({
+        loading: false,
+        success: data.ok,
+        message: data.message || data.error || (data.ok ? 'WhatsApp Cloud API Connected!' : 'Connection failed'),
+      });
+    } catch (err: any) {
+      setConnectionStatus({
+        loading: false,
+        success: false,
+        message: err.message || 'Error testing WhatsApp connection',
+      });
+    }
+  };
+
+  // Inline Chat Trigger Test
+  const handleRunInlineChatTest = async (overridePrompt?: string) => {
+    const promptToSend = (overridePrompt || chatTestMsg).trim();
+    if (!node || !promptToSend || isChatTesting) return;
+    setIsChatTesting(true);
+    try {
+      const res = await onTestNode({
+        ...node,
+        config: {
+          ...node.config,
+          message: promptToSend,
+          text: promptToSend,
+          query: promptToSend,
+        }
+      });
+      const reply = res?.output?.reply || res?.output?.text || res?.output?.message || res?.text || JSON.stringify(res?.output || res);
+      setChatTestResponse(String(reply));
+      setChatTestMsg('');
+    } catch (err: any) {
+      setChatTestResponse(`Error: ${err.message || 'Failed to trigger chat node'}`);
+    } finally {
+      setIsChatTesting(false);
+    }
+  };
+
   // Full Webhook URL for current origin
-  const fullWebhookUrl = `${window.location.origin}/api/webhook/${config.webhookPath || node.id}`;
+  const fullWebhookUrl = node ? `${window.location.origin}/api/webhook/${config.webhookPath || node.id}` : '';
+  const telegramWebhookUrl = `${window.location.origin}/api/webhooks/telegram`;
+  const whatsappWebhookUrl = `${window.location.origin}/api/webhooks/whatsapp`;
+
+  // Resolved Output data for Table/JSON/Schema inspector
+  const resolveOutputData = () => {
+    if (!node) return null;
+    if (testResult) return testResult;
+    if (executionResult?.output) return executionResult.output;
+    // Sample output schema
+    if (node.type === 'chat_trigger' || node.type === 'chat_message' || node.type === 'chat_ai') {
+      return {
+        reply: 'Workflow AI response: Your order #8849 has shipped via FedEx.',
+        tokensUsed: 42,
+        durationMs: 180,
+        status: 'success'
+      };
+    }
+    if (node.type === 'app_telegram' || node.type === 'comm_telegram') {
+      return {
+        delivered: true,
+        platform: 'Telegram',
+        messageId: 98124,
+        chatId: config.chatId || '@devops_channel',
+        messagePreview: config.text || config.message || 'Alert dispatched',
+        status: 'sent',
+        deliveredAt: new Date().toISOString()
+      };
+    }
+    if (node.type === 'app_whatsapp') {
+      return {
+        status: 'delivered',
+        messageId: 'wapp_msg_89124',
+        recipient: config.phoneNumber || '+15550192834',
+        platform: 'WhatsApp Cloud API',
+        timestamp: new Date().toISOString()
+      };
+    }
+    if (node.type === 'app_google_sheets') {
+      return [
+        { rowNumber: 1, customer: 'Alice Adams', email: 'alice@company.io', amount: 1250, status: 'Completed' },
+        { rowNumber: 2, customer: 'Bob Baker', email: 'bob@enterprise.com', amount: 3400, status: 'Pending' }
+      ];
+    }
+    return {
+      status: 'success',
+      nodeType: node.type,
+      message: 'Step executed successfully with 200 OK',
+      timestamp: new Date().toISOString()
+    };
+  };
+
+  const resolvedOutputData = resolveOutputData();
+
+  if (!node) return null;
 
   return (
     <>
@@ -152,21 +349,68 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             )}
 
             <button
-              onClick={() => setActiveTab('test')}
+              onClick={() => setActiveTab('output')}
               className="text-[11px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20 transition cursor-pointer shrink-0"
             >
-              View JSON Output
+              View Output
             </button>
           </div>
         )}
 
-      {/* Tabs */}
-      <div className="flex items-center border-b border-slate-800 bg-slate-950/40 px-2 text-xs">
+      {/* Tabs: 3 Functions (Table, JSON, Schema) placed BEFORE Parameters */}
+      <div className="flex items-center border-b border-slate-800 bg-slate-950/60 px-2 text-xs overflow-x-auto no-scrollbar">
+        {/* 1. TABLE */}
         <button
+          type="button"
+          onClick={() => setActiveTab('table')}
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'table'
+              ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+          title="Table View"
+        >
+          <TableIcon className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Table</span>
+        </button>
+
+        {/* 2. JSON */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('json')}
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'json'
+              ? 'border-amber-400 text-amber-300 bg-amber-500/10'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+          title="JSON View"
+        >
+          <FileCode className="w-3.5 h-3.5 text-amber-400" />
+          <span>JSON</span>
+        </button>
+
+        {/* 3. SCHEMA */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('schema')}
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'schema'
+              ? 'border-purple-400 text-purple-300 bg-purple-500/10'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+          title="Schema View"
+        >
+          <Layers className="w-3.5 h-3.5 text-purple-400" />
+          <span>Schema</span>
+        </button>
+
+        {/* 4. PARAMETERS */}
+        <button
+          type="button"
           onClick={() => setActiveTab('params')}
-          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 ${
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeTab === 'params'
-              ? 'border-cyan-400 text-cyan-300'
+              ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -174,11 +418,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <span>Parameters</span>
         </button>
 
+        {/* 5. CREDENTIALS */}
         <button
+          type="button"
           onClick={() => setActiveTab('credentials')}
-          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 ${
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeTab === 'credentials'
-              ? 'border-cyan-400 text-cyan-300'
+              ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -186,11 +432,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <span>Credentials</span>
         </button>
 
+        {/* 6. SETTINGS */}
         <button
+          type="button"
           onClick={() => setActiveTab('settings')}
-          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 ${
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
             activeTab === 'settings'
-              ? 'border-cyan-400 text-cyan-300'
+              ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -198,15 +446,18 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           <span>Settings</span>
         </button>
 
+        {/* 7. OUTPUT (next to Settings) */}
         <button
-          onClick={() => setActiveTab('test')}
-          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 ${
-            activeTab === 'test'
-              ? 'border-cyan-400 text-cyan-300'
+          type="button"
+          onClick={() => setActiveTab('output')}
+          className={`px-3 py-2.5 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            activeTab === 'output'
+              ? 'border-emerald-400 text-emerald-300 bg-emerald-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
+          title="Output Data"
         >
-          <Terminal className="w-3.5 h-3.5" />
+          <Terminal className="w-3.5 h-3.5 text-emerald-400" />
           <span>Output</span>
         </button>
       </div>
@@ -315,13 +566,12 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 <div>
                   <label className="text-[11px] font-semibold text-slate-300 block mb-1">Model</label>
                   <select
-                    value={config.model || 'gemini-3.8-flash'}
+                    value={config.model || 'gemini-2.5-flash'}
                     onChange={(e) => handleConfigChange('model', e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
                   >
-                    <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended)</option>
-                    <option value="gemini-flash-latest">gemini-flash-latest</option>
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Reasoning)</option>
                   </select>
                 </div>
 
@@ -754,13 +1004,12 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   </label>
                   {node.type === 'ai_model_gemini' ? (
                     <select
-                      value={config.model || 'gemini-3.8-flash'}
+                      value={config.model || 'gemini-2.5-flash'}
                       onChange={(e) => handleConfigChange('model', e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
                     >
-                      <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended, Fast & Intelligent)</option>
-                      <option value="gemini-flash-latest">gemini-flash-latest (General Multimodal)</option>
-                      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra Lightweight)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended, Fast & Intelligent)</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Reasoning & Complex Workflows)</option>
                     </select>
                   ) : (
                     <input
@@ -973,6 +1222,335 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               </div>
             )}
 
+            {/* TELEGRAM BOT & OUTSIDE CONNECTION */}
+            {(node.type === 'app_telegram' || node.type === 'comm_telegram') && (
+              <div className="space-y-4">
+                {/* Token ID Section */}
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Telegram Bot Token ID</span>
+                    </label>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      Required
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showSecretToken ? 'text' : 'password'}
+                      value={config.botToken || config.tokenId || ''}
+                      onChange={(e) => {
+                        handleConfigChange('botToken', e.target.value);
+                        handleConfigChange('tokenId', e.target.value);
+                      }}
+                      placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 pr-9 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretToken(!showSecretToken)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                      title={showSecretToken ? 'Hide Token' : 'Show Token'}
+                    >
+                      {showSecretToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>Create a bot via <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">@BotFather</a> on Telegram</span>
+                    <button
+                      type="button"
+                      onClick={handleTestTelegramToken}
+                      disabled={connectionStatus?.loading}
+                      className="px-2 py-1 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 font-semibold transition cursor-pointer flex items-center gap-1"
+                    >
+                      {connectionStatus?.loading ? <Play className="w-2.5 h-2.5 animate-spin" /> : <CheckCircle2 className="w-2.5 h-2.5" />}
+                      <span>Test Token</span>
+                    </button>
+                  </div>
+
+                  {connectionStatus && (
+                    <div className={`p-2 rounded-lg text-[11px] font-mono flex items-start gap-1.5 ${
+                      connectionStatus.success
+                        ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'
+                        : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                    }`}>
+                      {connectionStatus.success ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                      <span>{connectionStatus.message}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Target Chat ID */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Target Chat ID / Channel</label>
+                  <input
+                    type="text"
+                    value={config.chatId || '@devops_channel'}
+                    onChange={(e) => handleConfigChange('chatId', e.target.value)}
+                    placeholder="@channel_name or -100123456789"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Enter channel username (e.g. <code>@alerts_channel</code>) or numeric group ID.
+                  </p>
+                </div>
+
+                {/* Message Content */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Message Content</label>
+                  <textarea
+                    rows={4}
+                    value={config.text || config.message || ''}
+                    onChange={(e) => {
+                      handleConfigChange('text', e.target.value);
+                      handleConfigChange('message', e.target.value);
+                    }}
+                    placeholder="🚨 Alert: {{$json.summary || 'Trigger fired'}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Parse Mode */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Formatting Parse Mode</label>
+                  <select
+                    value={config.parseMode || 'HTML'}
+                    onChange={(e) => handleConfigChange('parseMode', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="HTML">HTML (bold, italic, code)</option>
+                    <option value="MarkdownV2">MarkdownV2</option>
+                    <option value="Markdown">Standard Markdown</option>
+                    <option value="Plain">Plain Text</option>
+                  </select>
+                </div>
+
+                {/* Outside Connection Setup (Bahar se connect karein) */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-b from-sky-950/40 to-slate-950 border border-sky-800/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Outside Webhook Connection (Bahar Se Connect Karein)</span>
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Ready to receive" />
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Connect your real external Telegram Bot to this workflow so incoming messages from users or groups automatically trigger this node.
+                  </p>
+
+                  <div className="flex items-center gap-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                    <input
+                      type="text"
+                      readOnly
+                      value={telegramWebhookUrl}
+                      className="bg-transparent text-[10px] font-mono text-slate-300 flex-1 outline-none select-all px-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(telegramWebhookUrl);
+                        setCopiedTelegramWebhook(true);
+                        setTimeout(() => setCopiedTelegramWebhook(false), 2000);
+                      }}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-white flex items-center gap-1 transition cursor-pointer shrink-0"
+                    >
+                      {copiedTelegramWebhook ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedTelegramWebhook ? 'Copied' : 'Copy URL'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRegisterTelegramWebhook}
+                    disabled={connectionStatus?.loading || (!config.botToken && !config.tokenId)}
+                    className="w-full py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Auto-Register Webhook with Telegram API</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* WHATSAPP CLOUD API & OUTSIDE CONNECTION */}
+            {node.type === 'app_whatsapp' && (
+              <div className="space-y-4">
+                {/* Access Token ID */}
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>WhatsApp System User Access Token ID</span>
+                    </label>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Required
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showSecretToken ? 'text' : 'password'}
+                      value={config.accessToken || config.tokenId || ''}
+                      onChange={(e) => {
+                        handleConfigChange('accessToken', e.target.value);
+                        handleConfigChange('tokenId', e.target.value);
+                      }}
+                      placeholder="EAAG... (Meta Cloud API Permanent Access Token)"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 pr-9 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretToken(!showSecretToken)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                      title={showSecretToken ? 'Hide Token' : 'Show Token'}
+                    >
+                      {showSecretToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>From Meta for Developers -&gt; WhatsApp -&gt; API Setup</span>
+                    <button
+                      type="button"
+                      onClick={handleTestWhatsAppToken}
+                      disabled={connectionStatus?.loading}
+                      className="px-2 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 font-semibold transition cursor-pointer flex items-center gap-1"
+                    >
+                      {connectionStatus?.loading ? <Play className="w-2.5 h-2.5 animate-spin" /> : <CheckCircle2 className="w-2.5 h-2.5" />}
+                      <span>Test Token</span>
+                    </button>
+                  </div>
+
+                  {connectionStatus && (
+                    <div className={`p-2 rounded-lg text-[11px] font-mono flex items-start gap-1.5 ${
+                      connectionStatus.success
+                        ? 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'
+                        : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                    }`}>
+                      {connectionStatus.success ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                      <span>{connectionStatus.message}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Phone Number ID & Business Account ID */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Phone Number ID</label>
+                    <input
+                      type="text"
+                      value={config.phoneNumberId || ''}
+                      onChange={(e) => handleConfigChange('phoneNumberId', e.target.value)}
+                      placeholder="10928374659201"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">WABA Account ID</label>
+                    <input
+                      type="text"
+                      value={config.businessAccountId || ''}
+                      onChange={(e) => handleConfigChange('businessAccountId', e.target.value)}
+                      placeholder="9821039482710"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Recipient Phone Number */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Recipient Phone Number</label>
+                  <input
+                    type="text"
+                    value={config.recipientPhone || config.phoneNumber || '+15550192834'}
+                    onChange={(e) => {
+                      handleConfigChange('recipientPhone', e.target.value);
+                      handleConfigChange('phoneNumber', e.target.value);
+                    }}
+                    placeholder="+1 555 019 2834 (E.164 with country code)"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Message Body */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Message Body</label>
+                  <textarea
+                    rows={3}
+                    value={config.message || ''}
+                    onChange={(e) => handleConfigChange('message', e.target.value)}
+                    placeholder="Hello! Your workflow notification: {{$json.text || 'Order confirmed'}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Outside Webhook Connection (Bahar se connect karein) */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-b from-emerald-950/40 to-slate-950 border border-emerald-800/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Meta Webhook (Bahar Se Connect Karein)</span>
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Paste these two values into <strong>Meta Developers &gt; WhatsApp &gt; Configuration &gt; Webhook</strong>:
+                  </p>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Callback URL</label>
+                    <div className="flex items-center gap-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                      <input
+                        type="text"
+                        readOnly
+                        value={whatsappWebhookUrl}
+                        className="bg-transparent text-[10px] font-mono text-slate-300 flex-1 outline-none select-all px-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(whatsappWebhookUrl);
+                          setCopiedWhatsAppWebhook(true);
+                          setTimeout(() => setCopiedWhatsAppWebhook(false), 2000);
+                        }}
+                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-white flex items-center gap-1 transition cursor-pointer shrink-0"
+                      >
+                        {copiedWhatsAppWebhook ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedWhatsAppWebhook ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Verify Token</label>
+                    <div className="flex items-center gap-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                      <input
+                        type="text"
+                        value={config.verifyToken || 'eie_whatsapp_verify_token'}
+                        onChange={(e) => handleConfigChange('verifyToken', e.target.value)}
+                        className="bg-transparent text-[10px] font-mono text-emerald-300 flex-1 outline-none px-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(config.verifyToken || 'eie_whatsapp_verify_token');
+                          setCopiedWhatsAppVerifyToken(true);
+                          setTimeout(() => setCopiedWhatsAppVerifyToken(false), 2000);
+                        }}
+                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-white flex items-center gap-1 transition cursor-pointer shrink-0"
+                      >
+                        {copiedWhatsAppVerifyToken ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedWhatsAppVerifyToken ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* CHAT NODES CONFIGURATION */}
             {node.type === 'chat_trigger' && (
               <div className="space-y-4">
@@ -994,6 +1572,78 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     onChange={(e) => handleConfigChange('requireSession', e.target.checked)}
                     className="rounded border-slate-700 text-sky-500 focus:ring-sky-500/20"
                   />
+                </div>
+
+                {/* SEPARATED BOTTOM FUNCTION / LIVE MESSAGE BOX (Mobile & PC) */}
+                <div className="mt-4 pt-3 border-t border-slate-800/80 bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Chat Trigger Message Box (Separated)</span>
+                    </span>
+                    {onOpenLiveChat && (
+                      <button
+                        type="button"
+                        onClick={onOpenLiveChat}
+                        className="text-[10px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        <span>Open Live Chat Box</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400">
+                    Send test prompt directly to trigger this chat flow:
+                  </p>
+
+                  {/* Quick Prompts */}
+                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 text-[10px]">
+                    {['Hi, workflow status?', 'Order #1049', 'Urgent issue'].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handleRunInlineChatTest(p)}
+                        disabled={isChatTesting}
+                        className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 whitespace-nowrap transition cursor-pointer disabled:opacity-50 text-[10px]"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Inline Message Input */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={chatTestMsg}
+                      onChange={(e) => setChatTestMsg(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleRunInlineChatTest();
+                        }
+                      }}
+                      placeholder="Type a test message..."
+                      disabled={isChatTesting}
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRunInlineChatTest()}
+                      disabled={!chatTestMsg.trim() || isChatTesting}
+                      className="px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs disabled:opacity-40 transition cursor-pointer flex items-center justify-center shrink-0"
+                    >
+                      {isChatTesting ? <Play className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {chatTestResponse && (
+                    <div className="mt-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200">
+                      <span className="text-[10px] uppercase font-mono text-cyan-400 block mb-0.5">Workflow Response:</span>
+                      <p className="whitespace-pre-wrap">{chatTestResponse}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1597,7 +2247,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             )}
 
             {/* 11. Generic Fallback for other nodes */}
-            {!['http_request', 'trigger_webhook', 'trigger_schedule', 'ai_agent', 'logic_if', 'logic_switch', 'logic_filter', 'data_merge', 'data_loop', 'respond_to_webhook', 'data_aggregate', 'data_sort_limit', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets', 'chat_trigger', 'chat_message', 'chat_ai', 'chat_memory', 'chat_sentiment', 'chat_webhook', 'core_edit_fields', 'core_wait', 'core_stop_error', 'core_datetime', 'core_crypto', 'core_code', 'core_variable', 'flow_router', 'flow_split_batches', 'flow_filter', 'flow_merge', 'chain_llm', 'chain_qa_retrieval', 'chain_summarize', 'chain_router', 'chain_transform', 'condition_if', 'condition_switch', 'condition_validator', 'condition_rate_limit'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
+            {!['http_request', 'trigger_webhook', 'trigger_schedule', 'ai_agent', 'logic_if', 'logic_switch', 'logic_filter', 'data_merge', 'data_loop', 'respond_to_webhook', 'data_aggregate', 'data_sort_limit', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets', 'app_telegram', 'comm_telegram', 'app_whatsapp', 'chat_trigger', 'chat_message', 'chat_ai', 'chat_memory', 'chat_sentiment', 'chat_webhook', 'core_edit_fields', 'core_wait', 'core_stop_error', 'core_datetime', 'core_crypto', 'core_code', 'core_variable', 'flow_router', 'flow_split_batches', 'flow_filter', 'flow_merge', 'chain_llm', 'chain_qa_retrieval', 'chain_summarize', 'chain_router', 'chain_transform', 'condition_if', 'condition_switch', 'condition_validator', 'condition_rate_limit'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
               <div className="space-y-3">
                 <p className="text-slate-400 text-xs">Configure properties for {node.name}:</p>
                 {Object.keys(config).length === 0 ? (
@@ -1710,35 +2360,59 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
           </div>
         )}
 
-        {/* TAB 4: TEST / OUTPUT INSPECTOR */}
-        {activeTab === 'test' && (
+        {/* TAB 7: OUTPUT (next to Settings) */}
+        {activeTab === 'output' && (
           <div className="space-y-3">
-            {testError && (
-              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
-                <strong>Error:</strong> {testError}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Step Output Inspector</span>
+                <span className="text-[10px] text-slate-400">Result generated by this node (Table / JSON / Schema)</span>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={handleRunSingleTest}
+                disabled={isTesting}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer text-xs font-semibold"
+              >
+                <Play className={`w-3 h-3 fill-current ${isTesting ? 'animate-spin' : ''}`} />
+                <span>{isTesting ? 'Executing...' : 'Run Test Step'}</span>
+              </button>
+            </div>
 
-            {testResult ? (
+            <NodeDataInspector
+              outputData={resolvedOutputData}
+              error={testError || executionResult?.error}
+              className="min-h-[460px]"
+            />
+          </div>
+        )}
+
+        {/* TABS 1-3: 3 FUNCTIONS (TABLE / JSON / SCHEMA) PLACED BEFORE PARAMETERS */}
+        {(activeTab === 'table' || activeTab === 'json' || activeTab === 'schema') && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase font-mono text-cyan-400 block mb-1">Node Output JSON</span>
-                <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-200 overflow-x-auto max-h-64 whitespace-pre-wrap">
-                  {JSON.stringify(testResult, null, 2)}
-                </pre>
+                <span className="text-xs font-bold text-white block capitalize">{activeTab} View</span>
+                <span className="text-[10px] text-slate-400">Step output inspector ({activeTab.toUpperCase()})</span>
               </div>
-            ) : executionResult?.output ? (
-              <div>
-                <span className="text-[10px] uppercase font-mono text-emerald-400 block mb-1">Last Execution Output</span>
-                <pre className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-200 overflow-x-auto max-h-64 whitespace-pre-wrap">
-                  {JSON.stringify(executionResult.output, null, 2)}
-                </pre>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-slate-500">
-                <Terminal className="w-6 h-6 mx-auto mb-1 opacity-50" />
-                <p>Click "Test Node" below to execute this single node with mock data.</p>
-              </div>
-            )}
+              <button
+                type="button"
+                onClick={handleRunSingleTest}
+                disabled={isTesting}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer text-xs font-semibold"
+              >
+                <Play className={`w-3 h-3 fill-current ${isTesting ? 'animate-spin' : ''}`} />
+                <span>{isTesting ? 'Executing...' : 'Run Test Step'}</span>
+              </button>
+            </div>
+
+            <NodeDataInspector
+              outputData={resolvedOutputData}
+              error={testError || executionResult?.error}
+              mode={activeTab}
+              onModeChange={(newMode) => setActiveTab(newMode)}
+              className="min-h-[460px]"
+            />
           </div>
         )}
       </div>

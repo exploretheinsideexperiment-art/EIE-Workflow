@@ -5,6 +5,7 @@ import {
   isWorkflowGenerationPrompt,
   synthesizeWorkflowFromPrompt,
 } from '../../src/utils/workflowSynthesizer';
+import { autoRepairWorkflow } from '../../src/utils/workflowDoctor';
 
 export { detectUserLanguage, isWorkflowGenerationPrompt, synthesizeWorkflowFromPrompt };
 
@@ -107,7 +108,7 @@ ${latestExecution?.error ? `- Error: ${latestExecution.error}` : ''}
 Respond ONLY with valid JSON.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: message }] }],
         config: {
           systemInstruction,
@@ -171,19 +172,53 @@ Respond ONLY with valid JSON.`;
     };
   }
 
+  // Check for Repair / Fix Intent
+  const isRepairIntent =
+    lowerMsg.includes('fix') ||
+    lowerMsg.includes('repair') ||
+    lowerMsg.includes('solve') ||
+    lowerMsg.includes('issue') ||
+    lowerMsg.includes('error') ||
+    lowerMsg.includes('thik') ||
+    lowerMsg.includes('theek') ||
+    lowerMsg.includes('galti') ||
+    lowerMsg.includes('problem') ||
+    lowerMsg.includes('remove') ||
+    lowerMsg.includes('hatado') ||
+    lowerMsg.includes('sudhar') ||
+    lowerMsg.includes('dur kar');
+
+  if (isRepairIntent) {
+    const { fixedWorkflow, fixesApplied } = autoRepairWorkflow(workflow, latestExecution, lang);
+    const fixesText = fixesApplied.length > 0
+      ? fixesApplied.map((f) => `• ${f}`).join('\n')
+      : (lang === 'en' ? '• Validated all node ports, connections, and triggers.' : '• Sabhi node ports, connections aur parameters theek kar diye gaye.');
+
+    const reply = lang === 'en'
+      ? `🩺 **Ei-Doctor Auto-Repair Completed!**\n\nI have resolved the issues in your workflow:\n${fixesText}\n\n✨ All issues have been cleared! Your workflow is now healthy and ready to run.`
+      : `🩺 **Ei-Doctor Auto-Repair Ho Gaya Hai!**\n\nMaine aapke workflow ke ye issues solve kar diye hain:\n${fixesText}\n\n✨ Sabhi issues remove kar diye gaye hain! Workflow ab bilkul theek se execute hoga.`;
+
+    return {
+      action: 'auto_repair',
+      reply,
+      source: 'local_architect',
+      language: lang,
+      builtWorkflow: {
+        name: fixedWorkflow.name,
+        description: fixedWorkflow.description,
+        nodes: fixedWorkflow.nodes,
+        connections: fixedWorkflow.connections,
+      },
+    };
+  }
+
   // Contextual Chat Fallback
-  const lowerMsg = message.toLowerCase();
   let reply = '';
   const nodeCount = workflow?.nodes?.length || 0;
   const connectionCount = workflow?.connections?.length || 0;
 
   if (lang === 'en') {
-    if (lowerMsg.includes('fix') || lowerMsg.includes('repair') || lowerMsg.includes('solve') || lowerMsg.includes('issue') || lowerMsg.includes('error')) {
-      reply = `I have inspected your workflow **"${workflow?.name || 'Workflow'}"**. 
-It currently contains ${nodeCount} node(s) and ${connectionCount} connection(s).
-
-You can click the **"⚡ Auto-Fix All Problems"** button below to immediately repair disconnected ports, missing triggers, or incomplete node parameters!`;
-    } else if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
+    if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
       reply = `Autonomous AI Agents require an attached **Chat Model (Purple port)** to function. 
 Connect a **Google Gemini 2.5 Flash** model so the agent can reason and formulate answers. Would you like me to auto-connect it for you?`;
     } else if (lowerMsg.includes('test') || lowerMsg.includes('run')) {
@@ -192,22 +227,17 @@ Connect a **Google Gemini 2.5 Flash** model so the agent can reason and formulat
       reply = `Hello! I am **Ei-Doctor** 🩺, your AI Workflow Doctor and Architect. 
 I can diagnose workflow errors, fix broken connections, and automatically build complete workflows from your prompts. 
 
-Try asking: *"Build a workflow for customer support with Webhook and Slack"* or click **"Auto-Fix"**!`;
+Try asking: *"Build a workflow for customer support with Webhook and Slack"* or *"Ek naya workflow banao"*!`;
     }
   } else {
-    if (lowerMsg.includes('thik') || lowerMsg.includes('fix') || lowerMsg.includes('galti') || lowerMsg.includes('problem')) {
-      reply = `Namaste! Maine aapke workflow **"${workflow?.name || 'Workflow'}"** ka checkup kiya hai.
-Isme ${nodeCount} node(s) aur ${connectionCount} connection(s) hain.
-
-Aap niche diye gaye **"⚡ Auto-Fix All Problems"** par click karke sabhi issues ko ek click me turant theek kar sakte hain!`;
-    } else if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
+    if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
       reply = `AI Agent ko execute karne ke liye **Chat Model (Purple port)** ki zaroorat hoti hai. 
 Aap **Google Gemini Chat Model** connect karein taaki agent queries samajh sake.`;
     } else {
       reply = `Namaste! Main hoon **Ei-Doctor** 🩺, aapka AI Workflow Doctor aur Architect. 
 Main aapke workflow ki galtiya theek kar sakta hoon aur naye prompt se pura workflow automatically build bhi kar sakta hoon. 
 
-Aap mujhse pooch sakte hain: *"Ek naya workflow banao jo Google Sheets se lead padhe aur Gmail bheje"* ya "Auto-Fix" dabayein!`;
+Aap mujhse pooch sakte hain: *"Ek naya workflow banao jo Google Sheets se lead padhe aur Gmail bheje"*!`;
     }
   }
 

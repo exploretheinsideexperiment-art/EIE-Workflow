@@ -69,7 +69,7 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Response' }],
           config: {
             agentType: 'tools_agent',
-            model: 'gemini-3.8-flash',
+            model: 'gemini-2.5-flash',
             systemPrompt: 'You are an intelligent qualification AI Agent. Evaluate lead urgency and recommend action.',
             userPromptTemplate: 'Evaluate lead: {{$json}}',
             temperature: 0.2

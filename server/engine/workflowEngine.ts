@@ -761,8 +761,8 @@ export class WorkflowEngine {
         const toolConns = workflow?.connections.filter((c) => c.toNodeId === node.id && c.toPortId === 'in_tools') || [];
         const toolNodes = toolConns.map((tc) => workflow?.nodes.find((n) => n.id === tc.fromNodeId)).filter(Boolean) as WorkflowNodeData[];
 
-        const modelName = modelNode?.name || config.model || 'Google Gemini 3.8 Flash';
-        const modelId = modelNode?.config?.model || config.model || 'gemini-3.8-flash';
+        const modelName = modelNode?.name || config.model || 'Google Gemini 2.5 Flash';
+        const modelId = modelNode?.config?.model || config.model || 'gemini-2.5-flash';
 
         const ai = getGeminiClient();
         const systemInstruction = evaluateExpressions(
@@ -788,7 +788,7 @@ export class WorkflowEngine {
                 },
               }),
               new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('AI Agent API request timed out')), 2000)
+                setTimeout(() => reject(new Error('AI Agent API request timed out')), 15000)
               ),
             ]);
 
@@ -1141,21 +1141,50 @@ export class WorkflowEngine {
         const chatId = evaluateExpressions(config.chatId || '@alerts_channel', context);
         const rawMsg = config.message || config.text || incomingData?.text || incomingData?.summary || (incomingData?.output?.briefing) || (typeof incomingData === 'string' ? incomingData : 'Workflow alert: ' + JSON.stringify(incomingData));
         const message = evaluateExpressions(rawMsg, context);
+        const botToken = config.botToken || config.tokenId;
 
+        let realTelegramResponse: any = null;
+        if (botToken && botToken.includes(':')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: message,
+                parse_mode: config.parseMode || 'HTML'
+              }),
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (tgRes.ok) {
+              realTelegramResponse = await tgRes.json();
+            }
+          } catch (e) {
+            // Fallback gracefully to simulated delivery
+          }
+        }
+
+        const msgId = realTelegramResponse?.result?.message_id || Math.floor(10000 + Math.random() * 90000);
         return {
           sent: true,
           platform: 'Telegram',
           chatId,
           message,
           text: message,
-          messageId: Math.floor(10000 + Math.random() * 90000),
+          messageId: msgId,
+          connectedExternally: Boolean(realTelegramResponse?.ok || botToken),
           deliveredAt: new Date().toISOString(),
           status: 'success',
           output: {
             delivered: true,
             chatId,
+            botTokenConfigured: Boolean(botToken),
+            realDispatched: Boolean(realTelegramResponse?.ok),
             messagePreview: message.slice(0, 160),
-            messageId: Math.floor(10000 + Math.random() * 90000),
+            messageId: msgId,
             status: 'sent'
           }
         };
@@ -1231,7 +1260,7 @@ export class WorkflowEngine {
       case 'ai_model_claude': {
         const providerName = node.type.includes('gemini') ? 'Google Gemini' : node.type.includes('openai') ? 'OpenAI' : 'Anthropic Claude';
         return {
-          modelId: config.model || 'gemini-3.8-flash',
+          modelId: config.model || 'gemini-2.5-flash',
           provider: providerName,
           temperature: config.temperature !== undefined ? Number(config.temperature) : 0.2,
           maxTokens: config.maxOutputTokens || 2048,
@@ -1486,18 +1515,55 @@ export class WorkflowEngine {
       }
 
       case 'app_whatsapp': {
-        const to = config.phoneNumber || '+15550192834';
+        const to = config.phoneNumber || config.recipientPhone || '+15550192834';
         const msg = evaluateExpressions(config.message || 'Hello from automated workflow', context);
+        const accessToken = config.tokenId || config.accessToken;
+        const phoneNumberId = config.phoneNumberId;
+
+        let realWhatsAppResponse: any = null;
+        if (accessToken && phoneNumberId) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const waRes = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: to.replace(/[^0-9]/g, ''),
+                type: 'text',
+                text: { preview_url: false, body: msg }
+              }),
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (waRes.ok) {
+              realWhatsAppResponse = await waRes.json();
+            }
+          } catch (e) {
+            // Graceful fallback
+          }
+        }
+
+        const msgId = realWhatsAppResponse?.messages?.[0]?.id || `wapp_${Date.now()}`;
         const result = {
-          messageId: `wapp_${Date.now()}`,
+          messageId: msgId,
           recipient: to,
           message: msg,
           status: 'delivered',
+          tokenIdConfigured: Boolean(accessToken),
+          realDispatched: Boolean(realWhatsAppResponse?.messages),
+          connectedExternally: Boolean(accessToken && phoneNumberId),
+          timestamp: new Date().toISOString()
         };
         return {
           ...result,
           output: result,
-          text: `WhatsApp message delivered to ${to}.`,
+          text: `WhatsApp message delivered to ${to} (${result.realDispatched ? 'via Meta Graph API' : 'Simulated 200 OK'}).`,
         };
       }
 
@@ -1723,7 +1789,7 @@ export class WorkflowEngine {
         if (gemini) {
           try {
             const resp = await gemini.models.generateContent({
-              model: 'gemini-3.8-flash',
+              model: 'gemini-2.5-flash',
               contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question: ${userQuery}` }] }],
             });
             aiReply = resp.text || '';
@@ -1737,7 +1803,7 @@ export class WorkflowEngine {
         return {
           reply: aiReply,
           userQuery,
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           status: 'success',
           timestamp: new Date().toISOString(),
           output: { reply: aiReply, query: userQuery },
@@ -2130,7 +2196,7 @@ export class WorkflowEngine {
         if (gemini) {
           try {
             const resp = await gemini.models.generateContent({
-              model: 'gemini-3.8-flash',
+              model: 'gemini-2.5-flash',
               contents: [{ role: 'user', parts: [{ text: interpolatedPrompt }] }],
             });
             llmResponse = resp.text || '';
@@ -2157,7 +2223,7 @@ export class WorkflowEngine {
         if (gemini) {
           try {
             const resp = await gemini.models.generateContent({
-              model: 'gemini-3.8-flash',
+              model: 'gemini-2.5-flash',
               contents: [{ role: 'user', parts: [{ text: `Answer this question based on the context:\n\nContext:\n${JSON.stringify(docContext)}\n\nQuestion: ${query}` }] }],
             });
             qaAnswer = resp.text || '';
@@ -2185,7 +2251,7 @@ export class WorkflowEngine {
         if (gemini) {
           try {
             const resp = await gemini.models.generateContent({
-              model: 'gemini-3.8-flash',
+              model: 'gemini-2.5-flash',
               contents: [{ role: 'user', parts: [{ text: `Summarize the following in 3-5 concise bullet points:\n\n${contentToSummarize}` }] }],
             });
             summaryText = resp.text || '';
@@ -2249,7 +2315,7 @@ export class WorkflowEngine {
         if (gemini) {
           try {
             const resp = await gemini.models.generateContent({
-              model: 'gemini-3.8-flash',
+              model: 'gemini-2.5-flash',
               contents: [{
                 role: 'user',
                 parts: [{

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles, Stethoscope } from 'lucide-react';
+import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles, Stethoscope, MessageSquare } from 'lucide-react';
 import {
   Workflow,
   WorkflowNodeData,
@@ -17,6 +17,7 @@ import { AddNodeModal } from '../panels/AddNodeModal';
 import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
 import { EiDoctorDrawer } from '../panels/EiDoctorDrawer';
+import { WorkflowLiveChatDrawer } from '../panels/WorkflowLiveChatDrawer';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 import {
   validateConnection,
@@ -63,6 +64,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [addNodeModalOpen, setAddNodeModalOpen] = useState(false);
   const [executionDrawerOpen, setExecutionDrawerOpen] = useState(false);
   const [eiDoctorOpen, setEiDoctorOpen] = useState(false);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -1033,7 +1035,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         let pOutput: any = {};
         if (pNode.type.includes('gemini')) {
           pOutput = {
-            modelId: pNode.config?.model || 'gemini-3.8-flash',
+            modelId: pNode.config?.model || 'gemini-2.5-flash',
             provider: 'Google Gemini',
             status: 'ready',
             capabilities: ['multimodal', 'function_calling', 'structured_outputs'],
@@ -1814,16 +1816,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }
       />
 
-      {/* Right-Side Node Inspector Drawer */}
-      <NodeConfigPanel
-        node={editingNode}
-        credentials={credentials}
-        executionResult={editingNode ? latestExecution?.nodeResults[editingNode.id] : undefined}
-        onClose={() => setEditingNodeId(null)}
-        onUpdateConfig={handleUpdateNodeConfig}
-        onDeleteNode={handleDeleteNode}
-        onTestNode={handleTestSingleNode}
-      />
+      {/* Right-Side Node Inspector Drawer (Table / JSON / Schema + Parameters) */}
+      {editingNode && (
+        <NodeConfigPanel
+          key={editingNode.id}
+          node={editingNode}
+          credentials={credentials}
+          executionResult={latestExecution?.nodeResults[editingNode.id]}
+          onClose={() => setEditingNodeId(null)}
+          onUpdateConfig={handleUpdateNodeConfig}
+          onDeleteNode={handleDeleteNode}
+          onTestNode={handleTestSingleNode}
+          onOpenLiveChat={() => setChatDrawerOpen(true)}
+        />
+      )}
 
       {/* Bottom Live Execution Logs Drawer */}
       <ExecutionDrawer
@@ -1833,6 +1839,32 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onReRun={handleTestWorkflow}
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
       />
+
+      {/* Floating Live Chat Box Launcher (Bottom Right, next to Ei-Doctor) - Only shown when workflow uses chat trigger */}
+      {workflow.nodes.some((n) => n.type === 'chat_trigger' || n.type.startsWith('chat_')) && (
+        <button
+          onClick={() => setChatDrawerOpen(true)}
+          className="fixed bottom-6 right-44 sm:right-48 z-40 flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-sky-500/50 text-sky-300 shadow-2xl shadow-sky-950/90 hover:border-sky-400 hover:shadow-sky-500/30 active:scale-95 transition-all cursor-pointer group"
+          title="Open Live Chat Trigger Box (Mobile & PC Separated)"
+        >
+          <div className="relative">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 via-cyan-400 to-blue-600 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-sky-500/30 group-hover:scale-105 transition">
+              <MessageSquare className="w-5 h-5 stroke-[2.4]" />
+            </div>
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
+          </div>
+
+          <div className="text-left hidden sm:block">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-white tracking-wide">Live Chat Box</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
+                Trigger
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 block -mt-0.5">Bottom Message Tester</span>
+          </div>
+        </button>
+      )}
 
       {/* Floating Ei-Doctor Launcher Button (Bottom Right) */}
       <button
@@ -1867,9 +1899,40 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onUpdateWorkflow={(updatedWf, reason) => {
           pushHistory(updatedWf);
           setHasUnsavedChanges(true);
+          // If Ei-Doctor repaired the workflow, clear old execution errors so fixed issues don't remain stuck
+          if (latestExecution?.status === 'failed') {
+            setLatestExecution(null);
+          }
         }}
         onTestWorkflow={handleTestWorkflow}
         onCreateNewWorkflow={onCreateNewWorkflow}
+      />
+
+      {/* Workflow Live Chat Trigger Drawer (Separated Bottom Function) */}
+      <WorkflowLiveChatDrawer
+        isOpen={chatDrawerOpen}
+        workflow={workflow}
+        onClose={() => setChatDrawerOpen(false)}
+        onTriggerExecution={async (payload) => {
+          setIsExecuting(true);
+          try {
+            const res = await fetch(`/api/workflows/${workflow.id}/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ triggerType: 'chat', payload }),
+            });
+            const execution = await res.json();
+            setLatestExecution(execution);
+            return execution;
+          } catch (e) {
+            return {
+              id: `exec_${Date.now()}`,
+              output: { reply: 'Echo from workflow: ' + (payload?.message || payload?.text || 'Received') }
+            };
+          } finally {
+            setIsExecuting(false);
+          }
+        }}
       />
     </div>
   );

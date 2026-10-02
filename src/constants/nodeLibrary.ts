@@ -135,8 +135,13 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent Message' }],
     defaultConfig: {
       operation: 'sendMessage',
+      botToken: '',
+      tokenId: '',
       chatId: '@devops_channel',
-      text: '🚨 Alert: {{$json.message || "Trigger fired"}}'
+      text: '🚨 Alert: {{$json.message || "Trigger fired"}}',
+      parseMode: 'HTML',
+      enableExternalWebhook: true,
+      webhookPath: 'telegram'
     },
     requiresCredentials: true,
     credentialType: 'telegram'
@@ -144,7 +149,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
   {
     type: 'app_whatsapp',
     name: 'WhatsApp Business',
-    description: 'Send WhatsApp Cloud API template notifications, media files, and customer messages.',
+    description: 'Send WhatsApp Cloud API template notifications, media files, and customer messages with external webhook reception.',
     category: 'Applications',
     icon: 'MessageCircle',
     accentColor: '#25D366',
@@ -152,8 +157,16 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivery Status' }],
     defaultConfig: {
       operation: 'sendTemplate',
+      tokenId: '',
+      accessToken: '',
+      phoneNumberId: '',
+      businessAccountId: '',
+      verifyToken: 'eie_whatsapp_verify_token',
       templateName: 'order_status_update',
-      phoneNumber: '+10000000000'
+      phoneNumber: '+10000000000',
+      message: 'Hello! Your workflow notification: {{$json.text || "Status OK"}}',
+      enableExternalWebhook: true,
+      webhookPath: 'whatsapp'
     },
     requiresCredentials: true,
     credentialType: 'whatsapp'
@@ -539,14 +552,14 @@ export const NODE_LIBRARY: NodeDefinition[] = [
   {
     type: 'app_google_gemini',
     name: 'Google Gemini AI',
-    description: 'Run multimodal Gemini 2.5/3.8 Flash, text generation, structured JSON extraction, and agents.',
+    description: 'Run multimodal Gemini 2.5 Flash, text generation, structured JSON extraction, and agents.',
     category: 'All Applications',
     icon: 'Sparkles',
     accentColor: '#1A73E8',
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Prompt / Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Output' }],
     defaultConfig: {
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       prompt: 'Summarize and extract key action items: {{$json}}',
       temperature: 0.2
     },
@@ -988,7 +1001,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [],
     outputs: [{ id: 'out_model', name: 'model', type: 'model', label: 'Model' }],
     defaultConfig: {
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       temperature: 0.2,
       maxOutputTokens: 2048
     },
@@ -1355,8 +1368,12 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivered' }],
     defaultConfig: {
+      botToken: '',
+      tokenId: '',
       chatId: '@devops_channel',
-      message: '🚨 EIE-Workflow Alert: {{$json.summary || "Trigger event detected"}}'
+      message: '🚨 EIE-Workflow Alert: {{$json.summary || "Trigger event detected"}}',
+      enableExternalWebhook: true,
+      webhookPath: 'telegram'
     }
   },
   {

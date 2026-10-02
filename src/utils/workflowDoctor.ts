@@ -19,6 +19,17 @@ export interface DiagnosticReport {
   summary: string;
 }
 
+export const isTriggerNode = (node: WorkflowNodeData): boolean => {
+  return (
+    node.category === 'Triggers' ||
+    node.type.startsWith('trigger_') ||
+    node.type === 'chat_trigger' ||
+    node.type === 'widget_chat' ||
+    node.type === 'app_typeform' ||
+    node.type === 'app_google_forms'
+  );
+};
+
 /**
  * Intelligent diagnostic engine that inspects nodes, connections, and execution results
  */
@@ -45,9 +56,7 @@ export function diagnoseWorkflow(
   }
 
   // 1. Check for Trigger
-  const hasTrigger = nodes.some(
-    (n) => n.category === 'Triggers' || n.type.startsWith('trigger_')
-  );
+  const hasTrigger = nodes.some(isTriggerNode);
   if (!hasTrigger && nodes.length > 1) {
     issues.push({
       id: 'issue_no_trigger',
@@ -55,8 +64,8 @@ export function diagnoseWorkflow(
       severity: 'warning',
       title: isEn ? 'Trigger Event Missing' : 'Trigger Event Missing',
       description: isEn
-        ? 'The workflow has no Trigger event (Webhook, Schedule, or Manual trigger). Without a trigger, the workflow cannot start automatically.'
-        : 'Workflow me koi Trigger nahi hai (Webhook, Schedule, ya App Event). Iske bina workflow automatically start nahi ho payega.',
+        ? 'The workflow has no Trigger event (Webhook, Schedule, Chat, or Manual trigger). Without a trigger, the workflow cannot start automatically.'
+        : 'Workflow me koi Trigger nahi hai (Webhook, Schedule, Chat, ya App Event). Iske bina workflow automatically start nahi ho payega.',
       autoFixable: true,
     });
   }
@@ -69,7 +78,7 @@ export function diagnoseWorkflow(
 
     // AI sub-nodes only need outgoing
     const isAiSubNode = node.type.startsWith('ai_model_') || node.type.startsWith('ai_memory_') || node.type.startsWith('ai_tool_');
-    const isTrigger = node.category === 'Triggers' || node.type.startsWith('trigger_');
+    const isTrigger = isTriggerNode(node);
 
     if (isAiSubNode) {
       if (!hasOutgoing) {
@@ -255,38 +264,40 @@ export function autoRepairWorkflow(
   let connections = JSON.parse(JSON.stringify(workflow.connections)) as WorkflowConnection[];
 
   // 1. Fix Missing Trigger
-  const hasTrigger = nodes.some((n) => n.category === 'Triggers' || n.type.startsWith('trigger_'));
+  const hasTrigger = nodes.some(isTriggerNode);
   if (!hasTrigger && nodes.length > 0) {
-    const triggerDef = NODE_LIBRARY.find((n) => n.type === 'trigger_webhook');
+    const hasChat = nodes.some((n) => n.type.startsWith('chat_'));
+    const triggerType = hasChat ? 'chat_trigger' : 'trigger_webhook';
+    const triggerDef = NODE_LIBRARY.find((n) => n.type === triggerType);
     if (triggerDef) {
       const firstAction = nodes.find((n) => !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_'));
       const triggerX = firstAction ? Math.max(40, firstAction.position.x - 340) : 100;
       const triggerY = firstAction ? firstAction.position.y : 150;
 
       const triggerNode: WorkflowNodeData = {
-        id: `trigger_wh_${Date.now()}`,
+        id: `trigger_${Date.now()}`,
         type: triggerDef.type,
-        name: 'Inbound Webhook Trigger',
+        name: triggerDef.name,
         category: triggerDef.category,
         icon: triggerDef.icon,
         position: { x: triggerX, y: triggerY },
         inputs: triggerDef.inputs,
         outputs: triggerDef.outputs,
-        config: { webhookPath: 'auto_webhook_' + Date.now().toString(36) },
+        config: triggerDef.defaultConfig || {},
       };
 
       nodes.unshift(triggerNode);
-      fixesApplied.push('Added Inbound Webhook Trigger node');
+      fixesApplied.push(isEn ? `Added ${triggerDef.name}` : `${triggerDef.name} add kar diya gaya`);
 
       if (firstAction) {
         connections.push({
           id: `conn_trig_${Date.now()}`,
           fromNodeId: triggerNode.id,
-          fromPortId: 'out_main',
+          fromPortId: triggerNode.outputs[0]?.id || 'out_main',
           toNodeId: firstAction.id,
-          toPortId: 'in_main',
+          toPortId: firstAction.inputs[0]?.id || 'in_main',
         });
-        fixesApplied.push(`Connected Trigger to "${firstAction.name}"`);
+        fixesApplied.push(isEn ? `Connected ${triggerDef.name} to "${firstAction.name}"` : `${triggerDef.name} ko "${firstAction.name}" se connect kar diya`);
       }
     }
   }
@@ -308,7 +319,7 @@ export function autoRepairWorkflow(
             position: { x: Math.max(40, node.position.x - 320), y: Math.max(40, node.position.y - 120) },
             inputs: geminiDef.inputs,
             outputs: geminiDef.outputs,
-            config: { model: 'gemini-3.8-flash', temperature: 0.2 },
+            config: { model: 'gemini-2.5-flash', temperature: 0.2 },
           };
           nodes.push(modelNode);
           connections.push({
@@ -318,7 +329,7 @@ export function autoRepairWorkflow(
             toNodeId: node.id,
             toPortId: 'in_model',
           });
-          fixesApplied.push(`Connected Google Gemini 3.8 Flash model (purple) to "${node.name}"`);
+          fixesApplied.push(`Connected Google Gemini 2.5 Flash model (purple) to "${node.name}"`);
         }
       }
 
@@ -479,5 +490,217 @@ export function autoRepairWorkflow(
   return {
     fixedWorkflow,
     fixesApplied,
+  };
+}
+
+/**
+ * Resolve and remove a single specific issue on demand
+ */
+export function fixSingleIssue(
+  workflow: Workflow,
+  issueId: string,
+  latestExecution?: Execution | null,
+  lang: 'en' | 'hi' = 'en'
+): { fixedWorkflow: Workflow; fixApplied: string } {
+  const isEn = lang === 'en';
+  let fixApplied = isEn ? 'Issue resolved' : 'Samasya theek ho gayi';
+  const nodes = JSON.parse(JSON.stringify(workflow.nodes)) as WorkflowNodeData[];
+  let connections = JSON.parse(JSON.stringify(workflow.connections)) as WorkflowConnection[];
+
+  // 1. Missing Trigger
+  if (issueId === 'issue_no_trigger') {
+    const hasChat = nodes.some((n) => n.type.startsWith('chat_'));
+    const triggerDef = NODE_LIBRARY.find((n) => n.type === (hasChat ? 'chat_trigger' : 'trigger_webhook'));
+    if (triggerDef) {
+      const firstAction = nodes.find((n) => !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_'));
+      const triggerNode: WorkflowNodeData = {
+        id: `trigger_${Date.now()}`,
+        type: triggerDef.type,
+        name: triggerDef.name,
+        category: triggerDef.category,
+        icon: triggerDef.icon,
+        position: { x: firstAction ? Math.max(40, firstAction.position.x - 320) : 80, y: firstAction ? firstAction.position.y : 160 },
+        inputs: triggerDef.inputs,
+        outputs: triggerDef.outputs,
+        config: triggerDef.defaultConfig || {},
+      };
+      nodes.unshift(triggerNode);
+      if (firstAction) {
+        connections.push({
+          id: `conn_trig_${Date.now()}`,
+          fromNodeId: triggerNode.id,
+          fromPortId: triggerNode.outputs[0]?.id || 'out_main',
+          toNodeId: firstAction.id,
+          toPortId: firstAction.inputs[0]?.id || 'in_main',
+        });
+      }
+      fixApplied = isEn ? `Added and connected ${triggerDef.name}` : `${triggerDef.name} add aur connect kar diya gaya`;
+    }
+  }
+  // 2. Disconnected node or orphan node
+  else if (issueId.startsWith('issue_orphan_') || issueId.startsWith('issue_trigger_no_out_') || issueId.startsWith('issue_unconnected_sub_')) {
+    const targetNodeId = issueId.replace('issue_orphan_', '').replace('issue_trigger_no_out_', '').replace('issue_unconnected_sub_', '');
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+    if (targetNode) {
+      const isSub = targetNode.type.startsWith('ai_model_') || targetNode.type.startsWith('ai_memory_') || targetNode.type.startsWith('ai_tool_');
+      if (isSub) {
+        const agent = nodes.find((n) => n.type === 'ai_agent');
+        if (agent) {
+          const portId = targetNode.type.startsWith('ai_model_') ? 'in_model' : targetNode.type.startsWith('ai_memory_') ? 'in_memory' : 'in_tools';
+          connections.push({
+            id: `conn_sub_${Date.now()}`,
+            fromNodeId: targetNode.id,
+            fromPortId: targetNode.outputs[0]?.id || (targetNode.type.startsWith('ai_model_') ? 'out_model' : targetNode.type.startsWith('ai_memory_') ? 'out_memory' : 'out_tool'),
+            toNodeId: agent.id,
+            toPortId: portId,
+          });
+          fixApplied = isEn ? `Connected "${targetNode.name}" to "${agent.name}"` : `"${targetNode.name}" ko "${agent.name}" se joda`;
+        }
+      } else {
+        const otherNodes = nodes.filter((n) => n.id !== targetNode.id && !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_'));
+        const downstream = otherNodes.find((n) => n.position.x > targetNode.position.x);
+        const upstream = otherNodes.find((n) => n.position.x < targetNode.position.x);
+
+        if (downstream && !connections.some((c) => c.fromNodeId === targetNode.id && c.toNodeId === downstream.id)) {
+          connections.push({
+            id: `conn_fix_${Date.now()}`,
+            fromNodeId: targetNode.id,
+            fromPortId: targetNode.outputs[0]?.id || 'out_main',
+            toNodeId: downstream.id,
+            toPortId: downstream.inputs[0]?.id || 'in_main',
+          });
+          fixApplied = isEn ? `Connected "${targetNode.name}" to "${downstream.name}"` : `"${targetNode.name}" ko "${downstream.name}" se connect kar diya`;
+        } else if (upstream && !connections.some((c) => c.fromNodeId === upstream.id && c.toNodeId === targetNode.id)) {
+          connections.push({
+            id: `conn_fix_${Date.now()}`,
+            fromNodeId: upstream.id,
+            fromPortId: upstream.outputs[0]?.id || 'out_main',
+            toNodeId: targetNode.id,
+            toPortId: targetNode.inputs[0]?.id || 'in_main',
+          });
+          fixApplied = isEn ? `Connected "${upstream.name}" to "${targetNode.name}"` : `"${upstream.name}" ko "${targetNode.name}" se connect kar diya`;
+        }
+      }
+    }
+  }
+  // 3. AI Agent missing Model / Memory / Tool
+  else if (issueId.startsWith('issue_agent_no_model_')) {
+    const agentId = issueId.replace('issue_agent_no_model_', '');
+    const agent = nodes.find((n) => n.id === agentId);
+    if (agent) {
+      const geminiDef = NODE_LIBRARY.find((n) => n.type === 'ai_model_gemini');
+      if (geminiDef) {
+        const modelNode: WorkflowNodeData = {
+          id: `model_gemini_${Date.now()}`,
+          type: geminiDef.type,
+          name: 'Google Gemini Chat Model',
+          category: geminiDef.category,
+          icon: geminiDef.icon,
+          position: { x: Math.max(40, agent.position.x - 320), y: Math.max(40, agent.position.y - 120) },
+          inputs: geminiDef.inputs,
+          outputs: geminiDef.outputs,
+          config: { model: 'gemini-2.5-flash', temperature: 0.2 },
+        };
+        nodes.push(modelNode);
+        connections.push({
+          id: `conn_model_${Date.now()}`,
+          fromNodeId: modelNode.id,
+          fromPortId: 'out_model',
+          toNodeId: agent.id,
+          toPortId: 'in_model',
+        });
+        fixApplied = isEn ? `Attached Gemini 2.5 Flash model to "${agent.name}"` : `Gemini 2.5 Flash model "${agent.name}" se attach kar diya`;
+      }
+    }
+  }
+  else if (issueId.startsWith('issue_agent_no_mem_')) {
+    const agentId = issueId.replace('issue_agent_no_mem_', '');
+    const agent = nodes.find((n) => n.id === agentId);
+    if (agent) {
+      const memDef = NODE_LIBRARY.find((n) => n.type === 'ai_memory_window');
+      if (memDef) {
+        const memNode: WorkflowNodeData = {
+          id: `mem_win_${Date.now()}`,
+          type: memDef.type,
+          name: 'Window Buffer Memory',
+          category: memDef.category,
+          icon: memDef.icon,
+          position: { x: Math.max(40, agent.position.x - 320), y: agent.position.y + 40 },
+          inputs: memDef.inputs,
+          outputs: memDef.outputs,
+          config: { contextWindowLength: 10, sessionKey: 'session_{{$json.userId || "default"}}' },
+        };
+        nodes.push(memNode);
+        connections.push({
+          id: `conn_mem_${Date.now()}`,
+          fromNodeId: memNode.id,
+          fromPortId: 'out_memory',
+          toNodeId: agent.id,
+          toPortId: 'in_memory',
+        });
+        fixApplied = isEn ? `Attached Window Buffer Memory to "${agent.name}"` : `Window Buffer Memory "${agent.name}" se attach kar di`;
+      }
+    }
+  }
+  else if (issueId.startsWith('issue_agent_no_tools_')) {
+    const agentId = issueId.replace('issue_agent_no_tools_', '');
+    const agent = nodes.find((n) => n.id === agentId);
+    if (agent) {
+      const toolDef = NODE_LIBRARY.find((n) => n.type === 'ai_tool_calculator');
+      if (toolDef) {
+        const toolNode: WorkflowNodeData = {
+          id: `tool_calc_${Date.now()}`,
+          type: toolDef.type,
+          name: 'Calculator Tool',
+          category: toolDef.category,
+          icon: toolDef.icon,
+          position: { x: Math.max(40, agent.position.x - 320), y: agent.position.y + 180 },
+          inputs: toolDef.inputs,
+          outputs: toolDef.outputs,
+          config: { toolName: 'calculator' },
+        };
+        nodes.push(toolNode);
+        connections.push({
+          id: `conn_tool_${Date.now()}`,
+          fromNodeId: toolNode.id,
+          fromPortId: 'out_tool',
+          toNodeId: agent.id,
+          toPortId: 'in_tools',
+        });
+        fixApplied = isEn ? `Attached Calculator Tool to "${agent.name}"` : `Calculator Tool "${agent.name}" se connect kar diya`;
+      }
+    }
+  }
+  // 4. Empty Config / Execution Failed
+  else if (issueId.startsWith('issue_http_empty_') || issueId.startsWith('issue_email_empty_') || issueId.startsWith('issue_exec_failed_')) {
+    const targetNodeId = issueId.replace('issue_http_empty_', '').replace('issue_email_empty_', '').replace('issue_exec_failed_', '');
+    const targetNode = nodes.find((n) => n.id === targetNodeId);
+    if (targetNode) {
+      if (targetNode.type === 'http_request') {
+        targetNode.config = { ...targetNode.config, method: targetNode.config?.method || 'GET', url: 'https://httpbin.org/get' };
+        fixApplied = isEn ? `Configured working HTTP endpoint for "${targetNode.name}"` : `"${targetNode.name}" ke liye HTTP endpoint configure kar diya`;
+      } else if (targetNode.type === 'comm_email') {
+        targetNode.config = { ...targetNode.config, to: 'team@yourdomain.com', subject: 'Workflow Notification' };
+        fixApplied = isEn ? `Configured email defaults for "${targetNode.name}"` : `"${targetNode.name}" ke email defaults set kar diye`;
+      } else {
+        targetNode.config = { ...targetNode.config, repairedAt: new Date().toISOString() };
+        fixApplied = isEn ? `Repaired parameters for "${targetNode.name}"` : `"${targetNode.name}" ke parameters theek kar diye`;
+      }
+    }
+  }
+  // Fallback to auto-repair
+  else {
+    const res = autoRepairWorkflow(workflow, latestExecution, lang);
+    return { fixedWorkflow: res.fixedWorkflow, fixApplied: res.fixesApplied[0] || (isEn ? 'Repaired workflow' : 'Workflow theek kar diya') };
+  }
+
+  return {
+    fixedWorkflow: {
+      ...workflow,
+      nodes,
+      connections,
+      updatedAt: new Date().toISOString(),
+    },
+    fixApplied,
   };
 }

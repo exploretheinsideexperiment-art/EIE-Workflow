@@ -236,7 +236,7 @@ function createDefaultData(): DatabaseSchema {
         inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Data' }],
         outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Output' }],
         config: {
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           systemPrompt: 'You are an elite sales engineering AI. Analyze the customer inquiry. Return a clean JSON object with summary, estimatedContractTier (Tier 1, Tier 2, Tier 3), urgencyScore (1-100), and recommendedNextSteps array.',
           userPromptTemplate: 'Analyze customer inquiry from: {{$json.customer}} ({{$json.company}}):\nInquiry: {{$json.inquiry}}',
           temperature: 0.2,
@@ -334,7 +334,7 @@ function createDefaultData(): DatabaseSchema {
       durationMs: 1840,
       logs: [
         { timestamp: new Date(Date.now() - 3600000).toISOString(), level: 'info', message: 'Webhook triggered with payload: Apex Dynamics inquiry', nodeId: 'node_1' },
-        { timestamp: new Date(Date.now() - 3599600).toISOString(), level: 'info', message: 'Gemini AI model gemini-3.8-flash generated structured analysis in 980ms', nodeId: 'node_2' },
+        { timestamp: new Date(Date.now() - 3599600).toISOString(), level: 'info', message: 'Gemini AI model gemini-2.5-flash generated structured analysis in 980ms', nodeId: 'node_2' },
         { timestamp: new Date(Date.now() - 3598600).toISOString(), level: 'info', message: 'IF Condition evaluated urgencyScore (88 >= 50) => Branch TRUE', nodeId: 'node_3' },
         { timestamp: new Date(Date.now() - 3598160).toISOString(), level: 'info', message: 'Email dispatched successfully to vp-sales@eie-workflow.internal', nodeId: 'node_4' }
       ],
