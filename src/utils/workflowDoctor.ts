@@ -22,17 +22,25 @@ export interface DiagnosticReport {
 /**
  * Intelligent diagnostic engine that inspects nodes, connections, and execution results
  */
-export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution | null): DiagnosticReport {
+export function diagnoseWorkflow(
+  workflow: Workflow,
+  latestExecution?: Execution | null,
+  lang: 'en' | 'hi' = 'en'
+): DiagnosticReport {
   const issues: WorkflowIssue[] = [];
   const nodes = workflow.nodes || [];
   const connections = workflow.connections || [];
+
+  const isEn = lang === 'en';
 
   if (nodes.length === 0) {
     return {
       healthScore: 100,
       status: 'healthy',
       issues: [],
-      summary: 'Workflow canvas is empty. Add your first node to begin.',
+      summary: isEn
+        ? 'Workflow canvas is empty. Add your first node to begin.'
+        : 'Canvas abhi khali hai. Shuru karne ke liye pehla node add karein.',
     };
   }
 
@@ -45,8 +53,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
       id: 'issue_no_trigger',
       type: 'missing_trigger',
       severity: 'warning',
-      title: 'Trigger Event Missing',
-      description: 'Workflow me koi Trigger nahi hai (Webhook, Schedule, ya App Event). Iske bina workflow automatically start nahi ho payega.',
+      title: isEn ? 'Trigger Event Missing' : 'Trigger Event Missing',
+      description: isEn
+        ? 'The workflow has no Trigger event (Webhook, Schedule, or Manual trigger). Without a trigger, the workflow cannot start automatically.'
+        : 'Workflow me koi Trigger nahi hai (Webhook, Schedule, ya App Event). Iske bina workflow automatically start nahi ho payega.',
       autoFixable: true,
     });
   }
@@ -67,8 +77,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_unconnected_sub_${node.id}`,
           type: 'disconnected_node',
           severity: 'warning',
-          title: `Disconnected ${node.name}`,
-          description: `"${node.name}" kisi AI Agent se connect nahi hai. Isko AI Agent ke matching port se connect karein.`,
+          title: isEn ? `Disconnected ${node.name}` : `Disconnected ${node.name}`,
+          description: isEn
+            ? `"${node.name}" is not attached to any AI Agent. Connect it to the matching port on an AI Agent node.`
+            : `"${node.name}" kisi AI Agent se connect nahi hai. Isko AI Agent ke matching port se connect karein.`,
           nodeId: node.id,
           autoFixable: true,
         });
@@ -79,8 +91,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_trigger_no_out_${node.id}`,
           type: 'disconnected_node',
           severity: 'warning',
-          title: `Trigger "${node.name}" is Not Connected`,
-          description: 'Trigger node ka output kisi downstream action se connect nahi hai.',
+          title: isEn ? `Trigger "${node.name}" is Not Connected` : `Trigger "${node.name}" is Not Connected`,
+          description: isEn
+            ? `Trigger "${node.name}" output is not connected to any downstream action node.`
+            : 'Trigger node ka output kisi downstream action se connect nahi hai.',
           nodeId: node.id,
           autoFixable: true,
         });
@@ -92,8 +106,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_orphan_${node.id}`,
           type: 'disconnected_node',
           severity: 'warning',
-          title: `Orphan Node: "${node.name}"`,
-          description: `"${node.name}" canvas par akela hai (na incoming wire hai na outgoing).`,
+          title: isEn ? `Orphan Node: "${node.name}"` : `Orphan Node: "${node.name}"`,
+          description: isEn
+            ? `"${node.name}" is isolated on the canvas with neither incoming nor outgoing connections.`
+            : `"${node.name}" canvas par akela hai (na incoming wire hai na outgoing).`,
           nodeId: node.id,
           autoFixable: true,
         });
@@ -108,8 +124,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_agent_no_model_${node.id}`,
           type: 'missing_model',
           severity: 'error',
-          title: `AI Agent Missing Chat Model: "${node.name}"`,
-          description: 'AI Agent ko perform karne ke liye Google Gemini ya OpenAI model ki zaroorat hai.',
+          title: isEn ? `AI Agent Missing Chat Model: "${node.name}"` : `AI Agent Missing Chat Model: "${node.name}"`,
+          description: isEn
+            ? `The AI Agent requires a Chat Model (e.g. Google Gemini 2.5 Flash) connected to its Model port.`
+            : 'AI Agent ko perform karne ke liye Google Gemini ya OpenAI model ki zaroorat hai.',
           nodeId: node.id,
           autoFixable: true,
         });
@@ -121,8 +139,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_agent_no_mem_${node.id}`,
           type: 'missing_memory',
           severity: 'info',
-          title: `AI Agent Missing Memory: "${node.name}"`,
-          description: 'AI Agent ke paas Memory nahi hai, jisse conversation history retain nahi hogi.',
+          title: isEn ? `AI Agent Missing Memory: "${node.name}"` : `AI Agent Missing Memory: "${node.name}"`,
+          description: isEn
+            ? `The AI Agent has no Memory component attached to retain multi-turn conversational context.`
+            : 'AI Agent ke paas Memory nahi hai, jisse conversation history retain nahi hogi.',
           nodeId: node.id,
           autoFixable: true,
         });
@@ -134,8 +154,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
           id: `issue_agent_no_tools_${node.id}`,
           type: 'missing_tool',
           severity: 'info',
-          title: `AI Agent has No Tools: "${node.name}"`,
-          description: 'AI Agent bina tools ke external actions (search, calculation, API) perform nahi kar payega.',
+          title: isEn ? `AI Agent has No Tools: "${node.name}"` : `AI Agent has No Tools: "${node.name}"`,
+          description: isEn
+            ? `The AI Agent has no external tools attached (Calculator, Web Search, Code Execution, etc.).`
+            : 'AI Agent bina tools ke external actions (search, calculation, API) perform nahi kar payega.',
           nodeId: node.id,
           autoFixable: true,
         });
@@ -148,8 +170,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
         id: `issue_http_empty_${node.id}`,
         type: 'empty_config',
         severity: 'error',
-        title: `Empty URL in HTTP Request: "${node.name}"`,
-        description: 'HTTP Request me target URL khali hai.',
+        title: isEn ? `Empty URL in HTTP Request: "${node.name}"` : `Empty URL in HTTP Request: "${node.name}"`,
+        description: isEn
+          ? `The HTTP Request node has an empty Target URL.`
+          : 'HTTP Request me target URL khali hai.',
         nodeId: node.id,
         autoFixable: true,
       });
@@ -160,8 +184,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
         id: `issue_email_empty_${node.id}`,
         type: 'empty_config',
         severity: 'warning',
-        title: `Incomplete Email Config: "${node.name}"`,
-        description: 'Recipient Email address ya Subject line missing hai.',
+        title: isEn ? `Incomplete Email Config: "${node.name}"` : `Incomplete Email Config: "${node.name}"`,
+        description: isEn
+          ? `Recipient Email address or Subject line is missing.`
+          : 'Recipient Email address ya Subject line missing hai.',
         nodeId: node.id,
         autoFixable: true,
       });
@@ -174,8 +200,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
         id: `issue_exec_failed_${node.id}`,
         type: 'execution_error',
         severity: 'error',
-        title: `Step Execution Failed: "${node.name}"`,
-        description: `Last test run me yeh step fail hua: "${err}". Ei-Doctor iske configurations aur connections internally thik kar sakta hai.`,
+        title: isEn ? `Step Execution Failed: "${node.name}"` : `Step Execution Failed: "${node.name}"`,
+        description: isEn
+          ? `This step failed during the last test run with error: "${err}". Ei-Doctor can reconfigure and repair it automatically.`
+          : `Last test run me yeh step fail hua: "${err}". Ei-Doctor iske configurations aur connections internally thik kar sakta hai.`,
         nodeId: node.id,
         autoFixable: true,
       });
@@ -195,9 +223,14 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
   if (healthScore < 50) status = 'critical';
   else if (healthScore < 85) status = 'warning';
 
-  let summary = 'Aapka workflow bilkul swasth aur ready hai! Sabhi connections aur configurations sahi hain.';
+  let summary = isEn
+    ? 'Your workflow is healthy and fully configured! All connections and parameters are valid.'
+    : 'Aapka workflow bilkul swasth aur ready hai! Sabhi connections aur configurations sahi hain.';
+
   if (issues.length > 0) {
-    summary = `Ei-Doctor ne ${issues.length} problem(s) detect kiye hain. "Auto-Fix All" par click karke inhe turant thik karein.`;
+    summary = isEn
+      ? `Ei-Doctor detected ${issues.length} potential problem(s). Click "Auto-Fix All" to resolve them automatically.`
+      : `Ei-Doctor ne ${issues.length} problem(s) detect kiye hain. "Auto-Fix All" par click karke inhe turant thik karein.`;
   }
 
   return {
@@ -213,8 +246,10 @@ export function diagnoseWorkflow(workflow: Workflow, latestExecution?: Execution
  */
 export function autoRepairWorkflow(
   workflow: Workflow,
-  latestExecution?: Execution | null
+  latestExecution?: Execution | null,
+  lang: 'en' | 'hi' = 'en'
 ): { fixedWorkflow: Workflow; fixesApplied: string[] } {
+  const isEn = lang === 'en';
   const fixesApplied: string[] = [];
   const nodes = JSON.parse(JSON.stringify(workflow.nodes)) as WorkflowNodeData[];
   let connections = JSON.parse(JSON.stringify(workflow.connections)) as WorkflowConnection[];

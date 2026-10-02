@@ -973,8 +973,631 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               </div>
             )}
 
+            {/* CHAT NODES CONFIGURATION */}
+            {node.type === 'chat_trigger' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Welcome Message</label>
+                  <input
+                    type="text"
+                    value={config.welcomeMessage || ''}
+                    onChange={(e) => handleConfigChange('welcomeMessage', e.target.value)}
+                    placeholder="Hello! How can I assist your workflow today?"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-xs text-slate-300 font-medium">Require Chat Session ID</span>
+                  <input
+                    type="checkbox"
+                    checked={config.requireSession !== false}
+                    onChange={(e) => handleConfigChange('requireSession', e.target.checked)}
+                    className="rounded border-slate-700 text-sky-500 focus:ring-sky-500/20"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chat_message' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Response Message</label>
+                  <textarea
+                    rows={4}
+                    value={config.message || ''}
+                    onChange={(e) => handleConfigChange('message', e.target.value)}
+                    placeholder="{{$json.output || 'Thank you for reaching out!'}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Speaker Role</label>
+                  <select
+                    value={config.role || 'assistant'}
+                    onChange={(e) => handleConfigChange('role', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-sky-500 focus:outline-none"
+                  >
+                    <option value="assistant">Assistant / Bot</option>
+                    <option value="system">System Notice</option>
+                    <option value="user">User Echo</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chat_ai' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Persona & System Prompt</label>
+                  <textarea
+                    rows={3}
+                    value={config.systemPrompt || ''}
+                    onChange={(e) => handleConfigChange('systemPrompt', e.target.value)}
+                    placeholder="You are an intelligent, helpful AI workflow assistant."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Temperature</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      value={config.temperature ?? 0.3}
+                      onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Max Tokens</label>
+                    <input
+                      type="number"
+                      step="128"
+                      value={config.maxTokens || 1024}
+                      onChange={(e) => handleConfigChange('maxTokens', parseInt(e.target.value, 10))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chat_memory' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Memory Window Size (Turns)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={config.windowSize || 10}
+                    onChange={(e) => handleConfigChange('windowSize', parseInt(e.target.value, 10))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Memory Storage Key</label>
+                  <input
+                    type="text"
+                    value={config.memoryKey || 'chat_history'}
+                    onChange={(e) => handleConfigChange('memoryKey', e.target.value)}
+                    placeholder="chat_history"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chat_sentiment' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Text Field to Analyze</label>
+                  <input
+                    type="text"
+                    value={config.field || 'message'}
+                    onChange={(e) => handleConfigChange('field', e.target.value)}
+                    placeholder="message"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Urgency Threshold (0 - 1.0)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={config.sentimentThreshold ?? 0.5}
+                    onChange={(e) => handleConfigChange('sentimentThreshold', parseFloat(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chat_webhook' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Widget Endpoint Path</label>
+                  <input
+                    type="text"
+                    value={config.widgetPath || 'support-chat'}
+                    onChange={(e) => handleConfigChange('widgetPath', e.target.value)}
+                    placeholder="support-chat"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Greeting Notice</label>
+                  <input
+                    type="text"
+                    value={config.greetingText || 'Connected to live workflow assistant.'}
+                    onChange={(e) => handleConfigChange('greetingText', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* CORE NODES CONFIGURATION */}
+            {node.type === 'core_edit_fields' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-xs text-slate-300 font-medium">Keep Only Set Fields</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.keepOnlySet)}
+                    onChange={(e) => handleConfigChange('keepOnlySet', e.target.checked)}
+                    className="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field Assignments (JSON array)</label>
+                  <textarea
+                    rows={4}
+                    value={typeof config.assignments === 'string' ? config.assignments : JSON.stringify(config.assignments || [], null, 2)}
+                    onChange={(e) => {
+                      try {
+                        handleConfigChange('assignments', JSON.parse(e.target.value));
+                      } catch {
+                        handleConfigChange('assignments', e.target.value);
+                      }
+                    }}
+                    placeholder='[{"name": "status", "value": "active"}]'
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'core_wait' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Amount</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={config.amount || 2}
+                    onChange={(e) => handleConfigChange('amount', parseInt(e.target.value, 10))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-pink-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Unit</label>
+                  <select
+                    value={config.unit || 'seconds'}
+                    onChange={(e) => handleConfigChange('unit', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-pink-500 focus:outline-none"
+                  >
+                    <option value="seconds">Seconds</option>
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'core_stop_error' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Error Message</label>
+                  <input
+                    type="text"
+                    value={config.errorMessage || ''}
+                    onChange={(e) => handleConfigChange('errorMessage', e.target.value)}
+                    placeholder="Workflow halted: unauthorized action"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Status Code</label>
+                  <input
+                    type="number"
+                    value={config.statusCode || 400}
+                    onChange={(e) => handleConfigChange('statusCode', parseInt(e.target.value, 10))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'core_datetime' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                  <select
+                    value={config.operation || 'format'}
+                    onChange={(e) => handleConfigChange('operation', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="format">Format Current Date</option>
+                    <option value="add">Add Time Interval</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Target Timezone</label>
+                  <input
+                    type="text"
+                    value={config.timezone || 'UTC'}
+                    onChange={(e) => handleConfigChange('timezone', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'core_crypto' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Crypto Operation</label>
+                  <select
+                    value={config.operation || 'sha256'}
+                    onChange={(e) => handleConfigChange('operation', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-slate-400 focus:outline-none"
+                  >
+                    <option value="sha256">SHA-256 Hash</option>
+                    <option value="md5">MD5 Hash</option>
+                    <option value="base64_encode">Base64 Encode</option>
+                    <option value="base64_decode">Base64 Decode</option>
+                    <option value="uuid">Generate Random UUID</option>
+                  </select>
+                </div>
+                {config.operation !== 'uuid' && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Input Value Expression</label>
+                    <input
+                      type="text"
+                      value={config.value || '{{$json.id}}'}
+                      onChange={(e) => handleConfigChange('value', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-slate-400 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {node.type === 'core_code' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">JavaScript Code Script</label>
+                  <textarea
+                    rows={6}
+                    value={config.code || '// Process item data\nitem.processedAt = new Date().toISOString();\nreturn item;'}
+                    onChange={(e) => handleConfigChange('code', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-sky-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">Variables available: <code>item</code>, <code>$json</code>, <code>$items</code></span>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'core_variable' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Action</label>
+                  <select
+                    value={config.action || 'set'}
+                    onChange={(e) => handleConfigChange('action', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="set">Set Variable</option>
+                    <option value="increment">Increment Counter</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Variable Name</label>
+                  <input
+                    type="text"
+                    value={config.variableName || 'counter'}
+                    onChange={(e) => handleConfigChange('variableName', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Value</label>
+                  <input
+                    type="text"
+                    value={config.value || '1'}
+                    onChange={(e) => handleConfigChange('value', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* FLOW NODES CONFIGURATION */}
+            {node.type === 'flow_router' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Default Fallback Route</label>
+                  <select
+                    value={config.activeRoute || 'out_route_1'}
+                    onChange={(e) => handleConfigChange('activeRoute', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="out_route_1">Route 1</option>
+                    <option value="out_route_2">Route 2</option>
+                    <option value="out_route_3">Route 3</option>
+                    <option value="out_fallback">Fallback</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'flow_split_batches' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Batch Size</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value={config.batchSize || 10}
+                    onChange={(e) => handleConfigChange('batchSize', parseInt(e.target.value, 10))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'flow_filter' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field to Filter</label>
+                  <input
+                    type="text"
+                    value={config.field || 'status'}
+                    onChange={(e) => handleConfigChange('field', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operator</label>
+                    <select
+                      value={config.operator || '=='}
+                      onChange={(e) => handleConfigChange('operator', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
+                    >
+                      <option value="==">Equals (==)</option>
+                      <option value="!=">Not Equals (!=)</option>
+                      <option value="contains">Contains</option>
+                      <option value="not_empty">Is Not Empty</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Match Value</label>
+                    <input
+                      type="text"
+                      value={config.value || 'active'}
+                      onChange={(e) => handleConfigChange('value', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'flow_merge' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Merge Mode</label>
+                  <select
+                    value={config.mode || 'combine'}
+                    onChange={(e) => handleConfigChange('mode', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="combine">Combine Objects ({'{...a, ...b}'})</option>
+                    <option value="append">Append into Array</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* CHAIN NODES CONFIGURATION */}
+            {node.type === 'chain_llm' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Prompt Template</label>
+                  <textarea
+                    rows={5}
+                    value={config.promptTemplate || ''}
+                    onChange={(e) => handleConfigChange('promptTemplate', e.target.value)}
+                    placeholder="Summarize the input: {{$json}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chain_qa_retrieval' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Question / Query</label>
+                  <input
+                    type="text"
+                    value={config.query || '{{$json.question}}'}
+                    onChange={(e) => handleConfigChange('query', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chain_summarize' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Summary Format</label>
+                  <select
+                    value={config.format || 'bullet_points'}
+                    onChange={(e) => handleConfigChange('format', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="bullet_points">Bullet Points</option>
+                    <option value="paragraph">Executive Paragraph</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chain_router' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Classification Prompt</label>
+                  <input
+                    type="text"
+                    value={config.classificationPrompt || 'Classify the inquiry into: technical, sales, or general.'}
+                    onChange={(e) => handleConfigChange('classificationPrompt', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-fuchsia-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'chain_transform' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Target JSON Schema</label>
+                  <textarea
+                    rows={5}
+                    value={config.targetSchema || '{\n  "name": "string",\n  "status": "string"\n}'}
+                    onChange={(e) => handleConfigChange('targetSchema', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* CONDITION NODES CONFIGURATION */}
+            {node.type === 'condition_if' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field Path</label>
+                  <input
+                    type="text"
+                    value={config.fieldPath || config.field || 'status'}
+                    onChange={(e) => handleConfigChange('fieldPath', e.target.value)}
+                    placeholder="status"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Comparison Operator</label>
+                    <select
+                      value={config.operator || '=='}
+                      onChange={(e) => handleConfigChange('operator', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-emerald-500 focus:outline-none"
+                    >
+                      <option value="==">Equals (==)</option>
+                      <option value="!=">Not Equals (!=)</option>
+                      <option value=">">Greater Than (&gt;)</option>
+                      <option value="<">Less Than (&lt;)</option>
+                      <option value=">=">Greater or Equal (&gt;=)</option>
+                      <option value="<=">Less or Equal (&lt;=)</option>
+                      <option value="contains">Contains Substring</option>
+                      <option value="is_empty">Is Empty</option>
+                      <option value="not_empty">Is Not Empty</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Expected Value</label>
+                    <input
+                      type="text"
+                      value={config.value || 'active'}
+                      onChange={(e) => handleConfigChange('value', e.target.value)}
+                      placeholder="active"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {node.type === 'condition_switch' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field to Inspect</label>
+                  <input
+                    type="text"
+                    value={config.field || 'category'}
+                    onChange={(e) => handleConfigChange('field', e.target.value)}
+                    placeholder="category"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'condition_validator' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Required Fields (Comma Separated)</label>
+                  <input
+                    type="text"
+                    value={Array.isArray(config.requiredFields) ? config.requiredFields.join(', ') : (config.requiredFields || 'email, name')}
+                    onChange={(e) => {
+                      const list = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                      handleConfigChange('requiredFields', list);
+                    }}
+                    placeholder="email, name, id"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {node.type === 'condition_rate_limit' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Max Requests</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={config.maxRequests || 60}
+                      onChange={(e) => handleConfigChange('maxRequests', parseInt(e.target.value, 10))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-rose-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Window (Seconds)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={config.windowSeconds || 60}
+                      onChange={(e) => handleConfigChange('windowSeconds', parseInt(e.target.value, 10))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-rose-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 11. Generic Fallback for other nodes */}
-            {!['http_request', 'trigger_webhook', 'trigger_schedule', 'ai_agent', 'logic_if', 'logic_switch', 'logic_filter', 'data_merge', 'data_loop', 'respond_to_webhook', 'data_aggregate', 'data_sort_limit', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
+            {!['http_request', 'trigger_webhook', 'trigger_schedule', 'ai_agent', 'logic_if', 'logic_switch', 'logic_filter', 'data_merge', 'data_loop', 'respond_to_webhook', 'data_aggregate', 'data_sort_limit', 'data_code', 'comm_email', 'ai_model_gemini', 'ai_model_openai', 'ai_model_claude', 'ai_memory_window', 'ai_memory_redis', 'app_slack', 'app_google_sheets', 'chat_trigger', 'chat_message', 'chat_ai', 'chat_memory', 'chat_sentiment', 'chat_webhook', 'core_edit_fields', 'core_wait', 'core_stop_error', 'core_datetime', 'core_crypto', 'core_code', 'core_variable', 'flow_router', 'flow_split_batches', 'flow_filter', 'flow_merge', 'chain_llm', 'chain_qa_retrieval', 'chain_summarize', 'chain_router', 'chain_transform', 'condition_if', 'condition_switch', 'condition_validator', 'condition_rate_limit'].includes(node.type) && !node.type.startsWith('ai_tool_') && (
               <div className="space-y-3">
                 <p className="text-slate-400 text-xs">Configure properties for {node.name}:</p>
                 {Object.keys(config).length === 0 ? (

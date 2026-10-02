@@ -333,6 +333,21 @@ router.post('/workflows/:id/run', async (req: Request, res: Response) => {
   }
 });
 
+// Test single node directly in real execution
+router.post('/nodes/test', async (req: Request, res: Response) => {
+  const { node, sampleInput, workflow } = req.body;
+  if (!node || !node.type) {
+    return res.status(400).json({ error: 'Node configuration is required.' });
+  }
+
+  try {
+    const result = await WorkflowEngine.executeSingleNode(node, sampleInput || {}, workflow);
+    return res.json({ success: true, result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Node execution failed.' });
+  }
+});
+
 // --- EXECUTIONS ---
 router.get('/executions', (req: Request, res: Response) => {
   const { workflowId } = req.query;
@@ -587,22 +602,24 @@ router.get('/stats', (req: Request, res: Response) => {
 
 // --- EI-DOCTOR AI CHAT, TROUBLESHOOTER & AUTONOMOUS WORKFLOW ARCHITECT ---
 router.post('/buddy/chat', async (req: Request, res: Response) => {
-  const { message, workflow, latestExecution } = req.body;
+  const { message, workflow, latestExecution, language } = req.body;
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required.' });
   }
 
   try {
-    const aiResult = await handleEiDoctorChat(message, workflow, latestExecution);
+    const aiResult = await handleEiDoctorChat(message, workflow, latestExecution, language);
     return res.json(aiResult);
   } catch (err: any) {
     console.error('[Ei-Doctor Error]', err);
     return res.json({
       action: 'chat',
-      reply: 'An error occurred while processing your request. Please try again.',
+      reply: language === 'hi'
+        ? 'Aapki request process karne me takleef hui. Kripya dobara koshish karein.'
+        : 'An error occurred while processing your request. Please try again.',
       source: 'local_architect',
-      language: 'en',
+      language: language === 'hi' ? 'hi' : 'en',
     });
   }
 });

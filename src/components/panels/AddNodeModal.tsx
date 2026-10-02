@@ -245,7 +245,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 <span>AI Agent & Models</span>
               </div>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800/50 shrink-0">
-                4
+                {NODE_LIBRARY.filter((n) => n.category === 'AI').length}
               </span>
             </button>
 
@@ -263,7 +263,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 <span>AI Agent Tools</span>
               </div>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50 shrink-0">
-                6
+                {NODE_LIBRARY.filter((n) => n.category === 'AI Tools').length}
               </span>
             </button>
 
@@ -289,18 +289,37 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
             {CATEGORIES.filter((c) => c !== 'All Applications' && c !== 'Applications' && c !== 'AI' && c !== 'AI Tools').map((cat) => {
               const count = NODE_LIBRARY.filter((n) => n.category === cat).length;
+              const isSelected = selectedCategory === cat;
               return (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
                   className={`flex items-center justify-between gap-2 px-3 py-1.5 sm:py-2 rounded-xl text-xs font-medium transition cursor-pointer whitespace-nowrap shrink-0 ${
-                    selectedCategory === cat
+                    isSelected
                       ? 'bg-cyan-500/15 text-cyan-300 font-semibold border border-cyan-500/30'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                   }`}
                 >
-                  <span>{cat}</span>
-                  <span className="text-[10px] font-mono text-slate-500 shrink-0">{count}</span>
+                  <div className="flex items-center gap-2">
+                    {cat === 'Chat' && <Icons.MessageSquare className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
+                    {cat === 'Core' && <Icons.Cpu className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                    {cat === 'Flow' && <Icons.Workflow className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                    {cat === 'Chain' && <Icons.Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                    {cat === 'Condition' && <Icons.GitBranch className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                    {cat === 'Triggers' && <Icons.Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                    {cat === 'Communication' && <Icons.Share2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
+                    {cat === 'Database' && <Icons.Database className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                    {cat === 'HTTP' && <Icons.Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                    {cat === 'Logic' && <Icons.GitBranch className="w-3.5 h-3.5 text-orange-400 shrink-0" />}
+                    {cat === 'Data' && <Icons.Layers className="w-3.5 h-3.5 text-teal-400 shrink-0" />}
+                    {cat === 'Files' && <Icons.FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                    {cat === 'Developer' && <Icons.Terminal className="w-3.5 h-3.5 text-pink-400 shrink-0" />}
+                    {cat === 'Utilities' && <Icons.Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                    <span>{cat}</span>
+                  </div>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-cyan-950 text-cyan-300' : 'bg-slate-900 text-slate-500'} shrink-0`}>
+                    {count}
+                  </span>
                 </button>
               );
             })}

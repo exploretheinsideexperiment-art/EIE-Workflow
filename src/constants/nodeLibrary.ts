@@ -3,6 +3,11 @@ import { NodeDefinition, NodeCategory } from '../types/workflow';
 export const CATEGORIES: NodeCategory[] = [
   'All Applications',
   'Triggers',
+  'Chat',
+  'Core',
+  'Flow',
+  'Chain',
+  'Condition',
   'AI',
   'AI Tools',
   'Communication',
@@ -1457,6 +1462,559 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       endpoint: 'https://api.github.com/graphql',
       query: 'query { viewer { login } }'
+    }
+  },
+
+  // ==========================================
+  // 10. CHAT NODES
+  // ==========================================
+  {
+    type: 'chat_trigger',
+    name: 'Chat Trigger',
+    description: 'Listens for incoming chat messages from live webchat, bot widget, or client API.',
+    category: 'Chat',
+    icon: 'MessageSquare',
+    accentColor: '#0284c7',
+    inputs: [],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'User Chat Message' }],
+    defaultConfig: {
+      welcomeMessage: 'Hello! How can I assist your workflow today?',
+      requireSession: true,
+      streamingEnabled: true
+    }
+  },
+  {
+    type: 'chat_message',
+    name: 'Send Chat Response',
+    description: 'Sends a formatted response back to the active user chat session with markdown & action buttons.',
+    category: 'Chat',
+    icon: 'Send',
+    accentColor: '#0ea5e9',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Message Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chat Result' }],
+    defaultConfig: {
+      message: '{{$json.output || $json.reply || "Thank you for reaching out!"}}',
+      role: 'assistant',
+      showTypingIndicator: true
+    }
+  },
+  {
+    type: 'chat_ai',
+    name: 'Interactive AI Chat',
+    description: 'Conversational AI Chat node with multi-turn memory, persona prompt, and real-time generation.',
+    category: 'Chat',
+    icon: 'Bot',
+    accentColor: '#6366f1',
+    inputs: [
+      { id: 'in_main', name: 'main', type: 'main', label: 'User Query' },
+      { id: 'in_model', name: 'model', type: 'model', label: 'Chat Model' },
+      { id: 'in_memory', name: 'memory', type: 'memory', label: 'Memory' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chat Reply' }],
+    defaultConfig: {
+      systemPrompt: 'You are an intelligent, helpful AI workflow assistant. Answer questions accurately and concisely.',
+      temperature: 0.3,
+      maxTokens: 1024
+    }
+  },
+  {
+    type: 'chat_memory',
+    name: 'Chat Window Memory',
+    description: 'Maintains conversational sliding window memory across chat interactions, summarizing or retaining past turns.',
+    category: 'Chat',
+    icon: 'Brain',
+    accentColor: '#8b5cf6',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'New Message' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Context & History' }],
+    defaultConfig: {
+      windowSize: 10,
+      memoryKey: 'chat_history',
+      autoSummarize: true
+    }
+  },
+  {
+    type: 'chat_sentiment',
+    name: 'Chat Sentiment & Intent',
+    description: 'Analyzes user chat sentiment (positive/neutral/negative/urgent) and classifies customer intent for automated routing.',
+    category: 'Chat',
+    icon: 'Smile',
+    accentColor: '#06b6d4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'User Message' }],
+    outputs: [
+      { id: 'out_main', name: 'main', type: 'main', label: 'Analysis' },
+      { id: 'out_urgent', name: 'urgent', type: 'branch', label: 'High Urgency / Escalation' }
+    ],
+    defaultConfig: {
+      field: 'message',
+      detectUrgency: true,
+      sentimentThreshold: 0.5
+    }
+  },
+  {
+    type: 'chat_webhook',
+    name: 'Live Webchat Receiver',
+    description: 'Direct webhook endpoint for embeds, React chatbots, WhatsApp webhooks, and live customer support widgets.',
+    category: 'Chat',
+    icon: 'MessageCircle',
+    accentColor: '#10b981',
+    inputs: [],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Incoming Chat' }],
+    defaultConfig: {
+      widgetPath: 'support-chat',
+      autoAcknowledge: true,
+      greetingText: 'Connected to live workflow assistant.'
+    }
+  },
+
+  // ==========================================
+  // 11. CORE NODES (n8n Standard Core Suite)
+  // ==========================================
+  {
+    type: 'core_edit_fields',
+    name: 'Edit Fields (Set)',
+    description: 'Set, update, rename, or compute field values on items (the n8n Edit Fields node).',
+    category: 'Core',
+    icon: 'Edit3',
+    accentColor: '#f59e0b',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Set Output' }],
+    defaultConfig: {
+      mode: 'set',
+      keepOnlySet: false,
+      assignments: [
+        { name: 'processedAt', value: '{{$now}}' },
+        { name: 'status', value: 'completed' }
+      ]
+    }
+  },
+  {
+    type: 'core_wait',
+    name: 'Wait / Delay',
+    description: 'Pauses workflow execution for a given time duration (seconds, minutes, hours) or until a specific date.',
+    category: 'Core',
+    icon: 'Clock',
+    accentColor: '#ec4899',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Resume' }],
+    defaultConfig: {
+      amount: 2,
+      unit: 'seconds'
+    }
+  },
+  {
+    type: 'core_stop_error',
+    name: 'Stop and Error',
+    description: 'Halts the workflow execution intentionally with an explicit error message, status code, and reason.',
+    category: 'Core',
+    icon: 'AlertOctagon',
+    accentColor: '#ef4444',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
+    outputs: [{ id: 'out_error', name: 'error', type: 'error', label: 'Error' }],
+    defaultConfig: {
+      errorMessage: 'Workflow halted: Validation failed or unauthorized action detected.',
+      statusCode: 400
+    }
+  },
+  {
+    type: 'core_execute_workflow',
+    name: 'Execute Sub-Workflow',
+    description: 'Executes another workflow as a sub-routine, passing arguments and receiving outputs.',
+    category: 'Core',
+    icon: 'Workflow',
+    accentColor: '#8b5cf6',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Sub-Workflow Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sub-Workflow Output' }],
+    defaultConfig: {
+      workflowName: 'Sub Automation Routine',
+      passThrough: true
+    }
+  },
+  {
+    type: 'core_datetime',
+    name: 'Date & Time',
+    description: 'Format timestamps, add or subtract time intervals, calculate duration differences, and convert timezones.',
+    category: 'Core',
+    icon: 'Calendar',
+    accentColor: '#10b981',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Formatted Date' }],
+    defaultConfig: {
+      operation: 'format',
+      format: 'YYYY-MM-DD HH:mm:ss',
+      timezone: 'UTC',
+      addAmount: 0,
+      addUnit: 'days'
+    }
+  },
+  {
+    type: 'core_crypto',
+    name: 'Crypto & Hash',
+    description: 'Generate MD5, SHA-256, HMAC cryptographic hashes, random UUIDs, or Base64 encode/decode.',
+    category: 'Core',
+    icon: 'Lock',
+    accentColor: '#64748b',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Hashed / Encoded' }],
+    defaultConfig: {
+      operation: 'sha256',
+      value: '{{$json.id || $json.email || "eie_secret"}}',
+      encoding: 'hex'
+    }
+  },
+  {
+    type: 'core_code',
+    name: 'Code (JS / TS)',
+    description: 'Execute custom JavaScript or TypeScript code with full access to $json, $items, and external utilities.',
+    category: 'Core',
+    icon: 'Terminal',
+    accentColor: '#38bdf8',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Items' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Code Result' }],
+    defaultConfig: {
+      code: '// Process item data\nitem.processedAt = new Date().toISOString();\nitem.status = "SUCCESS";\nreturn item;'
+    }
+  },
+  {
+    type: 'core_variable',
+    name: 'Workflow State Variable',
+    description: 'Store, read, increment, or persist global state variables across workflow steps and loops.',
+    category: 'Core',
+    icon: 'Variable',
+    accentColor: '#14b8a6',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Variable Output' }],
+    defaultConfig: {
+      action: 'set',
+      variableName: 'counter',
+      value: '1'
+    }
+  },
+  {
+    type: 'core_json_parse',
+    name: 'JSON Parse & Serialize',
+    description: 'Parse JSON strings into structured objects or serialize complex objects into formatted JSON strings.',
+    category: 'Core',
+    icon: 'FileJson',
+    accentColor: '#a78bfa',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Data Input' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Processed JSON' }],
+    defaultConfig: {
+      operation: 'parse',
+      field: 'raw_payload'
+    }
+  },
+
+  // ==========================================
+  // 12. FLOW NODES (Flow Control & Routing)
+  // ==========================================
+  {
+    type: 'flow_router',
+    name: 'Flow Router',
+    description: 'Routes items dynamically across multiple custom named branch channels based on expressions.',
+    category: 'Flow',
+    icon: 'Network',
+    accentColor: '#3b82f6',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Items' }],
+    outputs: [
+      { id: 'out_route_1', name: 'route_1', type: 'branch', label: 'Route 1' },
+      { id: 'out_route_2', name: 'route_2', type: 'branch', label: 'Route 2' },
+      { id: 'out_route_3', name: 'route_3', type: 'branch', label: 'Route 3' },
+      { id: 'out_fallback', name: 'fallback', type: 'branch', label: 'Fallback' }
+    ],
+    defaultConfig: {
+      activeRoute: 'out_route_1',
+      rules: [
+        { routeId: 'out_route_1', field: 'type', op: '==', value: 'priority' },
+        { routeId: 'out_route_2', field: 'type', op: '==', value: 'standard' },
+        { routeId: 'out_route_3', field: 'type', op: '==', value: 'archive' }
+      ]
+    }
+  },
+  {
+    type: 'flow_split_batches',
+    name: 'Split In Batches (Loop)',
+    description: 'Splits arrays or item collections into batches of N items and loops through them sequentially.',
+    category: 'Flow',
+    icon: 'Layers',
+    accentColor: '#f97316',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Array' }],
+    outputs: [
+      { id: 'out_loop', name: 'loop', type: 'branch', label: 'Loop (Batch)' },
+      { id: 'out_done', name: 'done', type: 'main', label: 'Done (All Processed)' }
+    ],
+    defaultConfig: {
+      batchSize: 10,
+      reset: false
+    }
+  },
+  {
+    type: 'flow_filter',
+    name: 'Filter Items',
+    description: 'Filters lists of items based on conditions, outputting kept items on main port and discarded on branch.',
+    category: 'Flow',
+    icon: 'Filter',
+    accentColor: '#06b6d4',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Items' }],
+    outputs: [
+      { id: 'out_kept', name: 'kept', type: 'main', label: 'Kept (Passed)' },
+      { id: 'out_discarded', name: 'discarded', type: 'branch', label: 'Discarded' }
+    ],
+    defaultConfig: {
+      field: 'status',
+      operator: '==',
+      value: 'active'
+    }
+  },
+  {
+    type: 'flow_loop',
+    name: 'Loop Over Items',
+    description: 'Iterates through an array of items one by one, giving access to the current item and loop index.',
+    category: 'Flow',
+    icon: 'Repeat',
+    accentColor: '#a855f7',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Items' }],
+    outputs: [
+      { id: 'out_item', name: 'item', type: 'branch', label: 'Current Item' },
+      { id: 'out_done', name: 'done', type: 'main', label: 'Loop Done' }
+    ],
+    defaultConfig: {
+      maxIterations: 100
+    }
+  },
+  {
+    type: 'flow_merge',
+    name: 'Merge Flow Branches',
+    description: 'Merges outputs from parallel workflow branches together by key, array append, or wait-for-both.',
+    category: 'Flow',
+    icon: 'GitMerge',
+    accentColor: '#6366f1',
+    inputs: [
+      { id: 'in_branch_1', name: 'branch1', type: 'main', label: 'Branch 1' },
+      { id: 'in_branch_2', name: 'branch2', type: 'main', label: 'Branch 2' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Merged Output' }],
+    defaultConfig: {
+      mode: 'combine',
+      joinKey: 'id'
+    }
+  },
+  {
+    type: 'flow_parallel',
+    name: 'Parallel Fork',
+    description: 'Forks single incoming item into multiple parallel asynchronous execution tracks.',
+    category: 'Flow',
+    icon: 'Split',
+    accentColor: '#ec4899',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Source Item' }],
+    outputs: [
+      { id: 'out_track_a', name: 'trackA', type: 'branch', label: 'Parallel Track A' },
+      { id: 'out_track_b', name: 'trackB', type: 'branch', label: 'Parallel Track B' }
+    ],
+    defaultConfig: {
+      concurrency: 5
+    }
+  },
+
+  // ==========================================
+  // 13. CHAIN NODES (LangChain / LLM Chains)
+  // ==========================================
+  {
+    type: 'chain_llm',
+    name: 'Basic LLM Chain',
+    description: 'Combines a prompt template with an attached AI Chat Model to generate structured outputs.',
+    category: 'Chain',
+    icon: 'Sparkles',
+    accentColor: '#8b5cf6',
+    inputs: [
+      { id: 'in_main', name: 'main', type: 'main', label: 'Input Variables' },
+      { id: 'in_model', name: 'model', type: 'model', label: 'Chat Model' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chain Output' }],
+    defaultConfig: {
+      promptTemplate: 'You are a senior data architect. Summarize the following payload into key actionable insights:\n\n{{$json}}'
+    }
+  },
+  {
+    type: 'chain_qa_retrieval',
+    name: 'QA Retrieval Chain',
+    description: 'Grounded question answering that queries vector search or knowledge docs and formulates answers with citations.',
+    category: 'Chain',
+    icon: 'BookOpen',
+    accentColor: '#7c3aed',
+    inputs: [
+      { id: 'in_main', name: 'main', type: 'main', label: 'Question' },
+      { id: 'in_model', name: 'model', type: 'model', label: 'Model' },
+      { id: 'in_tools', name: 'tools', type: 'tool', label: 'Vector Store / Docs' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Grounded Answer' }],
+    defaultConfig: {
+      query: '{{$json.query || $json.question || "How does the system work?"}}',
+      returnSourceDocuments: true
+    }
+  },
+  {
+    type: 'chain_summarize',
+    name: 'Summarization Chain',
+    description: 'Compresses long text documents, chat logs, transcripts, or tables into structured bulleted summaries.',
+    category: 'Chain',
+    icon: 'FileText',
+    accentColor: '#9333ea',
+    inputs: [
+      { id: 'in_main', name: 'main', type: 'main', label: 'Content' },
+      { id: 'in_model', name: 'model', type: 'model', label: 'Model' }
+    ],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Summary Output' }],
+    defaultConfig: {
+      format: 'bullet_points',
+      maxBullets: 5
+    }
+  },
+  {
+    type: 'chain_sequential',
+    name: 'Sequential Chain',
+    description: 'Executes a multi-stage LLM pipeline where the output of one step feeds into the prompt of the next step.',
+    category: 'Chain',
+    icon: 'GitMerge',
+    accentColor: '#c084fc',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Initial Payload' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Final Result' }],
+    defaultConfig: {
+      stages: [
+        { name: 'Stage 1: Extract Entities', prompt: 'Extract entities from: {{$json}}' },
+        { name: 'Stage 2: Generate Report', prompt: 'Create clean report based on: {{$json}}' }
+      ]
+    }
+  },
+  {
+    type: 'chain_router',
+    name: 'LLM Router Chain',
+    description: 'Dynamically routes user input to specialized sub-chains or prompts by classifying query intent with an LLM.',
+    category: 'Chain',
+    icon: 'Compass',
+    accentColor: '#d946ef',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'User Query' }],
+    outputs: [
+      { id: 'out_chain_a', name: 'chainA', type: 'branch', label: 'Technical Support' },
+      { id: 'out_chain_b', name: 'chainB', type: 'branch', label: 'Sales / Pricing' },
+      { id: 'out_fallback', name: 'fallback', type: 'branch', label: 'General / Fallback' }
+    ],
+    defaultConfig: {
+      classificationPrompt: 'Classify the inquiry into: technical, sales, or general.',
+      routes: ['technical', 'sales', 'general']
+    }
+  },
+  {
+    type: 'chain_transform',
+    name: 'Schema Transform Chain',
+    description: 'Extracts unstructured text or messy JSON and coerces it into a strictly typed, clean JSON target schema.',
+    category: 'Chain',
+    icon: 'Binary',
+    accentColor: '#818cf8',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Unstructured Data' }],
+    outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Clean JSON' }],
+    defaultConfig: {
+      targetSchema: '{\n  "name": "string",\n  "email": "string",\n  "sentiment": "string"\n}'
+    }
+  },
+
+  // ==========================================
+  // 14. CONDITION NODES (Logic & Rule Evaluation)
+  // ==========================================
+  {
+    type: 'condition_if',
+    name: 'Condition (IF / ELSE)',
+    description: 'Evaluate multi-rule boolean conditions (equals, contains, regex, gt, lt, is empty) with AND/OR logic.',
+    category: 'Condition',
+    icon: 'GitBranch',
+    accentColor: '#10b981',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Data' }],
+    outputs: [
+      { id: 'out_true', name: 'true', type: 'true', label: 'True Branch' },
+      { id: 'out_false', name: 'false', type: 'false', label: 'False Branch' }
+    ],
+    defaultConfig: {
+      operator: '==',
+      fieldPath: 'status',
+      value: 'active',
+      combine: 'AND'
+    }
+  },
+  {
+    type: 'condition_switch',
+    name: 'Multi-Condition Switch',
+    description: 'Routes execution through multiple matching rule cases with dedicated case ports and a fallback port.',
+    category: 'Condition',
+    icon: 'Sliders',
+    accentColor: '#f59e0b',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Data' }],
+    outputs: [
+      { id: 'out_case_0', name: 'case_0', type: 'branch', label: 'Case 1' },
+      { id: 'out_case_1', name: 'case_1', type: 'branch', label: 'Case 2' },
+      { id: 'out_case_2', name: 'case_2', type: 'branch', label: 'Case 3' },
+      { id: 'out_fallback', name: 'fallback', type: 'branch', label: 'Fallback' }
+    ],
+    defaultConfig: {
+      field: 'category',
+      cases: [
+        { value: 'support', port: 'out_case_0' },
+        { value: 'sales', port: 'out_case_1' },
+        { value: 'billing', port: 'out_case_2' }
+      ]
+    }
+  },
+  {
+    type: 'condition_compare',
+    name: 'Compare Datasets',
+    description: 'Compares two datasets or payloads side-by-side to detect added, removed, or modified records.',
+    category: 'Condition',
+    icon: 'Columns',
+    accentColor: '#6366f1',
+    inputs: [
+      { id: 'in_a', name: 'datasetA', type: 'main', label: 'Dataset A' },
+      { id: 'in_b', name: 'datasetB', type: 'main', label: 'Dataset B' }
+    ],
+    outputs: [
+      { id: 'out_same', name: 'same', type: 'main', label: 'Unchanged' },
+      { id: 'out_different', name: 'different', type: 'branch', label: 'Changed / New' }
+    ],
+    defaultConfig: {
+      matchKey: 'id',
+      compareMode: 'deep'
+    }
+  },
+  {
+    type: 'condition_validator',
+    name: 'Data Schema Validator',
+    description: 'Validates input payload against required fields and regex formats. Branches to Valid or Invalid ports.',
+    category: 'Condition',
+    icon: 'CheckSquare',
+    accentColor: '#059669',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Payload' }],
+    outputs: [
+      { id: 'out_valid', name: 'valid', type: 'main', label: 'Valid Payload' },
+      { id: 'out_invalid', name: 'invalid', type: 'branch', label: 'Invalid / Errors' }
+    ],
+    defaultConfig: {
+      requiredFields: ['email', 'name'],
+      allowEmptyStrings: false
+    }
+  },
+  {
+    type: 'condition_rate_limit',
+    name: 'Rate Limiter & Throttle',
+    description: 'Throttles incoming execution rate per client or IP address, routing allowed vs rate-limited events.',
+    category: 'Condition',
+    icon: 'Gauge',
+    accentColor: '#e11d48',
+    inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Request' }],
+    outputs: [
+      { id: 'out_allowed', name: 'allowed', type: 'main', label: 'Within Limit' },
+      { id: 'out_blocked', name: 'blocked', type: 'branch', label: 'Throttled (429)' }
+    ],
+    defaultConfig: {
+      maxRequests: 60,
+      windowSeconds: 60,
+      keyField: 'ip'
     }
   }
 ];

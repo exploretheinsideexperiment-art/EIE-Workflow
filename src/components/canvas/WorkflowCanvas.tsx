@@ -1011,11 +1011,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  // --- WORKFLOW EXECUTION & SAVING ---
-  const handleTestWorkflow = async () => {
-    setIsExecuting(true);
-    setExecutionDrawerOpen(true);
-
   // --- REAL WORKFLOW EXECUTION RUNNER ---
   const handleTestWorkflow = async () => {
     setIsExecuting(true);
@@ -1313,10 +1308,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       setIsExecuting(false);
     }
   };
-  };
 
   const handleTestSingleNode = async (node: WorkflowNodeData) => {
     try {
+      // First try dedicated single-node test endpoint with real engine execution
+      const directRes = await fetch('/api/nodes/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          node,
+          sampleInput: node.pinnedData || node.config?.samplePayload || {},
+          workflow,
+        }),
+      });
+      if (directRes.ok) {
+        const directData = await directRes.json();
+        if (directData.success && directData.result) {
+          return directData.result.output || directData.result;
+        }
+      }
+
+      // Fallback to workflow run
       const res = await fetch(`/api/workflows/${workflow.id}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
