@@ -305,3 +305,64 @@ export function validateConnection(
 
   return { valid: true };
 }
+
+/**
+ * Automatically finds the best compatible pair of ports between two nodes.
+ * Used for effortless click-to-connect.
+ */
+export function findBestCompatiblePorts(
+  fromNode: WorkflowNodeData,
+  toNode: WorkflowNodeData,
+  preferredFromPortId?: string,
+  preferredToPortId?: string
+): { fromPort: NodePort; toPort: NodePort } | null {
+  if (fromNode.id === toNode.id) return null;
+
+  const fromPorts = fromNode.outputs || [];
+  const toPorts = toNode.inputs || [];
+
+  if (fromPorts.length === 0 || toPorts.length === 0) return null;
+
+  // 1. If preferred fromPort provided
+  if (preferredFromPortId) {
+    const fPort = fromPorts.find((p) => p.id === preferredFromPortId);
+    if (fPort) {
+      if (preferredToPortId) {
+        const tPort = toPorts.find((p) => p.id === preferredToPortId);
+        if (tPort && isPortCompatible(fPort.type, tPort.type)) {
+          return { fromPort: fPort, toPort: tPort };
+        }
+      }
+      const match = toPorts.find((t) => isPortCompatible(fPort.type, t.type));
+      if (match) return { fromPort: fPort, toPort: match };
+    }
+  }
+
+  // 2. If preferred toPort provided
+  if (preferredToPortId) {
+    const tPort = toPorts.find((p) => p.id === preferredToPortId);
+    if (tPort) {
+      const match = fromPorts.find((f) => isPortCompatible(f.type, tPort.type));
+      if (match) return { fromPort: match, toPort: tPort };
+    }
+  }
+
+  // 3. Try main -> main first (most common data flow)
+  const mainOut = fromPorts.find((p) => p.id === 'out_main' || p.type === 'main');
+  const mainIn = toPorts.find((p) => p.id === 'in_main' || p.type === 'main');
+  if (mainOut && mainIn && isPortCompatible(mainOut.type, mainIn.type)) {
+    return { fromPort: mainOut, toPort: mainIn };
+  }
+
+  // 4. Try any compatible pair
+  for (const f of fromPorts) {
+    for (const t of toPorts) {
+      if (isPortCompatible(f.type, t.type)) {
+        return { fromPort: f, toPort: t };
+      }
+    }
+  }
+
+  return null;
+}
+

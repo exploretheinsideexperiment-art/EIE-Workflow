@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles, Stethoscope, MessageSquare } from 'lucide-react';
+import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles, Stethoscope, MessageSquare, Link2, CheckCircle2 } from 'lucide-react';
 import {
   Workflow,
   WorkflowNodeData,
@@ -26,7 +26,8 @@ import {
   validateConnection,
   getPortColorDef,
   getPortTypeFromNode,
-  isPortCompatible
+  isPortCompatible,
+  findBestCompatiblePorts
 } from '../../utils/portValidation';
 
 interface WorkflowCanvasProps {
@@ -102,14 +103,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const initialDragPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
 
-  // Connection Dragging State
+  // Connection Dragging & Click-to-Connect State
   const [connectingState, setConnectingState] = useState<{
     fromNodeId: string;
     fromPortId: string;
     portType: string;
     startPos: { x: number; y: number };
     currentPos: { x: number; y: number };
+    isClickMode?: boolean;
+    dragDist?: number;
   } | null>(null);
+  const [connectionSuccessToast, setConnectionSuccessToast] = useState<string | null>(null);
 
   // Undo / Redo History
   const [history, setHistory] = useState<Workflow[]>([initialWorkflow]);
@@ -192,6 +196,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Spacebar pan mode detection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConnectingState(null);
+        setPendingSourcePort(null);
+      }
       if (e.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
         setIsSpacePressed(true);
       }
@@ -220,6 +228,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           setSelectedNodeIds([]);
           setSelectedConnectionId(null);
           setPendingSourcePort(null);
+          setConnectingState(null);
         }
       }
     }
@@ -273,19 +282,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         return;
       }
 
-      // 3. Port Wire Dragging
+      // 3. Port Wire Dragging & Cursor Following (Click-to-Connect)
       if (connectingState) {
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (!containerRect) return;
+
+        const mouseWorldX = (e.clientX - containerRect.left - viewport.x) / viewport.zoom;
+        const mouseWorldY = (e.clientY - containerRect.top - viewport.y) / viewport.zoom;
+        const dx = mouseWorldX - connectingState.startPos.x;
+        const dy = mouseWorldY - connectingState.startPos.y;
+        const dist = Math.hypot(dx, dy);
 
         setConnectingState((prev) =>
           prev
             ? {
                 ...prev,
                 currentPos: {
-                  x: (e.clientX - containerRect.left - viewport.x) / viewport.zoom,
-                  y: (e.clientY - containerRect.top - viewport.y) / viewport.zoom,
+                  x: mouseWorldX,
+                  y: mouseWorldY,
                 },
+                dragDist: (prev.dragDist || 0) + dist,
               }
             : null
         );
@@ -312,8 +328,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         setDraggingNodeId(null);
         pushHistory(workflow);
       }
-      // If connectingState and released on empty canvas, open Add Node modal right at drop point!
+      // If connectingState:
       if (connectingState) {
+        // 1. Check if released over ANY target node card!
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const nodeCard = el?.closest('[id^="node-"]');
+        if (nodeCard) {
+          const targetNodeId = nodeCard.id.replace('node-', '');
+          if (targetNodeId && targetNodeId !== connectingState.fromNodeId) {
+            handleConnectToNode(targetNodeId);
+            return;
+          }
+        }
+
+        // 2. If it was click mode, keep it active in Click-to-Connect mode!
+        if (connectingState.isClickMode) {
+          return;
+        }
+
+        // 3. If mouse barely moved (< 20px), treat it as a click and stay in Click-to-Connect mode!
+        if (!connectingState.dragDist || connectingState.dragDist < 20) {
+          setConnectingState((prev) => (prev ? { ...prev, isClickMode: true } : null));
+          return;
+        }
+
+        // 4. If it was a real drag-and-drop on empty canvas, open Add Node modal right at drop point!
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (containerRect) {
           const dropWorldX = snapVal((e.clientX - containerRect.left - viewport.x) / viewport.zoom);
@@ -329,6 +368,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           setAddNodeModalOpen(true);
         }
         setConnectingState(null);
+        setPendingSourcePort(null);
       }
     };
 
@@ -665,7 +705,42 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     pushHistory(updatedWorkflow);
   };
 
-  // --- CONNECTING NODES (DRAG & 2-CLICK) ---
+  // --- CONNECTING NODES (CLICK-TO-CONNECT & DRAG) ---
+  const startConnectFromNode = (nodeId: string, portId?: string) => {
+    const fromNode = workflow.nodes.find((n) => n.id === nodeId);
+    if (!fromNode || fromNode.outputs.length === 0) return;
+
+    const activePortId = portId || fromNode.outputs[0]?.id || 'out_main';
+    const portType = getPortTypeFromNode(fromNode, activePortId, true);
+
+    const portIdx = Math.max(0, fromNode.outputs.findIndex((p) => p.id === activePortId));
+    const isExpanded = Boolean(fromNode.isExpanded);
+    const isAiAgent = fromNode.type === 'ai_agent';
+    const nodeWidth = isExpanded ? (isAiAgent ? 420 : 390) : (isAiAgent ? 280 : 264);
+
+    const worldStart = {
+      x: fromNode.position.x + nodeWidth,
+      y: fromNode.position.y + 36 + portIdx * 24,
+    };
+
+    setConnectingState({
+      fromNodeId: nodeId,
+      fromPortId: activePortId,
+      portType,
+      startPos: worldStart,
+      currentPos: { x: worldStart.x + 40, y: worldStart.y },
+      isClickMode: true,
+      dragDist: 0,
+    });
+
+    setPendingSourcePort({
+      nodeId,
+      portId: activePortId,
+      portType,
+      isOutput: true,
+    });
+  };
+
   const handleStartPortDrag = (
     nodeId: string,
     portId: string,
@@ -689,6 +764,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       portType,
       startPos: worldStart,
       currentPos: worldStart,
+      isClickMode: false,
+      dragDist: 0,
+    });
+
+    setPendingSourcePort({
+      nodeId,
+      portId,
+      portType,
+      isOutput: true,
     });
   };
 
@@ -697,23 +781,74 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     if (!isOutput && connectingState.fromNodeId !== targetNodeId) {
       connectTwoPorts(connectingState.fromNodeId, connectingState.fromPortId, targetNodeId, targetPortId);
+      setConnectingState(null);
+      setPendingSourcePort(null);
     }
-
-    setConnectingState(null);
   };
 
-  // Click-to-Connect implementation (2-click connection without dragging)
-  const handlePortClick = (nodeId: string, portId: string, isOutput: boolean) => {
-    const node = workflow.nodes.find((n) => n.id === nodeId);
-    if (isOutput) {
-      // Set as pending output source
-      const portType = getPortTypeFromNode(node, portId, true);
-      setPendingSourcePort({ nodeId, portId, portType, isOutput: true });
+  // Effortless Click-to-Connect: connects two nodes automatically finding compatible ports
+  const handleConnectToNode = (targetNodeId: string, targetPortId?: string) => {
+    const sourceNodeId = connectingState?.fromNodeId || pendingSourcePort?.nodeId;
+    const sourcePortId = connectingState?.fromPortId || pendingSourcePort?.portId;
+
+    if (!sourceNodeId || sourceNodeId === targetNodeId) {
+      setConnectingState(null);
+      setPendingSourcePort(null);
+      return;
+    }
+
+    const fromNode = workflow.nodes.find((n) => n.id === sourceNodeId);
+    const toNode = workflow.nodes.find((n) => n.id === targetNodeId);
+    if (!fromNode || !toNode) {
+      setConnectingState(null);
+      setPendingSourcePort(null);
+      return;
+    }
+
+    const match = findBestCompatiblePorts(fromNode, toNode, sourcePortId, targetPortId);
+    if (!match) {
+      setConnectionError(
+        `❌ Cannot connect "${fromNode.name}" to "${toNode.name}": No compatible input/output ports found!`
+      );
+      setTimeout(() => setConnectionError(null), 4000);
+      setConnectingState(null);
+      setPendingSourcePort(null);
+      return;
+    }
+
+    connectTwoPorts(fromNode.id, match.fromPort.id, toNode.id, match.toPort.id);
+    setConnectionSuccessToast(`✓ Connected "${fromNode.name}" → "${toNode.name}"`);
+    setTimeout(() => setConnectionSuccessToast(null), 3000);
+    setConnectingState(null);
+    setPendingSourcePort(null);
+  };
+
+  // Quick Action: Connect 2 currently selected nodes
+  const handleConnectSelectedNodes = () => {
+    if (selectedNodeIds.length !== 2) return;
+    const [idA, idB] = selectedNodeIds;
+    const fromNode = workflow.nodes.find((n) => n.id === idA);
+    const toNode = workflow.nodes.find((n) => n.id === idB);
+    if (!fromNode || !toNode) return;
+
+    const match = findBestCompatiblePorts(fromNode, toNode);
+    if (match) {
+      connectTwoPorts(fromNode.id, match.fromPort.id, toNode.id, match.toPort.id);
+      setConnectionSuccessToast(`✓ Connected "${fromNode.name}" → "${toNode.name}"`);
+      setTimeout(() => setConnectionSuccessToast(null), 3000);
     } else {
-      // Clicked an input port! If we have a pending output source, complete the connection!
-      if (pendingSourcePort && pendingSourcePort.isOutput && pendingSourcePort.nodeId !== nodeId) {
-        connectTwoPorts(pendingSourcePort.nodeId, pendingSourcePort.portId, nodeId, portId);
-        setPendingSourcePort(null);
+      setConnectionError(`❌ No compatible connection between "${fromNode.name}" and "${toNode.name}"`);
+      setTimeout(() => setConnectionError(null), 3500);
+    }
+  };
+
+  // Click-to-Connect port handler
+  const handlePortClick = (nodeId: string, portId: string, isOutput: boolean) => {
+    if (isOutput) {
+      startConnectFromNode(nodeId, portId);
+    } else {
+      if (connectingState || pendingSourcePort) {
+        handleConnectToNode(nodeId, portId);
       }
     }
   };
@@ -775,6 +910,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     };
     pushHistory(updated);
   };
+
+  // Direct Click-to-Connect between two nodes with notification
+  const connectNodesDirectly = useCallback((fromNodeId: string, toNodeId: string) => {
+    if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) return;
+    const fromNode = workflow.nodes.find((n) => n.id === fromNodeId);
+    const toNode = workflow.nodes.find((n) => n.id === toNodeId);
+    if (!fromNode || !toNode) return;
+
+    const match = findBestCompatiblePorts(fromNode, toNode);
+    if (!match) {
+      setConnectionError(
+        `❌ Cannot connect "${fromNode.name}" to "${toNode.name}": No compatible input/output ports found!`
+      );
+      setTimeout(() => setConnectionError(null), 4000);
+      return;
+    }
+
+    connectTwoPorts(fromNode.id, match.fromPort.id, toNode.id, match.toPort.id);
+    setConnectionSuccessToast(`✓ Connected "${fromNode.name}" → "${toNode.name}"`);
+    setTimeout(() => setConnectionSuccessToast(null), 3000);
+    setConnectingState(null);
+    setPendingSourcePort(null);
+  }, [workflow]);
 
   // Quick Connect '+' Button on Output Port (n8n Style)
   const handleQuickConnect = (nodeId: string, portId: string) => {
@@ -992,12 +1150,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     }
   };
 
-  // Keyboard Delete / Backspace Shortcut
+  // Keyboard Shortcuts (Delete, Backspace, Escape, C)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = (e.target as HTMLElement)?.tagName;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) || (e.target as HTMLElement)?.isContentEditable) {
         return;
+      }
+
+      if (e.key === 'Escape') {
+        if (connectingState || pendingSourcePort) {
+          e.preventDefault();
+          setConnectingState(null);
+          setPendingSourcePort(null);
+          return;
+        }
+      }
+
+      if ((e.key === 'c' || e.key === 'C') && !e.metaKey && !e.ctrlKey) {
+        if (selectedNodeIds.length === 1 && !connectingState) {
+          e.preventDefault();
+          startConnectFromNode(selectedNodeIds[0]);
+          return;
+        }
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -1010,7 +1185,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeIds, selectedConnectionId, workflow]);
+  }, [selectedNodeIds, selectedConnectionId, workflow, connectingState, pendingSourcePort]);
 
   const handleUpdateNodeConfig = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
     const updated = {
@@ -1569,6 +1744,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onRunWorkflow={handleTestWorkflow}
         onSaveWorkflow={handleSave}
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
+        canConnectSelected={selectedNodeIds.length === 2}
+        onConnectSelectedNodes={handleConnectSelectedNodes}
         onToggleActive={async () => {
           await onToggleActive();
           setWorkflow((w) => ({ ...w, active: !w.active }));
@@ -1601,28 +1778,40 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           />
         )}
 
-        {/* Pending Connection Banner (Click-to-Connect Helper) */}
-        {pendingSourcePort && (() => {
-          const colorDef = getPortColorDef(pendingSourcePort.portType);
+        {/* Click-to-Connect Active Helper Banner */}
+        {connectingState && (() => {
+          const fromNode = workflow.nodes.find((n) => n.id === connectingState.fromNodeId);
+          const colorDef = getPortColorDef(connectingState.portType);
           return (
             <div
-              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-950/95 border shadow-2xl shadow-black/90 backdrop-blur-md animate-in slide-in-from-top-2 duration-200"
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-950/95 border shadow-2xl shadow-cyan-950/90 backdrop-blur-md animate-in slide-in-from-top-2 duration-200"
               style={{ borderColor: colorDef.hex }}
             >
               <span className="w-2.5 h-2.5 rounded-full animate-ping" style={{ backgroundColor: colorDef.hex }} />
-              <span className="text-xs font-semibold" style={{ color: colorDef.hex }}>
-                Connect {colorDef.name} — Click matching {colorDef.shortLabel} input port
+              <span className="text-xs font-semibold text-white">
+                Connecting <strong style={{ color: colorDef.hex }}>"{fromNode?.name || 'Node'}"</strong> — <span className="text-emerald-300 font-bold">Click any target node to connect</span>
               </span>
               <button
-                onClick={() => setPendingSourcePort(null)}
-                className="text-slate-400 hover:text-white ml-2 text-xs cursor-pointer p-0.5"
-                title="Cancel Connection"
+                onClick={() => {
+                  setConnectingState(null);
+                  setPendingSourcePort(null);
+                }}
+                className="text-slate-400 hover:text-white ml-2 text-xs cursor-pointer px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 transition"
+                title="Cancel Connection (Esc)"
               >
-                ✕
+                Cancel (Esc)
               </button>
             </div>
           );
         })()}
+
+        {/* Connection Success Toast Alert */}
+        {connectionSuccessToast && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-950/95 border border-emerald-500/80 text-emerald-200 text-xs font-bold shadow-2xl backdrop-blur-md animate-in slide-in-from-top-2 duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>{connectionSuccessToast}</span>
+          </div>
+        )}
 
         {/* Connection Error Toast Alert */}
         {connectionError && (
@@ -1723,9 +1912,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 key={node.id}
                 node={node}
                 isSelected={selectedNodeIds.includes(node.id)}
-                isPendingSource={pendingSourcePort?.nodeId === node.id}
+                isPendingSource={pendingSourcePort?.nodeId === node.id || connectingState?.fromNodeId === node.id}
+                isConnectTargetCandidate={Boolean(
+                  (connectingState || pendingSourcePort) &&
+                  (connectingState?.fromNodeId || pendingSourcePort?.nodeId) !== node.id
+                )}
                 activeConnectingPortType={connectingState?.portType || pendingSourcePort?.portType || null}
                 activeConnectingNodeId={connectingState?.fromNodeId || pendingSourcePort?.nodeId || null}
+                sourceNodeName={
+                  connectingState
+                    ? workflow.nodes.find((n) => n.id === connectingState.fromNodeId)?.name
+                    : undefined
+                }
+                otherNodes={workflow.nodes.filter((n) => n.id !== node.id)}
+                onDirectConnectNodes={connectNodesDirectly}
                 executionResult={latestExecution?.nodeResults[node.id]}
                 isConnecting={Boolean(connectingState)}
                 onSelect={handleNodeSelect}
@@ -1733,6 +1933,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 onStartPortDrag={handleStartPortDrag}
                 onPortMouseUp={handlePortMouseUp}
                 onPortClick={handlePortClick}
+                onStartConnectFromNode={(id, portId) => startConnectFromNode(id, portId)}
+                onConnectToThisNode={(id, portId) => handleConnectToNode(id, portId)}
                 onQuickConnect={handleQuickConnect}
                 onQuickAddSubNode={handleQuickAddSubNode}
                 onDeleteNode={handleDeleteNode}
@@ -1779,23 +1981,58 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </span>
 
           {selectedNodeIds.length === 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingNodeId(selectedNodeIds[0]);
-              }}
-              onTouchEnd={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setEditingNodeId(selectedNodeIds[0]);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition cursor-pointer active:scale-95 shadow-sm shadow-cyan-500/20"
-              title="Configure Event Settings"
-            >
-              <Settings className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Configure</span>
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startConnectFromNode(selectedNodeIds[0]);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold transition cursor-pointer active:scale-95 shadow-md shadow-cyan-500/20"
+                title="Click to Connect this node to another step (Press C)"
+              >
+                <Link2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Connect to Node... (C)</span>
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNodeId(selectedNodeIds[0]);
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setEditingNodeId(selectedNodeIds[0]);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition cursor-pointer active:scale-95 shadow-sm shadow-cyan-500/20"
+                title="Configure Event Settings"
+              >
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Configure</span>
+              </button>
+            </>
           )}
+
+          {selectedNodeIds.length === 2 && (() => {
+            const [idA, idB] = selectedNodeIds;
+            const nodeA = workflow.nodes.find((n) => n.id === idA);
+            const nodeB = workflow.nodes.find((n) => n.id === idB);
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleConnectSelectedNodes();
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 text-xs font-black transition cursor-pointer active:scale-95 shadow-lg shadow-cyan-500/30 animate-pulse"
+                title={`Connect "${nodeA?.name || 'A'}" to "${nodeB?.name || 'B'}"`}
+              >
+                <Link2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>
+                  Connect "{nodeA?.name?.slice(0, 14) || 'A'}" → "{nodeB?.name?.slice(0, 14) || 'B'}"
+                </span>
+              </button>
+            );
+          })()}
 
           <button
             onClick={() => {

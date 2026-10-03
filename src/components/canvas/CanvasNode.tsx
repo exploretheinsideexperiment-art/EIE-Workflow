@@ -25,6 +25,9 @@ import {
   FileText,
   Table,
   Code2,
+  Link2,
+  Zap,
+  MousePointer,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -37,13 +40,19 @@ interface CanvasNodeProps {
   isPendingSource?: boolean;
   executionResult?: ExecutionNodeResult;
   isConnecting?: boolean;
+  isConnectTargetCandidate?: boolean;
   activeConnectingPortType?: string | null;
   activeConnectingNodeId?: string | null;
+  sourceNodeName?: string;
+  otherNodes?: WorkflowNodeData[];
+  onDirectConnectNodes?: (fromNodeId: string, toNodeId: string) => void;
   onSelect: (nodeId: string, multi: boolean) => void;
   onStartDrag?: (nodeId: string, clientX: number, clientY: number, multi: boolean) => void;
   onStartPortDrag: (nodeId: string, portId: string, isOutput: boolean, pos: { x: number; y: number }) => void;
   onPortMouseUp: (nodeId: string, portId: string, isOutput: boolean) => void;
   onPortClick?: (nodeId: string, portId: string, isOutput: boolean) => void;
+  onStartConnectFromNode?: (nodeId: string, portId?: string) => void;
+  onConnectToThisNode?: (nodeId: string, portId?: string) => void;
   onQuickConnect?: (nodeId: string, portId: string) => void;
   onQuickAddSubNode?: (nodeId: string, subType: 'model' | 'memory' | 'tool') => void;
   onDeleteNode: (nodeId: string) => void;
@@ -62,13 +71,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   isPendingSource,
   executionResult,
   isConnecting,
+  isConnectTargetCandidate,
   activeConnectingPortType,
   activeConnectingNodeId,
+  sourceNodeName,
+  otherNodes,
+  onDirectConnectNodes,
   onSelect,
   onStartDrag,
   onStartPortDrag,
   onPortMouseUp,
   onPortClick,
+  onStartConnectFromNode,
+  onConnectToThisNode,
   onQuickConnect,
   onQuickAddSubNode,
   onDeleteNode,
@@ -82,6 +97,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dataTab, setDataTab] = useState<'table' | 'json'>('table');
+  const [showConnectPopover, setShowConnectPopover] = useState(false);
 
   // Dynamic Lucide icon lookup with safe fallback
   const IconComponent = ((Icons as any)[node.icon] || Icons.Box) as React.ComponentType<{ className?: string }>;
@@ -159,9 +175,18 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         width: isExpanded ? (isAiAgent ? '420px' : '390px') : isAiAgent ? '280px' : '264px',
         touchAction: 'none',
       }}
-      className={`absolute select-none rounded-2xl bg-slate-900/98 backdrop-blur-xl border transition-colors duration-150 group cursor-move ${borderGlowClass}`}
+      className={`absolute select-none rounded-2xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move ${
+        isConnectTargetCandidate
+          ? 'border-emerald-400 ring-4 ring-emerald-500/50 shadow-2xl shadow-emerald-500/30 scale-[1.03] cursor-pointer z-30'
+          : borderGlowClass
+      }`}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
+        if (isConnectTargetCandidate && onConnectToThisNode) {
+          e.stopPropagation();
+          onConnectToThisNode(node.id);
+          return;
+        }
         const target = e.target as HTMLElement;
         if (target.closest('button') || target.closest('[data-port="true"]') || target.closest('input')) {
           e.stopPropagation();
@@ -171,6 +196,11 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         onStartDrag?.(node.id, e.clientX, e.clientY, e.shiftKey || e.metaKey || e.ctrlKey);
       }}
       onTouchStart={(e) => {
+        if (isConnectTargetCandidate && onConnectToThisNode) {
+          e.stopPropagation();
+          onConnectToThisNode(node.id);
+          return;
+        }
         const target = e.target as HTMLElement;
         if (target.closest('button') || target.closest('[data-port="true"]') || target.closest('input')) {
           e.stopPropagation();
@@ -183,6 +213,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       }}
       onClick={(e) => {
         e.stopPropagation();
+        if (isConnectTargetCandidate && onConnectToThisNode) {
+          onConnectToThisNode(node.id);
+          return;
+        }
         if (isSelected) {
           onOpenConfig(node.id);
         } else {
@@ -194,9 +228,36 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         onOpenConfig(node.id);
       }}
     >
+      {/* Target Candidate Floating Badge (for effortless click-to-connect) */}
+      {isConnectTargetCandidate && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onConnectToThisNode?.(node.id);
+          }}
+          className="absolute -top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-black text-[11px] shadow-2xl flex items-center gap-1.5 z-40 cursor-pointer animate-bounce hover:scale-110 active:scale-95 transition whitespace-nowrap"
+        >
+          <Zap className="w-3.5 h-3.5 fill-current text-slate-950" />
+          <span>Click to Connect</span>
+        </div>
+      )}
+
       {/* n8n Floating Hover Action Bar */}
       <div className="absolute -top-9 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-between pointer-events-none z-30">
         <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/95 border border-slate-700/90 shadow-xl pointer-events-auto">
+          {onStartConnectFromNode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartConnectFromNode(node.id);
+              }}
+              className="p-1 rounded-lg hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition cursor-pointer"
+              title="Click to Connect this node to another step"
+            >
+              <Link2 className="w-3.5 h-3.5 text-cyan-400" />
+            </button>
+          )}
+
           {onTestSingleNode && (
             <button
               onClick={(e) => {
@@ -358,6 +419,78 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             >
               {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
+          )}
+
+          {/* Quick Connect Button with Dropdown Menu */}
+          {onStartConnectFromNode && node.outputs.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowConnectPopover((prev) => !prev);
+                }}
+                className={`p-1 rounded-lg transition cursor-pointer flex items-center gap-0.5 ${
+                  showConnectPopover
+                    ? 'bg-cyan-500/30 text-cyan-300 ring-1 ring-cyan-400'
+                    : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
+                }`}
+                title="Connect this node to another step"
+                aria-label="Connect"
+              >
+                <Link2 className="w-3.5 h-3.5 text-cyan-400" />
+              </button>
+
+              {/* Connect Popover Menu */}
+              {showConnectPopover && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-2 w-56 p-2 rounded-xl bg-slate-950/98 border border-slate-700 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 text-left"
+                >
+                  <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
+                    <span>Connect to...</span>
+                    <button
+                      onClick={() => setShowConnectPopover(false)}
+                      className="text-slate-500 hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Option 1: Click any node on canvas */}
+                  <button
+                    onClick={() => {
+                      setShowConnectPopover(false);
+                      onStartConnectFromNode(node.id);
+                    }}
+                    className="w-full mt-1.5 px-2 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <MousePointer className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Click node on canvas</span>
+                  </button>
+
+                  {/* Option 2: Direct list of other nodes on canvas */}
+                  {otherNodes && otherNodes.length > 0 && (
+                    <div className="mt-2 space-y-1 max-h-36 overflow-y-auto">
+                      <div className="text-[9px] font-mono text-slate-500 px-1">Or choose target node:</div>
+                      {otherNodes.map((target) => (
+                        <button
+                          key={target.id}
+                          onClick={() => {
+                            setShowConnectPopover(false);
+                            onDirectConnectNodes?.(node.id, target.id);
+                          }}
+                          className="w-full px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-2 transition cursor-pointer text-left truncate"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                          <span className="truncate">{target.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Quick Settings Gear */}
@@ -675,7 +808,11 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (isIncompatible) return;
-                onPortClick?.(node.id, port.id, false);
+                if (onConnectToThisNode) {
+                  onConnectToThisNode(node.id, port.id);
+                } else {
+                  onPortClick?.(node.id, port.id, false);
+                }
               }}
               onMouseUp={(e) => {
                 e.stopPropagation();
@@ -704,7 +841,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       </div>
 
       {/* Output Ports (Right) with Quick-Add '+' Connector (n8n Style) */}
-      <div className="absolute top-1/2 -right-2.5 -translate-y-1/2 flex flex-col gap-2.5 z-10">
+      <div className="absolute top-1/2 -right-3 -translate-y-1/2 flex flex-col gap-2.5 z-20">
         {node.outputs.map((port) => {
           const colors = getPortColorDef(port.type);
           const isDraggingThis = isConnecting && activeConnectingNodeId === node.id;
@@ -712,17 +849,17 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
 
           return (
             <div key={port.id} className="relative flex items-center">
-              {/* Output Port Dot */}
+              {/* Output Port Dot - Large comfortable hit target */}
               <div
                 id={`port-${node.id}-${port.id}`}
                 data-port="true"
                 title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect`}
-                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-md shadow-black group/port relative ${
+                className={`w-6 h-6 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-lg shadow-black group/port relative cursor-pointer ${
                   isDraggingThis
                     ? `ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-20`
                     : isConnectingActive
                     ? 'opacity-40 cursor-default'
-                    : `${colors.hover} hover:scale-125 cursor-crosshair`
+                    : `${colors.hover} hover:scale-125 hover:border-white hover:shadow-cyan-500/50`
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -737,16 +874,15 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                   });
                 }}
               >
-                <div className={`w-1.5 h-1.5 rounded-full ${colors.bg} group-hover/port:bg-white`} />
-                {port.label && (
-                  <span className="absolute left-6 text-[9px] font-mono tracking-tight text-slate-300 bg-slate-950/90 px-1.5 py-0.5 rounded border border-slate-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30">
-                    {port.label}
-                  </span>
-                )}
+                <div className={`w-2 h-2 rounded-full ${colors.bg} group-hover/port:bg-white transition-colors`} />
+                <span className="absolute left-7 text-[10px] font-mono tracking-tight text-cyan-200 bg-slate-950/95 px-2 py-0.5 rounded-lg border border-cyan-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30 shadow-xl">
+                  {port.label || 'Click to Connect'}
+                </span>
               </div>
 
               {/* Quick Connect '+' Button (n8n style) */}
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onQuickConnect?.(node.id, port.id);

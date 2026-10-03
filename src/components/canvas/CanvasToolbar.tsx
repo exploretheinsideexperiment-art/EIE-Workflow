@@ -20,6 +20,7 @@ import {
   Settings,
   Stethoscope,
   Bot,
+  Link2,
   Edit3,
   Check
 } from 'lucide-react';
@@ -61,6 +62,8 @@ interface CanvasToolbarProps {
   onSaveWorkflow: () => void;
   onToggleActive: () => void;
   onOpenEiDoctor?: () => void;
+  canConnectSelected?: boolean;
+  onConnectSelectedNodes?: () => void;
 }
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
@@ -100,6 +103,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onSaveWorkflow,
   onToggleActive,
   onOpenEiDoctor,
+  canConnectSelected,
+  onConnectSelectedNodes,
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameValue, setNameValue] = React.useState(workflowName);
@@ -216,6 +221,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <TerminalSquare className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden sm:inline">Logs</span>
           </button>
+
+          {/* Connect 2 Selected Nodes Quick Action */}
+          {canConnectSelected && onConnectSelectedNodes && (
+            <button
+              onClick={onConnectSelectedNodes}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-md transition cursor-pointer whitespace-nowrap animate-pulse"
+              title="Connect the 2 selected nodes directly"
+            >
+              <Link2 className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Connect Selected</span>
+            </button>
+          )}
 
           {/* AI Fixer Quick Launch Button */}
           <button
