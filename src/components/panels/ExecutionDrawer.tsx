@@ -12,6 +12,7 @@ import {
   Layers,
   ArrowRight,
   Stethoscope,
+  Bot,
   Maximize2,
   Minimize2,
   MessageSquare
@@ -126,10 +127,10 @@ export const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({
             <button
               onClick={onOpenEiDoctor}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-semibold text-xs shadow-xs transition cursor-pointer"
-              title="Inspect with Ei-Doctor"
+              title="Inspect & Repair with AI Fixer"
             >
-              <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Ei-Doctor</span>
+              <Bot className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">AI Fixer</span>
             </button>
           )}
 

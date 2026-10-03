@@ -834,8 +834,8 @@ router.get('/stats', (req: Request, res: Response) => {
   });
 });
 
-// --- EI-DOCTOR AI CHAT, TROUBLESHOOTER & AUTONOMOUS WORKFLOW ARCHITECT ---
-router.post('/buddy/chat', async (req: Request, res: Response) => {
+// --- AI FIXER: AUTONOMOUS ROBOT CHAT, TROUBLESHOOTER & WORKFLOW ARCHITECT ---
+const handleFixerChatRequest = async (req: Request, res: Response) => {
   const { message, workflow, latestExecution, language } = req.body;
 
   if (!message || typeof message !== 'string') {
@@ -846,15 +846,18 @@ router.post('/buddy/chat', async (req: Request, res: Response) => {
     const aiResult = await handleEiDoctorChat(message, workflow, latestExecution, language);
     return res.json(aiResult);
   } catch (err: any) {
-    console.error('[Ei-Doctor Error]', err);
+    console.error('[AI Fixer Error]', err);
     return res.json({
       action: 'chat',
       reply: language === 'hi'
-        ? 'Aapki request process karne me takleef hui. Kripya dobara koshish karein.'
+        ? 'Aapki request process karne me dikkat hui. Kripya dobara koshish karein.'
         : 'An error occurred while processing your request. Please try again.',
       source: 'local_architect',
       language: language === 'hi' ? 'hi' : 'en',
     });
   }
-});
+};
+
+router.post('/fixer/chat', handleFixerChatRequest);
+router.post('/buddy/chat', handleFixerChatRequest);
 

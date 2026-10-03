@@ -211,8 +211,8 @@ export function diagnoseWorkflow(
         severity: 'error',
         title: isEn ? `Step Execution Failed: "${node.name}"` : `Step Execution Failed: "${node.name}"`,
         description: isEn
-          ? `This step failed during the last test run with error: "${err}". Ei-Doctor can reconfigure and repair it automatically.`
-          : `Last test run me yeh step fail hua: "${err}". Ei-Doctor iske configurations aur connections internally thik kar sakta hai.`,
+          ? `This step failed during the last test run with error: "${err}". AI Fixer can reconfigure and repair it automatically.`
+          : `Last test run me yeh step fail hua: "${err}". AI Fixer iske configurations aur connections internally thik kar sakta hai.`,
         nodeId: node.id,
         autoFixable: true,
       });
@@ -238,8 +238,8 @@ export function diagnoseWorkflow(
 
   if (issues.length > 0) {
     summary = isEn
-      ? `Ei-Doctor detected ${issues.length} potential problem(s). Click "Auto-Fix All" to resolve them automatically.`
-      : `Ei-Doctor ne ${issues.length} problem(s) detect kiye hain. "Auto-Fix All" par click karke inhe turant thik karein.`;
+      ? `AI Fixer detected ${issues.length} potential problem(s). Click "Auto-Fix All" to resolve them automatically.`
+      : `AI Fixer ne ${issues.length} problem(s) detect kiye hain. "Auto-Fix All" par click karke inhe turant thik karein.`;
   }
 
   return {
@@ -271,8 +271,8 @@ export function autoRepairWorkflow(
     const triggerDef = NODE_LIBRARY.find((n) => n.type === triggerType);
     if (triggerDef) {
       const firstAction = nodes.find((n) => !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_'));
-      const triggerX = firstAction ? Math.max(40, firstAction.position.x - 340) : 100;
-      const triggerY = firstAction ? firstAction.position.y : 150;
+      const triggerX = firstAction ? Math.max(40, (firstAction.position?.x ?? 380) - 340) : 100;
+      const triggerY = firstAction ? (firstAction.position?.y ?? 150) : 150;
 
       const triggerNode: WorkflowNodeData = {
         id: `trigger_${Date.now()}`,
@@ -316,7 +316,7 @@ export function autoRepairWorkflow(
             name: 'Google Gemini Chat Model',
             category: geminiDef.category,
             icon: geminiDef.icon,
-            position: { x: Math.max(40, node.position.x - 320), y: Math.max(40, node.position.y - 120) },
+            position: { x: Math.max(40, (node.position?.x ?? 200) - 320), y: Math.max(40, (node.position?.y ?? 120) - 120) },
             inputs: geminiDef.inputs,
             outputs: geminiDef.outputs,
             config: { model: 'gemini-2.5-flash', temperature: 0.2 },
@@ -344,7 +344,7 @@ export function autoRepairWorkflow(
             name: 'Window Buffer Memory',
             category: memDef.category,
             icon: memDef.icon,
-            position: { x: Math.max(40, node.position.x - 320), y: node.position.y + 40 },
+            position: { x: Math.max(40, (node.position?.x ?? 200) - 320), y: (node.position?.y ?? 120) + 40 },
             inputs: memDef.inputs,
             outputs: memDef.outputs,
             config: { contextWindowLength: 10, sessionKey: 'session_{{$json.userId || "default"}}' },
@@ -372,7 +372,7 @@ export function autoRepairWorkflow(
             name: 'Calculator Tool',
             category: toolDef.category,
             icon: toolDef.icon,
-            position: { x: Math.max(40, node.position.x - 320), y: node.position.y + 180 },
+            position: { x: Math.max(40, (node.position?.x ?? 200) - 320), y: (node.position?.y ?? 120) + 180 },
             inputs: toolDef.inputs,
             outputs: toolDef.outputs,
             config: { toolName: 'calculator' },
@@ -394,7 +394,7 @@ export function autoRepairWorkflow(
   // 3. Fix Disconnected Action Nodes (Connect in logical left-to-right chain)
   const regularActionNodes = nodes.filter(
     (n) => !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_')
-  ).sort((a, b) => a.position.x - b.position.x);
+  ).sort((a, b) => (a.position?.x ?? 0) - (b.position?.x ?? 0));
 
   for (let i = 0; i < regularActionNodes.length - 1; i++) {
     const current = regularActionNodes[i];
@@ -558,8 +558,9 @@ export function fixSingleIssue(
         }
       } else {
         const otherNodes = nodes.filter((n) => n.id !== targetNode.id && !n.type.startsWith('ai_model_') && !n.type.startsWith('ai_memory_') && !n.type.startsWith('ai_tool_'));
-        const downstream = otherNodes.find((n) => n.position.x > targetNode.position.x);
-        const upstream = otherNodes.find((n) => n.position.x < targetNode.position.x);
+        const targetX = targetNode.position?.x ?? 200;
+        const downstream = otherNodes.find((n) => (n.position?.x ?? 0) > targetX);
+        const upstream = otherNodes.find((n) => (n.position?.x ?? 0) < targetX);
 
         if (downstream && !connections.some((c) => c.fromNodeId === targetNode.id && c.toNodeId === downstream.id)) {
           connections.push({
@@ -596,7 +597,7 @@ export function fixSingleIssue(
           name: 'Google Gemini Chat Model',
           category: geminiDef.category,
           icon: geminiDef.icon,
-          position: { x: Math.max(40, agent.position.x - 320), y: Math.max(40, agent.position.y - 120) },
+          position: { x: Math.max(40, (agent.position?.x ?? 200) - 320), y: Math.max(40, (agent.position?.y ?? 120) - 120) },
           inputs: geminiDef.inputs,
           outputs: geminiDef.outputs,
           config: { model: 'gemini-2.5-flash', temperature: 0.2 },
@@ -625,7 +626,7 @@ export function fixSingleIssue(
           name: 'Window Buffer Memory',
           category: memDef.category,
           icon: memDef.icon,
-          position: { x: Math.max(40, agent.position.x - 320), y: agent.position.y + 40 },
+          position: { x: Math.max(40, (agent.position?.x ?? 200) - 320), y: (agent.position?.y ?? 120) + 40 },
           inputs: memDef.inputs,
           outputs: memDef.outputs,
           config: { contextWindowLength: 10, sessionKey: 'session_{{$json.userId || "default"}}' },
@@ -654,7 +655,7 @@ export function fixSingleIssue(
           name: 'Calculator Tool',
           category: toolDef.category,
           icon: toolDef.icon,
-          position: { x: Math.max(40, agent.position.x - 320), y: agent.position.y + 180 },
+          position: { x: Math.max(40, (agent.position?.x ?? 200) - 320), y: (agent.position?.y ?? 120) + 180 },
           inputs: toolDef.inputs,
           outputs: toolDef.outputs,
           config: { toolName: 'calculator' },

@@ -19,6 +19,7 @@ import {
   Trash2,
   Settings,
   Stethoscope,
+  Bot,
   Edit3,
   Check
 } from 'lucide-react';
@@ -216,14 +217,14 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <span className="hidden sm:inline">Logs</span>
           </button>
 
-          {/* Ei-Doctor Quick Launch Button */}
+          {/* AI Fixer Quick Launch Button */}
           <button
             onClick={onOpenEiDoctor}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 text-xs font-semibold shadow-sm hover:border-cyan-400 transition cursor-pointer whitespace-nowrap shrink-0 group"
-            title="Open Ei-Doctor (AI Workflow Troubleshooter & Auto-Repair)"
+            title="Open AI Fixer (Autonomous AI Robot Troubleshooter & Auto-Repair)"
           >
-            <Stethoscope className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
-            <span className="font-bold">Ei-Doctor</span>
+            <Bot className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+            <span className="font-bold">AI Fixer</span>
           </button>
         </div>
 

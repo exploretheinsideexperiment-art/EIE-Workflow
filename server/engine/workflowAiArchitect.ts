@@ -32,7 +32,49 @@ export async function handleEiDoctorChat(
   requestedLanguage?: 'en' | 'hi'
 ): Promise<WorkflowAiResponse> {
   const lang = requestedLanguage || detectUserLanguage(message);
+  const lowerMsg = (message || '').toLowerCase();
   const wantsWorkflowBuild = isWorkflowGenerationPrompt(message);
+
+  // Check for Repair / Fix Intent FIRST to guarantee issue resolution
+  const isRepairIntent =
+    lowerMsg.includes('fix') ||
+    lowerMsg.includes('repair') ||
+    lowerMsg.includes('solve') ||
+    lowerMsg.includes('issue') ||
+    lowerMsg.includes('error') ||
+    lowerMsg.includes('thik') ||
+    lowerMsg.includes('theek') ||
+    lowerMsg.includes('galti') ||
+    lowerMsg.includes('problem') ||
+    lowerMsg.includes('remove') ||
+    lowerMsg.includes('hata') ||
+    lowerMsg.includes('sudhar') ||
+    lowerMsg.includes('dur kar');
+
+  if (isRepairIntent) {
+    const { fixedWorkflow, fixesApplied } = autoRepairWorkflow(workflow as any, latestExecution, lang);
+    const fixesText = fixesApplied.length > 0
+      ? fixesApplied.map((f) => `• ${f}`).join('\n')
+      : (lang === 'en' ? '• Validated all node ports, connections, and configurations.' : '• Sabhi node ports, connections aur parameters theek kar diye gaye.');
+
+    const reply = lang === 'en'
+      ? `🤖 **AI Fixer Auto-Repair Completed!**\n\nI have resolved the issues in your workflow:\n${fixesText}\n\n✨ All issues have been cleared! Your workflow is now healthy and ready to run.`
+      : `🤖 **AI Fixer Auto-Repair Ho Gaya Hai!**\n\nMaine aapke workflow ke ye issues solve kar diye hain:\n${fixesText}\n\n✨ Sabhi issues remove kar diye gaye hain! Workflow ab bilkul theek se execute hoga.`;
+
+    return {
+      action: 'auto_repair',
+      reply,
+      source: 'local_architect',
+      language: lang,
+      builtWorkflow: {
+        name: fixedWorkflow.name,
+        description: fixedWorkflow.description,
+        nodes: fixedWorkflow.nodes,
+        connections: fixedWorkflow.connections,
+      },
+    };
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (apiKey) {
@@ -50,7 +92,10 @@ export async function handleEiDoctorChat(
       const connections = workflow?.connections || [];
       const nodeCount = nodes.length;
 
-      const systemInstruction = `You are "Ei-Doctor", the expert AI Workflow Architect and Troubleshooter inside EIE-Workflow (an n8n-style automation platform).
+      const systemInstruction = `You are "AI Fixer", the expert Autonomous AI Robot Workflow Architect and Troubleshooter inside EIE-Workflow (an n8n-style automation platform).
+You are visualized as a cute, miniature humanoid robot patrolling and repairing workflows on screen.
+When fixing issues, explain what was fixed cleanly.
+When user asks to build or generate a workflow from instructions, output a high quality, fully-connected n8n workflow.
 
 CRITICAL LANGUAGE REQUIREMENT:
 The user language is STRICTLY: ${lang === 'en' ? 'ENGLISH' : 'HINDI / HINGLISH'}.
@@ -128,7 +173,7 @@ Respond ONLY with valid JSON.`;
             language: lang,
             builtWorkflow: {
               name: parsed.workflow.name || 'AI Generated Workflow',
-              description: parsed.workflow.description || 'Automated by Ei-Doctor',
+              description: parsed.workflow.description || 'Automated by AI Fixer',
               nodes: parsed.workflow.nodes,
               connections: parsed.workflow.connections || [],
             },
@@ -151,7 +196,7 @@ Respond ONLY with valid JSON.`;
         };
       }
     } catch (err: any) {
-      console.warn('[Ei-Doctor] Gemini call failed, using local architect engine:', err?.message || err);
+      console.warn('[AI Fixer] Gemini call failed, using local architect engine:', err?.message || err);
     }
   }
 
@@ -172,46 +217,6 @@ Respond ONLY with valid JSON.`;
     };
   }
 
-  // Check for Repair / Fix Intent
-  const isRepairIntent =
-    lowerMsg.includes('fix') ||
-    lowerMsg.includes('repair') ||
-    lowerMsg.includes('solve') ||
-    lowerMsg.includes('issue') ||
-    lowerMsg.includes('error') ||
-    lowerMsg.includes('thik') ||
-    lowerMsg.includes('theek') ||
-    lowerMsg.includes('galti') ||
-    lowerMsg.includes('problem') ||
-    lowerMsg.includes('remove') ||
-    lowerMsg.includes('hatado') ||
-    lowerMsg.includes('sudhar') ||
-    lowerMsg.includes('dur kar');
-
-  if (isRepairIntent) {
-    const { fixedWorkflow, fixesApplied } = autoRepairWorkflow(workflow, latestExecution, lang);
-    const fixesText = fixesApplied.length > 0
-      ? fixesApplied.map((f) => `• ${f}`).join('\n')
-      : (lang === 'en' ? '• Validated all node ports, connections, and triggers.' : '• Sabhi node ports, connections aur parameters theek kar diye gaye.');
-
-    const reply = lang === 'en'
-      ? `🩺 **Ei-Doctor Auto-Repair Completed!**\n\nI have resolved the issues in your workflow:\n${fixesText}\n\n✨ All issues have been cleared! Your workflow is now healthy and ready to run.`
-      : `🩺 **Ei-Doctor Auto-Repair Ho Gaya Hai!**\n\nMaine aapke workflow ke ye issues solve kar diye hain:\n${fixesText}\n\n✨ Sabhi issues remove kar diye gaye hain! Workflow ab bilkul theek se execute hoga.`;
-
-    return {
-      action: 'auto_repair',
-      reply,
-      source: 'local_architect',
-      language: lang,
-      builtWorkflow: {
-        name: fixedWorkflow.name,
-        description: fixedWorkflow.description,
-        nodes: fixedWorkflow.nodes,
-        connections: fixedWorkflow.connections,
-      },
-    };
-  }
-
   // Contextual Chat Fallback
   let reply = '';
   const nodeCount = workflow?.nodes?.length || 0;
@@ -224,20 +229,20 @@ Connect a **Google Gemini 2.5 Flash** model so the agent can reason and formulat
     } else if (lowerMsg.includes('test') || lowerMsg.includes('run')) {
       reply = `To test your workflow, click the **"Test Run"** button in the canvas header bar, or test any single node via its hover play icon.`;
     } else {
-      reply = `Hello! I am **Ei-Doctor** 🩺, your AI Workflow Doctor and Architect. 
-I can diagnose workflow errors, fix broken connections, and automatically build complete workflows from your prompts. 
+      reply = `Hello! I am **AI Fixer** 🤖 ⚡, your autonomous AI Humanoid Robot Troubleshooter and Architect. 
+I can diagnose workflow errors, fix broken connections on screen, and automatically build complete workflows from your prompts. 
 
-Try asking: *"Build a workflow for customer support with Webhook and Slack"* or *"Ek naya workflow banao"*!`;
+Try asking: *"Build a workflow for customer support with Webhook and Slack"* or *"Ek naya Telegram workflow banao"*!`;
     }
   } else {
     if (lowerMsg.includes('model') || lowerMsg.includes('gemini') || lowerMsg.includes('ai agent')) {
       reply = `AI Agent ko execute karne ke liye **Chat Model (Purple port)** ki zaroorat hoti hai. 
 Aap **Google Gemini Chat Model** connect karein taaki agent queries samajh sake.`;
     } else {
-      reply = `Namaste! Main hoon **Ei-Doctor** 🩺, aapka AI Workflow Doctor aur Architect. 
-Main aapke workflow ki galtiya theek kar sakta hoon aur naye prompt se pura workflow automatically build bhi kar sakta hoon. 
+      reply = `Namaste! Main hoon **AI Fixer** 🤖 ⚡, aapka autonomous Humanoid Robot Troubleshooter aur Workflow Architect. 
+Main screen par ghoomte hue aapke workflow ke errors repair kar sakta hoon aur naye prompt se pura workflow automatically build bhi kar sakta hoon. 
 
-Aap mujhse pooch sakte hain: *"Ek naya workflow banao jo Google Sheets se lead padhe aur Gmail bheje"*!`;
+Aap mujhse pooch sakte hain: *"Ek naya workflow banao jo Google Sheets se lead padhe aur Telegram par bheje"*!`;
     }
   }
 

@@ -517,6 +517,71 @@ export function synthesizeWorkflowFromPrompt(
     return { name, description, nodes, connections, explanation };
   }
 
+  // 1b. Telegram Notification / Update Workflow
+  if (lower.includes('telegram')) {
+    const name = isEn ? 'Telegram Notification & Alert Flow' : 'Telegram Bot Alert Workflow';
+    const description = isEn
+      ? 'Inbound Webhook receives event payload, formats alert message, and dispatches real-time update to Telegram channel/chat.'
+      : 'Inbound Webhook payload leta hai aur Telegram channel/chat par instant notification update bhejta hai.';
+
+    const nodes: WorkflowNodeData[] = [
+      {
+        id: `node_wh_${ts}`,
+        name: isEn ? 'Webhook Trigger' : 'Webhook Trigger',
+        type: 'trigger_webhook',
+        category: 'Triggers',
+        icon: 'Webhook',
+        position: { x: 100, y: 220 },
+        inputs: [],
+        outputs: [{ id: 'out_main', name: 'main', type: 'main' }],
+        config: { httpMethod: 'POST', path: 'telegram/webhook' },
+      },
+      {
+        id: `node_edit_${ts}`,
+        name: isEn ? 'Edit Fields (Set)' : 'Format Message (Set)',
+        type: 'core_edit_fields',
+        category: 'Core',
+        icon: 'Edit3',
+        position: { x: 400, y: 220 },
+        inputs: [{ id: 'in_main', name: 'main', type: 'main' }],
+        outputs: [{ id: 'out_main', name: 'main', type: 'main' }],
+        config: {
+          assignments: [
+            { name: 'notification_title', value: '⚡ System Alert' },
+            { name: 'formatted_date', value: '{{$now}}' }
+          ]
+        },
+      },
+      {
+        id: `node_tg_${ts}`,
+        name: 'Send Telegram Update',
+        type: 'app_telegram',
+        category: 'Applications',
+        icon: 'Send',
+        position: { x: 720, y: 220 },
+        inputs: [{ id: 'in_main', name: 'main', type: 'main' }],
+        outputs: [{ id: 'out_main', name: 'main', type: 'main' }],
+        config: {
+          resource: 'message',
+          operation: 'sendMessage',
+          chatId: '{{$json.chatId || "-1001234567890"}}',
+          text: '📢 {{$json.notification_title || "Alert"}}: {{$json.message || "Workflow notification triggered successfully!"}}\n🕒 Time: {{$now}}',
+        },
+      },
+    ];
+
+    const connections: WorkflowConnection[] = [
+      { id: `c1_${ts}`, fromNodeId: nodes[0].id, fromPortId: 'out_main', toNodeId: nodes[1].id, toPortId: 'in_main' },
+      { id: `c2_${ts}`, fromNodeId: nodes[1].id, fromPortId: 'out_main', toNodeId: nodes[2].id, toPortId: 'in_main' },
+    ];
+
+    const explanation = isEn
+      ? `I have synthesized the Telegram automation workflow:\n1. **Webhook Trigger**: Listens for inbound event trigger.\n2. **Edit Fields (Set)**: Formats variables and alert metadata.\n3. **Send Telegram Update**: Delivers instant markdown message to Telegram chat/channel.`
+      : `Maine aapka Telegram workflow canvas par construct kar diya hai:\n1. **Webhook Trigger**: Event data intake karega.\n2. **Edit Fields**: Message parameters format karega.\n3. **Send Telegram Update**: Direct Telegram group ya channel par update dispatch karega.`;
+
+    return { name, description, nodes, connections, explanation };
+  }
+
   // 2. Webhook -> AI Agent -> Slack / Discord
   if (
     lower.includes('agent') ||

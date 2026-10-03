@@ -527,10 +527,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                       onOpenDoctorForNode(node.id);
                     }}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold cursor-pointer transition"
-                    title="Fix this error with Ei-Doctor"
+                    title="Fix this error with AI Fixer"
                   >
-                    <Stethoscope className="w-2.5 h-2.5 text-cyan-400" />
-                    <span>Ei-Doctor</span>
+                    <Bot className="w-2.5 h-2.5 text-cyan-400" />
+                    <span>AI Fixer</span>
                   </button>
                 )}
               </div>

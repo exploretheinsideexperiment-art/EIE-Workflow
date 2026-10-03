@@ -49,6 +49,7 @@ export interface WorkflowNodeData {
     alwaysOutputData?: boolean;
     timeoutMs?: number;
     onError?: 'stop' | 'continue' | 'continueErrorOutput';
+    displayNoteInFlow?: boolean;
   };
 }
 
