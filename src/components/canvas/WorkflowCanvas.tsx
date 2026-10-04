@@ -19,6 +19,7 @@ import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
 import { AiFixerDrawer } from '../panels/AiFixerDrawer';
 import { WorkflowLiveChatDrawer } from '../panels/WorkflowLiveChatDrawer';
+import { CloudConnectivityModal } from '../modals/CloudConnectivityModal';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 import { resolveNodeInputData } from '../../utils/workflowDataFlow';
 import { diagnoseWorkflow, autoRepairWorkflow } from '../../utils/workflowDoctor';
@@ -69,6 +70,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [executionDrawerOpen, setExecutionDrawerOpen] = useState(false);
   const [eiDoctorOpen, setEiDoctorOpen] = useState(false);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -720,13 +722,32 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   // Exact wire port position calculator matching DOM flexbox coordinates
-  const getNodePortPos = (nodeId: string, portId: string, isOutput: boolean) => {
+  const getNodePortPos = (
+    nodeId: string,
+    portId: string,
+    isOutput: boolean,
+    connId?: string
+  ) => {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return { x: 0, y: 0 };
 
-    // 1. Try exact DOM measurement first - 100% pixel-accurate to real port element
-    const portEl = document.getElementById(`port-${nodeId}-${portId}`);
     const container = containerRef.current;
+
+    // 1. Try exact connection-specific port element first (e.g. distinct tool sockets on AI Agent)
+    if (!isOutput && connId && container) {
+      const specificPortEl = document.getElementById(`port-${nodeId}-${portId}-${connId}`);
+      if (specificPortEl) {
+        const portRect = specificPortEl.getBoundingClientRect();
+        const contRect = container.getBoundingClientRect();
+        return {
+          x: (portRect.left + portRect.width / 2 - contRect.left - viewport.x) / viewport.zoom,
+          y: (portRect.top + portRect.height / 2 - contRect.top - viewport.y) / viewport.zoom,
+        };
+      }
+    }
+
+    // 2. Try exact DOM measurement for port element
+    const portEl = document.getElementById(`port-${nodeId}-${portId}`);
     if (portEl && container) {
       const portRect = portEl.getBoundingClientRect();
       const contRect = container.getBoundingClientRect();
@@ -736,10 +757,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       };
     }
 
-    // 2. High-precision fallback
+    // 3. High-precision fallback
     const isExpanded = Boolean(node.isExpanded);
     const isAiAgent = node.type === 'ai_agent';
-    const nodeWidth = isExpanded ? (isAiAgent ? 420 : 390) : (isAiAgent ? 280 : 264);
+    const nodeWidth = isExpanded ? (isAiAgent ? 380 : 390) : (isAiAgent ? 320 : 264);
 
     const nodeEl = document.getElementById(`node-${nodeId}`);
     let actualHeight = 120;
@@ -748,6 +769,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       actualHeight = r.height / viewport.zoom;
     } else {
       actualHeight = isExpanded ? (isAiAgent ? 260 : 180) : (isAiAgent ? 200 : 120);
+    }
+
+    // AI Agent specific port positioning fallback (Left input, Right output, Bottom sub-nodes)
+    if (isAiAgent) {
+      if (isOutput) {
+        return {
+          x: node.position.x + nodeWidth + 24, // Protruding + terminal
+          y: node.position.y + actualHeight / 2,
+        };
+      }
+      if (portId === 'in_model') {
+        return { x: node.position.x + nodeWidth * 0.22, y: node.position.y + actualHeight };
+      }
+      if (portId === 'in_memory') {
+        return { x: node.position.x + nodeWidth * 0.50, y: node.position.y + actualHeight };
+      }
+      if (portId === 'in_tools' || portId.startsWith('in_tools')) {
+        return { x: node.position.x + nodeWidth * 0.78, y: node.position.y + actualHeight };
+      }
+      return { x: node.position.x, y: node.position.y + actualHeight / 2 };
     }
 
     const ports = isOutput ? node.outputs : node.inputs;
@@ -762,7 +803,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const portCenterY = node.position.y + stackTop + idx * portPitch + 12;
 
     return {
-      x: isOutput ? node.position.x + nodeWidth : node.position.x,
+      x: isOutput ? node.position.x + nodeWidth + 24 : node.position.x,
       y: portCenterY,
     };
   };
@@ -852,7 +893,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       return;
     }
 
-    const match = findBestCompatiblePorts(fromNode, toNode, sourcePortId, targetPortId);
+    const match = findBestCompatiblePorts(fromNode, toNode, sourcePortId, targetPortId, workflow.connections);
     if (!match) {
       setConnectionError(
         `❌ Cannot connect "${fromNode.name}" to "${toNode.name}": No compatible input/output ports found!`
@@ -878,7 +919,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const toNode = workflow.nodes.find((n) => n.id === idB);
     if (!fromNode || !toNode) return;
 
-    const match = findBestCompatiblePorts(fromNode, toNode);
+    const match = findBestCompatiblePorts(fromNode, toNode, undefined, undefined, workflow.connections);
     if (match) {
       connectTwoPorts(fromNode.id, match.fromPort.id, toNode.id, match.toPort.id);
       setConnectionSuccessToast(`✓ Connected "${fromNode.name}" → "${toNode.name}"`);
@@ -908,8 +949,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const fromPort = fromNode.outputs.find((p) => p.id === fromPortId);
     const toPort = toNode.inputs.find((p) => p.id === toPortId);
 
-    // Validate type and color compatibility strictly
-    const validation = validateConnection(fromNode, fromPort, toNode, toPort);
+    // Validate type and color compatibility strictly (including single connection restriction)
+    const validation = validateConnection(fromNode, fromPort, toNode, toPort, workflow.connections);
     if (!validation.valid) {
       setConnectionError(validation.errorMessage || 'Invalid Connection: Port types and colors must match!');
       setTimeout(() => {
@@ -965,7 +1006,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const toNode = workflow.nodes.find((n) => n.id === toNodeId);
     if (!fromNode || !toNode) return;
 
-    const match = findBestCompatiblePorts(fromNode, toNode);
+    const match = findBestCompatiblePorts(fromNode, toNode, undefined, undefined, workflow.connections);
     if (!match) {
       setConnectionError(
         `❌ Cannot connect "${fromNode.name}" to "${toNode.name}": No compatible input/output ports found!`
@@ -1768,6 +1809,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
         canConnectSelected={selectedNodeIds.length === 2}
         onConnectSelectedNodes={handleConnectSelectedNodes}
+        onOpenCloudModal={() => setIsCloudModalOpen(true)}
         onToggleActive={async () => {
           await onToggleActive();
           setWorkflow((w) => ({ ...w, active: !w.active }));
@@ -1865,15 +1907,24 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </defs>
 
           <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
-            {/* Static Existing Connections */}
+            {/* Static Existing Connections matching port point color */}
             {workflow.connections.map((conn) => {
               const startPos = getNodePortPos(conn.fromNodeId, conn.fromPortId, true);
-              const endPos = getNodePortPos(conn.toNodeId, conn.toPortId, false);
+              const endPos = getNodePortPos(conn.toNodeId, conn.toPortId, false, conn.id);
 
               const fromNode = workflow.nodes.find((n) => n.id === conn.fromNodeId);
+              const toNode = workflow.nodes.find((n) => n.id === conn.toNodeId);
+
+              const fromPort = fromNode?.outputs.find((p) => p.id === conn.fromPortId);
+              const toPort = toNode?.inputs.find((p) => p.id === conn.toPortId);
+
               const fromPortType =
-                fromNode?.outputs.find((p) => p.id === conn.fromPortId)?.type ||
+                fromPort?.type ||
                 getPortTypeFromNode(fromNode, conn.fromPortId, true);
+              const toPortType =
+                toPort?.type ||
+                getPortTypeFromNode(toNode, conn.toPortId, false);
+
               const stepResult = latestExecution?.nodeResults[conn.fromNodeId];
 
               return (
@@ -1883,6 +1934,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     startPos={startPos}
                     endPos={endPos}
                     fromPortType={fromPortType}
+                    toPortType={toPortType}
                     isSelected={selectedConnectionId === conn.id}
                     isExecuting={isExecuting}
                     executionStatus={stepResult?.status}
@@ -1897,24 +1949,40 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               );
             })}
 
-            {/* Active Wire being dragged from port with matching color */}
+            {/* Active Wire being dragged from port with matching color & glow */}
             {connectingState && (() => {
               const activeColorDef = getPortColorDef(connectingState.portType);
               return (
-                <path
-                  d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
-                    connectingState.startPos.x + 80
-                  } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
-                    connectingState.currentPos.y
-                  }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
-                  fill="none"
-                  stroke={activeColorDef.hex}
-                  strokeWidth="3.5"
-                  strokeDasharray="6 4"
-                  strokeLinecap="round"
-                  className="animate-pulse"
-                  style={{ filter: activeColorDef.glow }}
-                />
+                <g>
+                  {/* Outer ambient glow path matching port color */}
+                  <path
+                    d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
+                      connectingState.startPos.x + 80
+                    } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
+                      connectingState.currentPos.y
+                    }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
+                    fill="none"
+                    stroke={activeColorDef.hex}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    opacity="0.3"
+                  />
+                  {/* Dashed animated line */}
+                  <path
+                    d={`M ${connectingState.startPos.x} ${connectingState.startPos.y} C ${
+                      connectingState.startPos.x + 80
+                    } ${connectingState.startPos.y}, ${connectingState.currentPos.x - 80} ${
+                      connectingState.currentPos.y
+                    }, ${connectingState.currentPos.x} ${connectingState.currentPos.y}`}
+                    fill="none"
+                    stroke={activeColorDef.hex}
+                    strokeWidth="3.5"
+                    strokeDasharray="6 4"
+                    strokeLinecap="round"
+                    className="animate-pulse"
+                    style={{ filter: activeColorDef.glow }}
+                  />
+                </g>
               );
             })()}
           </g>
@@ -1935,6 +2003,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 node={node}
                 isSelected={selectedNodeIds.includes(node.id)}
                 isPendingSource={pendingSourcePort?.nodeId === node.id || connectingState?.fromNodeId === node.id}
+                connections={workflow.connections}
+                allNodes={workflow.nodes}
                 isConnectTargetCandidate={Boolean(
                   (connectingState || pendingSourcePort) &&
                   (connectingState?.fromNodeId || pendingSourcePort?.nodeId) !== node.id &&
@@ -1980,6 +2050,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 onToggleDisableNode={handleToggleDisableNode}
                 onTestSingleNode={handleTestSingleNode}
                 onPinDataNode={handlePinDataNode}
+                onDeleteConnection={handleDeleteConnection}
               />
             ))}
           </div>
@@ -2258,6 +2329,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             setIsExecuting(false);
           }
         }}
+      />
+
+      {/* Cloud Active & External Application API Modal */}
+      <CloudConnectivityModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+        workflow={workflow}
       />
     </div>
   );

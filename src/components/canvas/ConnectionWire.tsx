@@ -7,6 +7,7 @@ interface ConnectionWireProps {
   startPos: { x: number; y: number };
   endPos: { x: number; y: number };
   fromPortType?: string;
+  toPortType?: string;
   isSelected?: boolean;
   isExecuting?: boolean;
   executionStatus?: 'waiting' | 'running' | 'success' | 'failed' | 'skipped';
@@ -19,6 +20,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   startPos,
   endPos,
   fromPortType,
+  toPortType,
   isSelected,
   isExecuting,
   executionStatus,
@@ -28,30 +30,57 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   const dx = endPos.x - startPos.x;
   const dy = endPos.y - startPos.y;
 
-  // Adaptive control points for smooth bezier curvature
-  const curvature = Math.max(Math.abs(dx) * 0.5, 50);
-  const cp1x = startPos.x + curvature;
-  const cp1y = startPos.y;
-  const cp2x = endPos.x - curvature;
-  const cp2y = endPos.y;
+  // Check if target is a bottom-entering port (n8n subnode ports: Chat Model, Memory, Tool)
+  const isBottomTarget =
+    ['in_model', 'in_memory', 'in_tools'].includes(connection.toPortId) ||
+    connection.toPortId.startsWith('in_tools');
+
+  let cp1x: number;
+  let cp1y: number;
+  let cp2x: number;
+  let cp2y: number;
+
+  if (isBottomTarget) {
+    // Smooth curve from source node entering vertically UP into the bottom diamond port
+    const vertDist = Math.max(Math.abs(dy) * 0.45, 45);
+    const horizDist = Math.max(Math.abs(dx) * 0.35, 30);
+    cp1x = startPos.x + horizDist;
+    cp1y = startPos.y;
+    cp2x = endPos.x;
+    cp2y = endPos.y + vertDist;
+  } else {
+    // Standard horizontal bezier curvature
+    const curvature = Math.max(Math.abs(dx) * 0.5, 50);
+    cp1x = startPos.x + curvature;
+    cp1y = startPos.y;
+    cp2x = endPos.x - curvature;
+    cp2y = endPos.y;
+  }
 
   const pathData = `M ${startPos.x} ${startPos.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endPos.x} ${endPos.y}`;
   const midX = (startPos.x + endPos.x) / 2;
   const midY = (startPos.y + endPos.y) / 2;
 
-  // Determine stroke color by port type & execution status
-  const colorDef = getPortColorDef(fromPortType);
-  let strokeColor = colorDef.hex;
-  let strokeGlow = isSelected ? colorDef.glow : 'none';
+  // Wire color matches the port point color 100%:
+  // If either side is specialized (model, memory, tool, true, false, branch, outputParser), use that type!
+  const effectiveType =
+    fromPortType && fromPortType !== 'main'
+      ? fromPortType
+      : toPortType && toPortType !== 'main'
+      ? toPortType
+      : fromPortType || toPortType || 'main';
 
+  const colorDef = getPortColorDef(effectiveType);
+  const strokeColor = colorDef.hex;
+  let strokeGlow = isSelected ? colorDef.glow : `drop-shadow(0 0 4px ${colorDef.hex}60)`;
+
+  // Keep authentic port color at all times; enhance with brightness during execution
   if (executionStatus === 'running' || isExecuting) {
-    strokeColor = '#06b6d4'; // cyan
-    strokeGlow = 'drop-shadow(0 0 8px rgba(6, 182, 212, 0.8))';
+    strokeGlow = `drop-shadow(0 0 10px ${colorDef.hex})`;
   } else if (executionStatus === 'success') {
-    strokeColor = '#10b981';
-    strokeGlow = 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.6))';
+    strokeGlow = `drop-shadow(0 0 7px ${colorDef.hex}b3)`;
   } else if (executionStatus === 'failed') {
-    strokeColor = '#ef4444';
+    strokeGlow = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.8))';
   }
 
   return (
@@ -67,7 +96,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         d={pathData}
         fill="none"
         stroke="transparent"
-        strokeWidth="20"
+        strokeWidth="22"
         strokeLinecap="round"
       />
 
@@ -81,7 +110,17 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         opacity="0.8"
       />
 
-      {/* Main wire path */}
+      {/* Ambient glow matching exact port point color */}
+      <path
+        d={pathData}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={isSelected ? 6 : 4}
+        strokeLinecap="round"
+        opacity={isSelected ? 0.45 : 0.22}
+      />
+
+      {/* Main wire path in authentic port color */}
       <path
         d={pathData}
         fill="none"
@@ -96,14 +135,15 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
       {isSelected && (
         <g transform={`translate(${midX}, ${midY - 14})`}>
           <rect
-            x="-28"
+            x="-32"
             y="-10"
-            width="56"
+            width="64"
             height="20"
             rx="10"
-            fill="#0f172a"
+            fill="#090d16"
             stroke={colorDef.hex}
             strokeWidth="1.5"
+            filter={`drop-shadow(0 0 6px ${colorDef.hex}80)`}
           />
           <text
             x="0"
@@ -119,9 +159,9 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         </g>
       )}
 
-      {/* Flowing animated pulse particle during execution */}
+      {/* Flowing animated pulse particle during execution in exact port point color */}
       {(isExecuting || executionStatus === 'running' || executionStatus === 'success') && (
-        <circle r="4" fill={strokeColor} filter="url(#particle-glow)">
+        <circle r="4" fill={strokeColor} filter={`drop-shadow(0 0 6px ${strokeColor})`}>
           <animateMotion path={pathData} dur="1.2s" repeatCount="indefinite" />
         </circle>
       )}

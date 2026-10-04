@@ -319,7 +319,7 @@ export default function App() {
       id: `wf_${Date.now()}`,
       name: finalName,
       description: finalDesc,
-      active: false,
+      active: true, // Default to true (Active in Cloud)
       nodes: finalNodes,
       connections: finalConns,
       viewport: { x: 120, y: 120, zoom: 1 },

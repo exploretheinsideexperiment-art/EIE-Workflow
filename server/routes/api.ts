@@ -134,13 +134,13 @@ router.get('/workflows/:id', (req: Request, res: Response) => {
 });
 
 router.post('/workflows', (req: Request, res: Response) => {
-  const { name, description, nodes, connections, viewport } = req.body;
+  const { name, description, nodes, connections, viewport, active } = req.body;
   const newWorkflow: Workflow = {
     id: `wf_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
     workspaceId: DEFAULT_WORKSPACE_ID,
     name: name || 'Untitled Automation Workflow',
     description: description || 'Visually connects APIs, triggers, AI models, and communication channels.',
-    active: false,
+    active: active !== undefined ? Boolean(active) : true, // Default to true (Active in Cloud)
     nodes: nodes || [],
     connections: connections || [],
     viewport: viewport || { x: 120, y: 120, zoom: 1 },
@@ -151,11 +151,23 @@ router.post('/workflows', (req: Request, res: Response) => {
 
   db.mutate((d) => {
     d.workflows.unshift(newWorkflow);
+    // Auto-register cloud webhook for external applications
+    d.webhooks.push({
+      id: newWorkflow.id,
+      workflowId: newWorkflow.id,
+      nodeId: newWorkflow.nodes?.[0]?.id || 'root',
+      name: `${newWorkflow.name} Cloud Webhook`,
+      path: newWorkflow.id,
+      method: 'ALL',
+      callCount: 0,
+      createdAt: new Date().toISOString(),
+    });
+
     d.auditLogs.unshift({
       id: `aud_${Date.now()}`,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      action: 'Workflow Created',
-      details: `Workflow "${newWorkflow.name}" created`,
+      action: 'Workflow Created & Cloud Activated',
+      details: `Workflow "${newWorkflow.name}" created and active in Cloud`,
       timestamp: new Date().toISOString(),
     });
   });
@@ -175,6 +187,7 @@ router.put('/workflows/:id', (req: Request, res: Response) => {
         ...d.workflows[idx],
         ...updates,
         id,
+        active: updates.active !== undefined ? Boolean(updates.active) : d.workflows[idx].active ?? true,
         updatedAt: new Date().toISOString(),
       };
       updatedWf = d.workflows[idx];
@@ -185,7 +198,7 @@ router.put('/workflows/:id', (req: Request, res: Response) => {
         workspaceId: updates.workspaceId || DEFAULT_WORKSPACE_ID,
         name: updates.name || 'Untitled Automation Workflow',
         description: updates.description || 'Visually connects APIs, triggers, AI models, and communication channels.',
-        active: updates.active ?? false,
+        active: updates.active !== undefined ? Boolean(updates.active) : true,
         nodes: updates.nodes || [],
         connections: updates.connections || [],
         viewport: updates.viewport || { x: 120, y: 120, zoom: 1 },
@@ -219,6 +232,22 @@ router.put('/workflows/:id', (req: Request, res: Response) => {
             createdAt: new Date().toISOString(),
           });
         }
+      }
+
+      // Ensure every workflow has a default cloud webhook so external apps can connect via /api/webhook/:id
+      const defaultWhPath = updatedWf.id;
+      const existingDefaultWh = d.webhooks.find((w) => w.workflowId === updatedWf!.id && w.path === defaultWhPath);
+      if (!existingDefaultWh) {
+        d.webhooks.push({
+          id: defaultWhPath,
+          workflowId: updatedWf.id,
+          nodeId: updatedWf.nodes?.[0]?.id || 'root',
+          name: `${updatedWf.name} (Cloud Webhook)`,
+          path: defaultWhPath,
+          method: 'ALL',
+          callCount: 0,
+          createdAt: new Date().toISOString(),
+        });
       }
     }
   });
@@ -397,15 +426,35 @@ router.get('/webhooks', (req: Request, res: Response) => {
 router.all('/webhook/:path', async (req: Request, res: Response) => {
   const path = req.params.path;
   const webhooks = db.get('webhooks');
-  const targetWebhook = webhooks.find((w) => w.path === path || w.id === path);
+  let targetWebhook = webhooks.find((w) => w.path === path || w.id === path);
 
-  if (!targetWebhook) {
-    return res.status(404).json({ error: `No active webhook registered at path: /webhook/${path}` });
+  // If not found in webhooks table, check if path is a workflow ID or workflow name slug
+  let workflow = targetWebhook
+    ? db.get('workflows').find((w) => w.id === targetWebhook!.workflowId)
+    : db.get('workflows').find((w) => w.id === path || w.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === path.toLowerCase());
+
+  if (!workflow) {
+    return res.status(404).json({
+      error: `No active workflow or webhook found at /webhook/${path}`,
+      hint: 'Ensure your workflow ID or webhook path is correct and active.',
+    });
   }
 
-  const workflow = db.get('workflows').find((w) => w.id === targetWebhook.workflowId);
-  if (!workflow) {
-    return res.status(404).json({ error: 'Associated workflow not found.' });
+  // Auto-register webhook entry if missing
+  if (!targetWebhook) {
+    targetWebhook = {
+      id: workflow.id,
+      workflowId: workflow.id,
+      nodeId: workflow.nodes?.[0]?.id || 'root',
+      name: `${workflow.name} Cloud Webhook`,
+      path: workflow.id,
+      method: 'ALL',
+      callCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    db.mutate((d) => {
+      d.webhooks.push(targetWebhook!);
+    });
   }
 
   const payload = {
@@ -420,7 +469,7 @@ router.all('/webhook/:path', async (req: Request, res: Response) => {
 
   // Update webhook stats
   db.mutate((d) => {
-    const wh = d.webhooks.find((w) => w.id === targetWebhook.id);
+    const wh = d.webhooks.find((w) => w.id === targetWebhook!.id);
     if (wh) {
       wh.callCount = (wh.callCount || 0) + 1;
       wh.lastCalledAt = new Date().toISOString();
@@ -430,16 +479,117 @@ router.all('/webhook/:path', async (req: Request, res: Response) => {
 
   try {
     const execution = await WorkflowEngine.executeWorkflow(workflow, 'webhook', payload);
+
+    // Extract the final output (e.g. AI Agent or terminal node output)
+    const nodeResults = execution.nodeResults || {};
+    const nodeKeys = Object.keys(nodeResults);
+    // Find AI Agent output or the last executed node's output
+    const aiAgentResult = Object.values(nodeResults).find((nr) => nr.nodeType === 'ai_agent');
+    const lastResult = nodeKeys.length > 0 ? nodeResults[nodeKeys[nodeKeys.length - 1]] : null;
+    const finalOutput = aiAgentResult?.output || lastResult?.output || payload;
+
+    const responseText =
+      typeof finalOutput === 'string'
+        ? finalOutput
+        : finalOutput?.text ||
+          finalOutput?.response ||
+          finalOutput?.summary ||
+          finalOutput?.message ||
+          (finalOutput?.data ? JSON.stringify(finalOutput.data) : JSON.stringify(finalOutput));
+
     return res.json({
-      status: 'success',
-      message: `Workflow "${workflow.name}" triggered successfully via Webhook.`,
+      success: execution.status === 'success',
+      status: execution.status,
+      message: `Workflow "${workflow.name}" triggered successfully via Cloud Webhook.`,
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      active: workflow.active,
       executionId: execution.id,
-      workflowStatus: execution.status,
       durationMs: execution.durationMs,
+      output: finalOutput,
+      result: responseText,
+      nodeResults: execution.nodeResults,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Webhook workflow trigger failed.' });
   }
+});
+
+// Dedicated Cloud Trigger Endpoint for External Applications: /api/workflows/:id/trigger & /api/workflows/:id/webhook
+router.all(['/workflows/:id/trigger', '/workflows/:id/webhook'], async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const workflow = db.get('workflows').find((w) => w.id === id);
+  if (!workflow) {
+    return res.status(404).json({ error: `Workflow with ID ${id} not found.` });
+  }
+
+  const payload = {
+    headers: req.headers,
+    query: req.query,
+    params: req.params,
+    method: req.method,
+    body: req.body,
+    receivedAt: new Date().toISOString(),
+    ...(typeof req.body === 'object' && req.body !== null ? req.body : {}),
+  };
+
+  try {
+    const execution = await WorkflowEngine.executeWorkflow(workflow, 'webhook', payload);
+    const nodeResults = execution.nodeResults || {};
+    const nodeKeys = Object.keys(nodeResults);
+    const aiAgentResult = Object.values(nodeResults).find((nr) => nr.nodeType === 'ai_agent');
+    const lastResult = nodeKeys.length > 0 ? nodeResults[nodeKeys[nodeKeys.length - 1]] : null;
+    const finalOutput = aiAgentResult?.output || lastResult?.output || payload;
+
+    const responseText =
+      typeof finalOutput === 'string'
+        ? finalOutput
+        : finalOutput?.text ||
+          finalOutput?.response ||
+          finalOutput?.summary ||
+          finalOutput?.message ||
+          JSON.stringify(finalOutput);
+
+    return res.json({
+      success: execution.status === 'success',
+      status: execution.status,
+      message: `Workflow "${workflow.name}" executed successfully on Cloud.`,
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      active: workflow.active,
+      executionId: execution.id,
+      durationMs: execution.durationMs,
+      output: finalOutput,
+      result: responseText,
+      nodeResults: execution.nodeResults,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Workflow trigger failed.' });
+  }
+});
+
+// Cloud connection metadata endpoint: /api/workflows/:id/cloud-info
+router.get('/workflows/:id/cloud-info', (req: Request, res: Response) => {
+  const id = req.params.id;
+  const workflow = db.get('workflows').find((w) => w.id === id);
+  if (!workflow) {
+    return res.status(404).json({ error: 'Workflow not found.' });
+  }
+
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol || 'http';
+  const baseUrl = `${protocol}://${host}`;
+
+  return res.json({
+    workflowId: workflow.id,
+    name: workflow.name,
+    active: workflow.active,
+    cloudWebhookUrl: `${baseUrl}/api/webhook/${workflow.id}`,
+    cloudTriggerUrl: `${baseUrl}/api/workflows/${workflow.id}/trigger`,
+    curlExample: `curl -X POST "${baseUrl}/api/webhook/${workflow.id}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"message": "Hello from external application"}'`,
+    pythonExample: `import requests\n\nres = requests.post(\n    "${baseUrl}/api/webhook/${workflow.id}",\n    json={"message": "Hello from external application"}\n)\nprint(res.json())`,
+    javascriptExample: `const response = await fetch("${baseUrl}/api/webhook/${workflow.id}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ message: "Hello from external application" })\n});\nconst result = await response.json();\nconsole.log(result);`,
+  });
 });
 
 // Convenience test dispatcher from UI

@@ -331,8 +331,8 @@
       },
       "createdAt": "2026-09-24T03:23:13.182Z",
       "updatedAt": "2026-09-26T03:23:13.182Z",
-      "executionCount": 17,
-      "lastExecutedAt": "2026-09-29T03:42:19.067Z",
+      "executionCount": 18,
+      "lastExecutedAt": "2026-10-04T10:02:20.003Z",
       "nodes": [
         {
           "id": "node_1",
@@ -566,6 +566,355 @@
     }
   ],
   "executions": [
+    {
+      "id": "exec_1791108140003_57943e",
+      "workflowId": "wf_sample_ai_lead",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
+      "triggerType": "webhook",
+      "status": "success",
+      "startedAt": "2026-10-04T10:02:20.003Z",
+      "nodeResults": {
+        "node_1": {
+          "nodeId": "node_1",
+          "nodeName": "Inbound Webhook",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-10-04T10:02:20.004Z",
+          "input": {
+            "headers": {
+              "host": "localhost:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "103"
+            },
+            "query": {},
+            "params": {
+              "path": "wf_sample_ai_lead"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system"
+            },
+            "receivedAt": "2026-10-04T10:02:20.001Z",
+            "customer": "Test External User",
+            "inquiry": "Testing cloud webhook integration from external system"
+          },
+          "finishedAt": "2026-10-04T10:02:20.008Z",
+          "durationMs": 4,
+          "output": {
+            "headers": {
+              "host": "localhost:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "103"
+            },
+            "query": {},
+            "params": {
+              "path": "wf_sample_ai_lead"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system"
+            },
+            "receivedAt": "2026-10-04T10:02:20.001Z",
+            "customer": "Test External User",
+            "inquiry": "Testing cloud webhook integration from external system",
+            "triggered": true,
+            "status": "success",
+            "text": "Trigger event initialized with 8 attributes",
+            "output": {
+              "headers": {
+                "host": "localhost:3000",
+                "user-agent": "curl/7.88.1",
+                "accept": "*/*",
+                "content-type": "application/json",
+                "content-length": "103"
+              },
+              "query": {},
+              "params": {
+                "path": "wf_sample_ai_lead"
+              },
+              "method": "POST",
+              "body": {
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              },
+              "receivedAt": "2026-10-04T10:02:20.001Z",
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system"
+            }
+          }
+        },
+        "node_2": {
+          "nodeId": "node_2",
+          "nodeName": "Gemini AI Lead Analyst",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-10-04T10:02:20.008Z",
+          "input": {
+            "headers": {
+              "host": "localhost:3000",
+              "user-agent": "curl/7.88.1",
+              "accept": "*/*",
+              "content-type": "application/json",
+              "content-length": "103"
+            },
+            "query": {},
+            "params": {
+              "path": "wf_sample_ai_lead"
+            },
+            "method": "POST",
+            "body": {
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system"
+            },
+            "receivedAt": "2026-10-04T10:02:20.001Z",
+            "customer": "Test External User",
+            "inquiry": "Testing cloud webhook integration from external system",
+            "triggered": true,
+            "status": "success",
+            "text": "Trigger event initialized with 8 attributes",
+            "output": {
+              "headers": {
+                "host": "localhost:3000",
+                "user-agent": "curl/7.88.1",
+                "accept": "*/*",
+                "content-type": "application/json",
+                "content-length": "103"
+              },
+              "query": {},
+              "params": {
+                "path": "wf_sample_ai_lead"
+              },
+              "method": "POST",
+              "body": {
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              },
+              "receivedAt": "2026-10-04T10:02:20.001Z",
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system"
+            }
+          },
+          "finishedAt": "2026-10-04T10:02:28.688Z",
+          "durationMs": 8680,
+          "output": {
+            "text": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "output": {
+              "summary": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+              "customer": "Test External User",
+              "urgencyScore": 85,
+              "estimatedContractTier": "Tier 1",
+              "status": "approved"
+            },
+            "result": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "summary": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "urgencyScore": 88,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "headers": {
+                "host": "localhost:3000",
+                "user-agent": "curl/7.88.1",
+                "accept": "*/*",
+                "content-type": "application/json",
+                "content-length": "103"
+              },
+              "query": {},
+              "params": {
+                "path": "wf_sample_ai_lead"
+              },
+              "method": "POST",
+              "body": {
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              },
+              "receivedAt": "2026-10-04T10:02:20.001Z",
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system",
+              "triggered": true,
+              "status": "success",
+              "text": "Trigger event initialized with 8 attributes",
+              "output": {
+                "headers": {
+                  "host": "localhost:3000",
+                  "user-agent": "curl/7.88.1",
+                  "accept": "*/*",
+                  "content-type": "application/json",
+                  "content-length": "103"
+                },
+                "query": {},
+                "params": {
+                  "path": "wf_sample_ai_lead"
+                },
+                "method": "POST",
+                "body": {
+                  "customer": "Test External User",
+                  "inquiry": "Testing cloud webhook integration from external system"
+                },
+                "receivedAt": "2026-10-04T10:02:20.001Z",
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              }
+            },
+            "status": "success",
+            "modelUsed": "gemini-3.8-flash",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": []
+          }
+        },
+        "node_3": {
+          "nodeId": "node_3",
+          "nodeName": "Check High Urgency",
+          "nodeType": "logic_if",
+          "status": "success",
+          "startedAt": "2026-10-04T10:02:28.688Z",
+          "input": {
+            "text": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "output": {
+              "summary": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+              "customer": "Test External User",
+              "urgencyScore": 85,
+              "estimatedContractTier": "Tier 1",
+              "status": "approved"
+            },
+            "result": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "summary": "AI Agent analyzed workflow input cleanly using gemini-3.8-flash. Inquiry from Test External User categorized with high confidence.",
+            "urgencyScore": 88,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "headers": {
+                "host": "localhost:3000",
+                "user-agent": "curl/7.88.1",
+                "accept": "*/*",
+                "content-type": "application/json",
+                "content-length": "103"
+              },
+              "query": {},
+              "params": {
+                "path": "wf_sample_ai_lead"
+              },
+              "method": "POST",
+              "body": {
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              },
+              "receivedAt": "2026-10-04T10:02:20.001Z",
+              "customer": "Test External User",
+              "inquiry": "Testing cloud webhook integration from external system",
+              "triggered": true,
+              "status": "success",
+              "text": "Trigger event initialized with 8 attributes",
+              "output": {
+                "headers": {
+                  "host": "localhost:3000",
+                  "user-agent": "curl/7.88.1",
+                  "accept": "*/*",
+                  "content-type": "application/json",
+                  "content-length": "103"
+                },
+                "query": {},
+                "params": {
+                  "path": "wf_sample_ai_lead"
+                },
+                "method": "POST",
+                "body": {
+                  "customer": "Test External User",
+                  "inquiry": "Testing cloud webhook integration from external system"
+                },
+                "receivedAt": "2026-10-04T10:02:20.001Z",
+                "customer": "Test External User",
+                "inquiry": "Testing cloud webhook integration from external system"
+              }
+            },
+            "status": "success",
+            "modelUsed": "gemini-3.8-flash",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": []
+          },
+          "finishedAt": "2026-10-04T10:02:28.688Z",
+          "durationMs": 0,
+          "output": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 88,
+            "targetValue": "50",
+            "isTrue": true
+          }
+        },
+        "node_5": {
+          "nodeId": "node_5",
+          "nodeName": "Post to #leads-feed",
+          "nodeType": "comm_slack",
+          "status": "skipped"
+        },
+        "node_4": {
+          "nodeId": "node_4",
+          "nodeName": "Urgent Alert to VP Sales",
+          "nodeType": "comm_email",
+          "status": "success",
+          "startedAt": "2026-10-04T10:02:28.688Z",
+          "input": {
+            "branch": "true",
+            "evaluatedCondition": "urgencyScore [>=] 50",
+            "actualValue": 88,
+            "targetValue": "50",
+            "isTrue": true
+          },
+          "finishedAt": "2026-10-04T10:02:28.689Z",
+          "durationMs": 1,
+          "output": {
+            "sent": true,
+            "recipient": "vp-sales@eie-workflow.internal",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
+            "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> AI A",
+            "sentAt": "2026-10-04T10:02:28.689Z",
+            "messageId": "msg_1791108148689_876ee9f8"
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-10-04T10:02:20.003Z",
+          "level": "info",
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
+        },
+        {
+          "timestamp": "2026-10-04T10:02:20.008Z",
+          "level": "info",
+          "message": "Node \"Inbound Webhook\" (trigger_webhook) executed successfully in 4ms.",
+          "nodeId": "node_1"
+        },
+        {
+          "timestamp": "2026-10-04T10:02:28.688Z",
+          "level": "info",
+          "message": "Node \"Gemini AI Lead Analyst\" (ai_agent) executed successfully in 8680ms.",
+          "nodeId": "node_2"
+        },
+        {
+          "timestamp": "2026-10-04T10:02:28.688Z",
+          "level": "info",
+          "message": "Node \"Check High Urgency\" (logic_if) executed successfully in 0ms.",
+          "nodeId": "node_3"
+        },
+        {
+          "timestamp": "2026-10-04T10:02:28.689Z",
+          "level": "info",
+          "message": "Node \"Urgent Alert to VP Sales\" (comm_email) executed successfully in 1ms.",
+          "nodeId": "node_4"
+        },
+        {
+          "timestamp": "2026-10-04T10:02:28.689Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 8686ms."
+        }
+      ],
+      "finishedAt": "2026-10-04T10:02:28.689Z",
+      "durationMs": 8686
+    },
     {
       "id": "exec_1790796093651_ebb653",
       "workflowId": "test_screenshot_wf",
@@ -2611,6 +2960,21 @@
         "inquiry": "Need guide automation for galaxy Hitchhikers"
       },
       "createdAt": "2026-09-25T03:23:13.182Z"
+    },
+    {
+      "id": "wf_sample_ai_lead",
+      "workflowId": "wf_sample_ai_lead",
+      "nodeId": "node_1",
+      "name": "Inbound Webhook → AI Agent Analysis → Email Dispatch Cloud Webhook",
+      "path": "wf_sample_ai_lead",
+      "method": "ALL",
+      "callCount": 1,
+      "createdAt": "2026-10-04T10:02:20.000Z",
+      "lastCalledAt": "2026-10-04T10:02:20.001Z",
+      "lastPayload": {
+        "customer": "Test External User",
+        "inquiry": "Testing cloud webhook integration from external system"
+      }
     }
   ],
   "apiKeys": [
@@ -2625,6 +2989,13 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1791108148689",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1791108140003_57943e",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (8686ms)",
+      "timestamp": "2026-10-04T10:02:28.689Z"
+    },
     {
       "id": "aud_1790796095658",
       "action": "Execution exec_1790796093651_ebb653",

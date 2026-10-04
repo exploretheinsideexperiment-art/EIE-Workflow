@@ -22,7 +22,8 @@ import {
   Bot,
   Link2,
   Edit3,
-  Check
+  Check,
+  CloudLightning
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -61,6 +62,7 @@ interface CanvasToolbarProps {
   onRunWorkflow: () => void;
   onSaveWorkflow: () => void;
   onToggleActive: () => void;
+  onOpenCloudModal?: () => void;
   onOpenEiDoctor?: () => void;
   canConnectSelected?: boolean;
   onConnectSelectedNodes?: () => void;
@@ -102,6 +104,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onRunWorkflow,
   onSaveWorkflow,
   onToggleActive,
+  onOpenCloudModal,
   onOpenEiDoctor,
   canConnectSelected,
   onConnectSelectedNodes,
@@ -329,8 +332,29 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           </button>
         </div>
 
-        {/* Right Section: Active Toggle & Save Workflow */}
+        {/* Right Section: Cloud API & Active Toggle & Save Workflow */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Cloud API & Webhook details button for external apps */}
+          {onOpenCloudModal && (
+            <button
+              onClick={onOpenCloudModal}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0 group ${
+                isActive
+                  ? 'border-emerald-500/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 shadow-sm shadow-emerald-500/20'
+                  : 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300'
+              }`}
+              title="Open Cloud API & Webhook details to connect external applications"
+            >
+              <CloudLightning className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+              <span className="font-bold hidden sm:inline">Cloud API</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {isActive ? 'LIVE' : 'OFF'}
+              </span>
+            </button>
+          )}
+
           {/* Active Status Switch */}
           <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs shrink-0">
             <Radio className={`w-3 h-3 ${isActive ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
@@ -342,7 +366,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               className={`w-7 h-4 rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
                 isActive ? 'bg-emerald-500' : 'bg-slate-700'
               }`}
-              title={isActive ? 'Active - click to pause workflow' : 'Inactive - click to activate workflow'}
+              title={isActive ? 'Active on Cloud - click to pause workflow' : 'Inactive - click to activate workflow'}
             >
               <div
                 className={`w-3 h-3 rounded-full bg-white transition-transform duration-200 ${

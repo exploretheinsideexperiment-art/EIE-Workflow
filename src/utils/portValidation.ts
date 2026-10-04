@@ -1,4 +1,4 @@
-import { WorkflowNodeData, NodePort } from '../types/workflow';
+import { WorkflowNodeData, NodePort, WorkflowConnection } from '../types/workflow';
 
 export type PortType =
   | 'main'
@@ -136,7 +136,7 @@ export function getPortTypeFromNode(
     if (node.type === 'ai_agent') {
       if (portId === 'in_model') return 'model';
       if (portId === 'in_memory') return 'memory';
-      if (portId === 'in_tools') return 'tool';
+      if (portId === 'in_tools' || portId.startsWith('in_tools')) return 'tool';
       return 'main';
     }
     return 'main';
@@ -145,11 +145,13 @@ export function getPortTypeFromNode(
 
 /**
  * Check if an output port type can connect to a target input port type.
- * STRICT ENFORCEMENT:
- * - Model (purple) -> Model input only
- * - Memory (amber) -> Memory input only
- * - Tool (green) -> Tool input only
- * - Main/Data/Condition (cyan/green/rose) -> Main input only
+ * RULES (As requested by user):
+ * 1. Chat Model node (outType === 'model'): ONLY connects to AI Agent's Chat Model terminal (inType === 'model')
+ * 2. Memory node (outType === 'memory'): ONLY connects to AI Agent's Memory terminal (inType === 'memory')
+ * 3. AI Agent's Chat terminal (inType === 'model'): ONLY accepts Chat Model nodes
+ * 4. AI Agent's Memory terminal (inType === 'memory'): ONLY accepts Memory nodes
+ * 5. AI Agent's Tools terminal (inType === 'tool'): ALL other nodes can connect to tools terminal!
+ * 6. Regular In and Out ports: User can freely connect any node's output to any node's input!
  */
 export function isPortCompatible(
   outType: string,
@@ -159,19 +161,22 @@ export function isPortCompatible(
   // Output port cannot connect to another output port
   if (isTargetOutput) return false;
 
-  // 1. Model (Purple)
+  // 1. Chat Model (Purple):
+  // Chat node ka connection sirf AI Agent ke Chat terminal se ho!
   if (outType === 'model' || inType === 'model') {
     return outType === 'model' && inType === 'model';
   }
 
-  // 2. Memory (Amber)
+  // 2. Memory (Amber):
+  // Memory node ka connection sirf AI Agent ke Memory terminal se ho!
   if (outType === 'memory' || inType === 'memory') {
     return outType === 'memory' && inType === 'memory';
   }
 
-  // 3. Tool (Green)
-  if (outType === 'tool' || inType === 'tool') {
-    return outType === 'tool' && inType === 'tool';
+  // 3. AI Agent Tools Terminal (Green):
+  // Baki jitne bhi node hai vo sab tools terminal par connect ho sakte hain!
+  if (inType === 'tool') {
+    return outType !== 'model' && outType !== 'memory';
   }
 
   // 4. Output Parser (Pink)
@@ -179,11 +184,9 @@ export function isPortCompatible(
     return outType === 'outputParser' && inType === 'outputParser';
   }
 
-  // 5. Data Flow (Cyan, True/False, Branch) -> Main input
-  const isDataOut = ['main', 'true', 'false', 'branch'].includes(outType);
-  const isDataIn = inType === 'main';
-
-  return isDataOut && isDataIn;
+  // 5. In aur Out ka connection (Ham apne hisab se connect karenge):
+  // Any regular node output can connect to any input freely!
+  return outType !== 'model' && outType !== 'memory';
 }
 
 export interface ValidationResult {
@@ -200,7 +203,8 @@ export function validateConnection(
   fromNode: WorkflowNodeData,
   fromPort: NodePort | undefined,
   toNode: WorkflowNodeData,
-  toPort: NodePort | undefined
+  toPort: NodePort | undefined,
+  existingConnections?: WorkflowConnection[]
 ): ValidationResult {
   // 1. Self connection forbidden
   if (fromNode.id === toNode.id) {
@@ -216,90 +220,115 @@ export function validateConnection(
   const outColorDef = getPortColorDef(outType);
   const inColorDef = getPortColorDef(inType);
 
-  // 2. AI Model (Purple)
+  // 2. Chat Model Node / Chat Terminal (Purple)
+  // Memory aur chat node ka connection sirf ai agent ke memory aur chat terminal se ho!
+  // Ai agent me chat model aur memory par sirf ek hi baar connection bane!
   if (outType === 'model' || inType === 'model') {
     if (outType !== 'model') {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: AI Agent ka Chat Model port (${inColorDef.name}) sirf AI Model node (Gemini/OpenAI/Claude) se connect ho sakta hai. Aap "${outColorDef.name}" connect kar rahe hain.`,
+        errorMessage: `❌ Invalid Connection: AI Agent ka Chat Model terminal (${inColorDef.name}) sirf Chat Model node (Google Gemini, OpenAI, Claude) se hi connect ho sakta hai.`,
       };
     }
-    if (inType !== 'model') {
+    if (inType !== 'model' || toNode.type !== 'ai_agent') {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: AI Model (${outColorDef.name}) sirf AI Agent ke Chat Model port (${PORT_COLORS.model.name}) par hi connect ho sakta hai!`,
+        errorMessage: `❌ Invalid Connection: Chat Model node (${outColorDef.name}) sirf AI Agent ke Chat Model terminal (${PORT_COLORS.model.name}) par hi connect ho sakta hai!`,
       };
+    }
+    // Sirf ek hi baar connection ban sakta hai
+    if (existingConnections && existingConnections.length > 0) {
+      const alreadyConnected = existingConnections.find(
+        (c) => c.toNodeId === toNode.id && c.toPortId === 'in_model' && c.fromNodeId !== fromNode.id
+      );
+      if (alreadyConnected) {
+        return {
+          valid: false,
+          sourceColor: outColorDef.hex,
+          targetColor: inColorDef.hex,
+          errorMessage: `❌ AI Agent me Chat Model par sirf ek hi baar connection ban sakta hai! Pehle se judhe model ko disconnect karein.`,
+        };
+      }
     }
     return { valid: true };
   }
 
-  // 3. AI Memory (Amber)
+  // 3. Memory Node / Memory Terminal (Amber)
+  // Memory node ka connection sirf ai agent ke memory terminal se ho!
+  // Ai agent me memory par sirf ek hi baar connection bane!
   if (outType === 'memory' || inType === 'memory') {
     if (outType !== 'memory') {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: AI Agent ka Memory port (${inColorDef.name}) sirf Memory node (Window Buffer / Redis) se connect ho sakta hai. Aap "${outColorDef.name}" connect kar rahe hain.`,
+        errorMessage: `❌ Invalid Connection: AI Agent ka Memory terminal (${inColorDef.name}) sirf Memory node (Window Buffer Memory) se connect ho sakta hai.`,
       };
     }
-    if (inType !== 'memory') {
+    if (inType !== 'memory' || toNode.type !== 'ai_agent') {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: Memory node (${outColorDef.name}) sirf AI Agent ke Memory port (${PORT_COLORS.memory.name}) par hi connect ho sakta hai!`,
+        errorMessage: `❌ Invalid Connection: Memory node (${outColorDef.name}) sirf AI Agent ke Memory terminal (${PORT_COLORS.memory.name}) par hi connect ho sakta hai!`,
       };
+    }
+    // Sirf ek hi baar connection ban sakta hai
+    if (existingConnections && existingConnections.length > 0) {
+      const alreadyConnected = existingConnections.find(
+        (c) => c.toNodeId === toNode.id && c.toPortId === 'in_memory' && c.fromNodeId !== fromNode.id
+      );
+      if (alreadyConnected) {
+        return {
+          valid: false,
+          sourceColor: outColorDef.hex,
+          targetColor: inColorDef.hex,
+          errorMessage: `❌ AI Agent me Memory par sirf ek hi baar connection ban sakta hai! Pehle se judhi memory ko disconnect karein.`,
+        };
+      }
     }
     return { valid: true };
   }
 
-  // 4. AI Tool (Green)
-  if (outType === 'tool' || inType === 'tool') {
-    if (outType !== 'tool') {
+  // 4. AI Agent Tools Terminal (Green / in_tools)
+  // Baki jitne bhi node hai vo sab tools terminal par hi ho!
+  if (toNode.type === 'ai_agent' && (toPort?.id === 'in_tools' || inType === 'tool')) {
+    if (outType === 'model' || fromNode.type.startsWith('ai_model_')) {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: AI Agent ka Tools port (${inColorDef.name}) sirf Agent Tools (Calculator/Search/HTTP/Code) se connect ho sakta hai. Aap "${outColorDef.name}" connect kar rahe hain.`,
+        errorMessage: `❌ Chat Model ko sirf AI Agent ke Chat Model terminal (${PORT_COLORS.model.name}) se connect karein.`,
       };
     }
-    if (inType !== 'tool') {
+    if (outType === 'memory' || fromNode.type.startsWith('ai_memory_')) {
       return {
         valid: false,
         sourceColor: outColorDef.hex,
         targetColor: inColorDef.hex,
-        errorMessage: `❌ Invalid Connection: Agent Tool (${outColorDef.name}) sirf AI Agent ke Tools port (${PORT_COLORS.tool.name}) par hi connect ho sakta hai!`,
+        errorMessage: `❌ Memory node ko sirf AI Agent ke Memory terminal (${PORT_COLORS.memory.name}) se connect karein.`,
       };
     }
+    // Any other node (Calculator, Web Search, Code, Slack, Email, Webhook, HTTP, Sheets, Custom Tool) CAN connect as a tool!
     return { valid: true };
   }
 
-  // 5. Output parser
-  if (outType === 'outputParser' || inType === 'outputParser') {
-    if (outType !== inType) {
-      return {
-        valid: false,
-        errorMessage: '❌ Invalid Connection: Output Parser ports must match!',
-      };
-    }
-    return { valid: true };
-  }
-
-  // 6. Data Flow ports (Cyan / True / False) -> Main input
-  const isDataOut = ['main', 'true', 'false', 'branch'].includes(outType);
-  const isDataIn = inType === 'main';
-
-  if (!isDataOut || !isDataIn) {
+  // 5. In aur Out ka connection (Ham apne hisab se connect karenge):
+  // Any node's output can connect to any node's input in the main workflow!
+  if (outType === 'model') {
     return {
       valid: false,
-      sourceColor: outColorDef.hex,
-      targetColor: inColorDef.hex,
-      errorMessage: `❌ Port Type Mismatch: "${outColorDef.name}" port cannot connect to "${inColorDef.name}" port. Port color & type must match!`,
+      errorMessage: `❌ Chat Model sirf AI Agent ke Chat Model terminal se connect ho sakta hai.`,
+    };
+  }
+  if (outType === 'memory') {
+    return {
+      valid: false,
+      errorMessage: `❌ Memory node sirf AI Agent ke Memory terminal se connect ho sakta hai.`,
     };
   }
 
@@ -314,7 +343,8 @@ export function findBestCompatiblePorts(
   fromNode: WorkflowNodeData,
   toNode: WorkflowNodeData,
   preferredFromPortId?: string,
-  preferredToPortId?: string
+  preferredToPortId?: string,
+  existingConnections?: WorkflowConnection[]
 ): { fromPort: NodePort; toPort: NodePort } | null {
   if (fromNode.id === toNode.id) return null;
 
@@ -347,7 +377,33 @@ export function findBestCompatiblePorts(
     }
   }
 
-  // 3. Try main -> main first (most common data flow)
+  // 3. AI Agent intelligent slot matching (Only 1 connection for model & memory)
+  if (toNode.type === 'ai_agent') {
+    if (fromNode.type.startsWith('ai_model_')) {
+      const alreadyHasModel = existingConnections?.some(
+        (c) => c.toNodeId === toNode.id && c.toPortId === 'in_model'
+      );
+      if (!alreadyHasModel) {
+        const modelIn = toPorts.find((p) => p.id === 'in_model');
+        if (modelIn) return { fromPort: fromPorts[0], toPort: modelIn };
+      }
+    }
+    if (fromNode.type.startsWith('ai_memory_')) {
+      const alreadyHasMemory = existingConnections?.some(
+        (c) => c.toNodeId === toNode.id && c.toPortId === 'in_memory'
+      );
+      if (!alreadyHasMemory) {
+        const memIn = toPorts.find((p) => p.id === 'in_memory');
+        if (memIn) return { fromPort: fromPorts[0], toPort: memIn };
+      }
+    }
+    if (fromNode.type.startsWith('ai_tool_') || fromNode.category === 'AI Tools') {
+      const toolIn = toPorts.find((p) => p.id === 'in_tools');
+      if (toolIn) return { fromPort: fromPorts[0], toPort: toolIn };
+    }
+  }
+
+  // 4. Try main -> main first (most common data flow)
   const mainOut = fromPorts.find((p) => p.id === 'out_main' || p.type === 'main');
   const mainIn = toPorts.find((p) => p.id === 'in_main' || p.type === 'main');
   if (mainOut && mainIn && isPortCompatible(mainOut.type, mainIn.type)) {

@@ -17,6 +17,7 @@ import {
   KeyRound,
   Stethoscope,
   AlertCircle,
+  AlertTriangle,
   Maximize2,
   Minimize2,
   Power,
@@ -31,7 +32,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { WorkflowNodeData, ExecutionNodeResult, NodePort } from '../../types/workflow';
+import { WorkflowNodeData, ExecutionNodeResult, NodePort, WorkflowConnection } from '../../types/workflow';
 import { getPortColorDef, isPortCompatible } from '../../utils/portValidation';
 
 interface CanvasNodeProps {
@@ -45,6 +46,8 @@ interface CanvasNodeProps {
   activeConnectingNodeId?: string | null;
   sourceNodeName?: string;
   otherNodes?: WorkflowNodeData[];
+  connections?: WorkflowConnection[];
+  allNodes?: WorkflowNodeData[];
   onDirectConnectNodes?: (fromNodeId: string, toNodeId: string) => void;
   onSelect: (nodeId: string, multi: boolean) => void;
   onStartDrag?: (nodeId: string, clientX: number, clientY: number, multi: boolean) => void;
@@ -63,6 +66,7 @@ interface CanvasNodeProps {
   onToggleDisableNode?: (nodeId: string) => void;
   onTestSingleNode?: (node: WorkflowNodeData) => void;
   onPinDataNode?: (nodeId: string) => void;
+  onDeleteConnection?: (connectionId: string) => void;
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -76,6 +80,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   activeConnectingNodeId,
   sourceNodeName,
   otherNodes,
+  connections = [],
+  allNodes = [],
   onDirectConnectNodes,
   onSelect,
   onStartDrag,
@@ -94,6 +100,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onToggleDisableNode,
   onTestSingleNode,
   onPinDataNode,
+  onDeleteConnection,
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dataTab, setDataTab] = useState<'table' | 'json'>('table');
@@ -166,13 +173,51 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
 
   const outputPayload = node.pinnedData || executionResult?.output;
 
+  // Port connection mapping for high-transparency I/O visualization
+  const getPortConnections = (portId: string, isOutput: boolean) => {
+    if (!connections || connections.length === 0) return [];
+    if (isOutput) {
+      return connections
+        .filter((c) => c.fromNodeId === node.id && c.fromPortId === portId)
+        .map((c) => allNodes?.find((n) => n.id === c.toNodeId))
+        .filter(Boolean) as WorkflowNodeData[];
+    } else {
+      return connections
+        .filter((c) => c.toNodeId === node.id && c.toPortId === portId)
+        .map((c) => allNodes?.find((n) => n.id === c.fromNodeId))
+        .filter(Boolean) as WorkflowNodeData[];
+    }
+  };
+
+  const mainInputSources = getPortConnections('in_main', false);
+  const modelSources = getPortConnections('in_model', false);
+  const memorySources = getPortConnections('in_memory', false);
+  const toolSources = getPortConnections('in_tools', false);
+  const toolConns = connections.filter(
+    (c) => c.toNodeId === node.id && (c.toPortId === 'in_tools' || c.toPortId.startsWith('in_tools'))
+  );
+  const toolCount = toolConns.length;
+  const mainOutputTargets = getPortConnections('out_main', true);
+
   return (
     <div
       ref={nodeRef}
       id={`node-${node.id}`}
       style={{
         transform: `translate(${node.position.x}px, ${node.position.y}px)`,
-        width: isExpanded ? (isAiAgent ? '420px' : '390px') : isAiAgent ? '280px' : '264px',
+        width: isExpanded
+          ? isAiAgent
+            ? toolCount > 1
+              ? '420px'
+              : '380px'
+            : '390px'
+          : isAiAgent
+          ? toolCount > 1
+            ? '360px'
+            : toolCount === 1
+            ? '320px'
+            : '290px'
+          : '264px',
         touchAction: 'none',
       }}
       className={`absolute select-none rounded-2xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move ${
@@ -664,92 +709,123 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* SPECIAL AI AGENT SLOTS (n8n Style: Model, Memory, Tools) */}
+      {/* SPECIAL AI AGENT INTERIOR (n8n Style: Model, Memory, Tools Overview) */}
       {isAiAgent && (
-        <div className="px-3 pb-3 pt-1 border-t border-slate-800/60 flex flex-col gap-1.5 bg-slate-950/40 rounded-b-2xl">
-          <div
-            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
-              activeConnectingPortType === 'model' && activeConnectingNodeId !== node.id
-                ? 'bg-purple-950/70 border-purple-400 ring-2 ring-purple-400/80 shadow-lg shadow-purple-500/30 text-purple-200 animate-pulse scale-[1.02]'
-                : 'text-purple-300/90 bg-purple-950/30 border-purple-800/40'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-purple-400" />
-              <span>Model (LLM Engine)</span>
-            </div>
-            {onQuickAddSubNode && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickAddSubNode(node.id, 'model');
-                }}
-                className="text-[9px] bg-purple-800/60 hover:bg-purple-700 text-purple-200 px-1.5 py-0.5 rounded cursor-pointer transition"
-                title="Attach Chat Model"
-              >
-                + Model
-              </button>
-            )}
+        <div className="px-3 pb-5 pt-2 border-t border-purple-500/20 flex flex-col gap-2 bg-slate-950/50 rounded-b-2xl">
+          {/* Agent Header Banner */}
+          <div className="flex items-center justify-between text-[10px] font-mono">
+            <span className="flex items-center gap-1.5 text-purple-300 font-bold">
+              <Bot className="w-3.5 h-3.5 text-purple-400" />
+              <span>AI Agent (Tools & Reasoning)</span>
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
+              Autonomous
+            </span>
           </div>
 
-          <div
-            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
-              activeConnectingPortType === 'memory' && activeConnectingNodeId !== node.id
-                ? 'bg-amber-950/70 border-amber-400 ring-2 ring-amber-400/80 shadow-lg shadow-amber-500/30 text-amber-200 animate-pulse scale-[1.02]'
-                : 'text-amber-300/90 bg-amber-950/30 border-amber-800/40'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <History className="w-3 h-3 text-amber-400" />
-              <span>Memory (Chat History)</span>
-            </div>
-            {onQuickAddSubNode && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickAddSubNode(node.id, 'memory');
-                }}
-                className="text-[9px] bg-amber-800/60 hover:bg-amber-700 text-amber-200 px-1.5 py-0.5 rounded cursor-pointer transition"
-                title="Attach Buffer Memory"
-              >
-                + Memory
-              </button>
-            )}
+          {/* System Prompt Snippet */}
+          <div className="text-[10px] text-slate-300 bg-slate-900/80 p-2 rounded-lg border border-slate-800/80 line-clamp-2 leading-relaxed">
+            {node.config?.systemPrompt || 'Autonomous reasoning agent equipped with LLM model, conversational memory, and external tools.'}
           </div>
 
-          <div
-            className={`flex items-center justify-between text-[10px] font-mono px-2 py-1 rounded-lg border transition-all ${
-              activeConnectingPortType === 'tool' && activeConnectingNodeId !== node.id
-                ? 'bg-emerald-950/70 border-emerald-400 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/30 text-emerald-200 animate-pulse scale-[1.02]'
-                : 'text-emerald-300/90 bg-emerald-950/30 border-emerald-800/40'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Wrench className="w-3 h-3 text-emerald-400" />
-              <span>Tools (Calculator, Search, HTTP)</span>
+          {/* Connected Sub-Components Overview Strip */}
+          <div className="grid grid-cols-3 gap-1.5 text-[9px] font-mono">
+            {/* Model status */}
+            <div
+              className={`p-1.5 rounded-lg border text-center truncate ${
+                modelSources.length > 0
+                  ? 'bg-purple-950/40 border-purple-700/60 text-purple-200'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400'
+              }`}
+              title={modelSources.length > 0 ? `Attached Model: ${modelSources.map((n) => n.name).join(', ')}` : 'Chat Model required'}
+            >
+              <div className="text-[8px] text-purple-400/80 font-bold uppercase tracking-wider">Model</div>
+              <div className="font-bold truncate mt-0.5">
+                {modelSources.length > 0 ? (
+                  <span className="text-purple-300">✓ {modelSources[0].name.split(' ')[0]}</span>
+                ) : onQuickAddSubNode ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickAddSubNode(node.id, 'model');
+                    }}
+                    className="text-purple-400 hover:text-purple-300 underline font-semibold cursor-pointer"
+                  >
+                    + Model
+                  </button>
+                ) : (
+                  <span className="text-rose-400/80">Required</span>
+                )}
+              </div>
             </div>
-            {onQuickAddSubNode && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickAddSubNode(node.id, 'tool');
-                }}
-                className="text-[9px] bg-emerald-800/60 hover:bg-emerald-700 text-emerald-200 px-1.5 py-0.5 rounded cursor-pointer transition"
-                title="Attach Agent Tool"
-              >
-                + Tool
-              </button>
-            )}
+
+            {/* Memory status */}
+            <div
+              className={`p-1.5 rounded-lg border text-center truncate ${
+                memorySources.length > 0
+                  ? 'bg-amber-950/40 border-amber-700/60 text-amber-200'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400'
+              }`}
+              title={memorySources.length > 0 ? `Attached Memory: ${memorySources.map((n) => n.name).join(', ')}` : 'Optional Conversation Memory'}
+            >
+              <div className="text-[8px] text-amber-400/80 font-bold uppercase tracking-wider">Memory</div>
+              <div className="font-bold truncate mt-0.5">
+                {memorySources.length > 0 ? (
+                  <span className="text-amber-300">✓ Active</span>
+                ) : onQuickAddSubNode ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickAddSubNode(node.id, 'memory');
+                    }}
+                    className="text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
+                  >
+                    + Memory
+                  </button>
+                ) : (
+                  <span>Optional</span>
+                )}
+              </div>
+            </div>
+
+            {/* Tools status */}
+            <div
+              className={`p-1.5 rounded-lg border text-center truncate ${
+                toolSources.length > 0
+                  ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-200'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400'
+              }`}
+              title={toolSources.length > 0 ? `Attached Tools: ${toolSources.map((n) => n.name).join(', ')}` : 'Optional External Tools'}
+            >
+              <div className="text-[8px] text-emerald-400/80 font-bold uppercase tracking-wider">Tools</div>
+              <div className="font-bold truncate mt-0.5">
+                {toolSources.length > 0 ? (
+                  <span className="text-emerald-300">✓ {toolSources.length} Tool{toolSources.length > 1 ? 's' : ''}</span>
+                ) : onQuickAddSubNode ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickAddSubNode(node.id, 'tool');
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 underline font-semibold cursor-pointer"
+                  >
+                    + Tool
+                  </button>
+                ) : (
+                  <span>Optional</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Input Ports (Left) */}
-      <div className="absolute top-1/2 -left-3 -translate-y-1/2 flex flex-col gap-2.5 z-30">
-        {node.inputs.map((port) => {
+      {/* Input Ports (Left) - For AI Agent, ONLY in_main is on the left side (n8n Style) */}
+      <div className="absolute top-1/2 -left-3 -translate-y-1/2 flex flex-col gap-3.5 z-30">
+        {(isAiAgent ? node.inputs.filter((p) => p.id === 'in_main') : node.inputs).map((port) => {
           const colors = getPortColorDef(port.type);
           const isConnectingActive = Boolean(activeConnectingPortType);
           const isSelfNode = activeConnectingNodeId === node.id;
@@ -758,87 +834,574 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             !isSelfNode &&
             isPortCompatible(activeConnectingPortType!, port.type, false);
           const isIncompatible = isConnectingActive && (!isCompatible || isSelfNode);
+          const isConnected = getPortConnections(port.id, false).length > 0;
 
-          return (
-            <div
-              key={port.id}
-              id={`port-${node.id}-${port.id}`}
-              data-port="true"
-              data-node-id={node.id}
-              data-port-id={port.id}
-              data-is-output="false"
-              data-is-compatible={isCompatible ? 'true' : 'false'}
-              title={
-                isIncompatible
-                  ? `❌ Incompatible: Requires ${colors.name}`
-                  : isCompatible
-                  ? `✓ Connect to ${port.label || port.name} (${colors.name})`
-                  : `Input: ${port.label || port.name} (${colors.name})`
-              }
-              className={`w-6 h-6 rounded-full bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-lg shadow-black group/port cursor-pointer ${
-                isCompatible
-                  ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
-                  : isIncompatible
-                  ? 'opacity-25 border-slate-700 cursor-not-allowed scale-90'
-                  : `${colors.border} ${colors.hover} hover:scale-125`
-              }`}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isIncompatible) return;
-                if (onConnectToThisNode) {
-                  onConnectToThisNode(node.id, port.id);
-                } else {
-                  onPortClick?.(node.id, port.id, false);
-                }
-              }}
-              onMouseUp={(e) => {
-                e.stopPropagation();
-                if (isIncompatible) return;
-                onPortMouseUp(node.id, port.id, false);
-              }}
-            >
-              <div
-                className={`w-2 h-2 rounded-full ${colors.bg} ${
-                  isCompatible ? 'scale-125 bg-white' : ''
-                } group-hover/port:bg-white transition-colors`}
-              />
-              {/* Port label badge */}
-              <span
-                className={`absolute right-7 text-[10px] font-mono tracking-tight px-2 py-0.5 rounded-lg border transition-all whitespace-nowrap pointer-events-none z-40 shadow-xl ${
-                  isCompatible
-                    ? 'opacity-100 bg-slate-950 border-cyan-400 text-white font-bold scale-105 shadow-cyan-500/30'
-                    : 'opacity-0 group-hover/port:opacity-100 bg-slate-950/95 border-slate-800 text-slate-300'
-                }`}
-              >
-                {isCompatible ? `✓ Connect: ${port.label || port.name}` : port.label || port.name}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Output Ports (Right) with Quick-Add '+' Connector (n8n Style) */}
-      <div className="absolute top-1/2 -right-3 -translate-y-1/2 flex flex-col gap-2.5 z-20">
-        {node.outputs.map((port) => {
-          const colors = getPortColorDef(port.type);
-          const isDraggingThis = isConnecting && activeConnectingNodeId === node.id;
-          const isConnectingActive = Boolean(activeConnectingPortType);
+          // Clear short label for port
+          let shortBadge = '';
+          if (isAiAgent) {
+            shortBadge = 'IN: Query';
+          } else {
+            shortBadge = port.label ? `IN: ${port.label}` : 'IN';
+          }
 
           return (
             <div key={port.id} className="relative flex items-center">
-              {/* Output Port Dot - Large comfortable hit target */}
+              {/* Outer Port Dot matching exact point color */}
               <div
                 id={`port-${node.id}-${port.id}`}
                 data-port="true"
                 data-node-id={node.id}
                 data-port-id={port.id}
+                data-is-output="false"
+                data-is-compatible={isCompatible ? 'true' : 'false'}
+                title={
+                  isIncompatible
+                    ? `❌ Incompatible: Requires ${colors.name}`
+                    : isCompatible
+                    ? `✓ Connect to ${port.label || port.name} (${colors.name})`
+                    : `Input: ${port.label || port.name} (${colors.name}) - ${isConnected ? 'Connected' : 'Available'}`
+                }
+                className={`w-6 h-6 rounded-full bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-lg shadow-black group/port cursor-pointer ${
+                  isCompatible
+                    ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                    : isIncompatible
+                    ? 'opacity-30 border-slate-700 cursor-not-allowed scale-90'
+                    : isConnected
+                    ? `${colors.border} ring-1 ${colors.ring} hover:scale-125`
+                    : `${colors.border} ${colors.hover} hover:scale-125`
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isIncompatible) return;
+                  if (onConnectToThisNode) {
+                    onConnectToThisNode(node.id, port.id);
+                  } else {
+                    onPortClick?.(node.id, port.id, false);
+                  }
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  if (isIncompatible) return;
+                  onPortMouseUp(node.id, port.id, false);
+                }}
+              >
+                {/* Center dot in exact port point color */}
+                <div
+                  className={`w-2.5 h-2.5 rounded-full ${colors.bg} ${
+                    isCompatible ? 'scale-125 bg-white' : ''
+                  } group-hover/port:bg-white transition-colors shadow-sm`}
+                />
+
+                {/* Permanent or hover badge */}
+                <span
+                  className={`absolute right-7 text-[10px] font-mono tracking-tight px-2 py-0.5 rounded-lg border transition-all whitespace-nowrap pointer-events-none z-40 shadow-xl ${
+                    isCompatible
+                      ? 'opacity-100 bg-slate-950 border-cyan-400 text-white font-bold scale-105 shadow-cyan-500/30'
+                      : isAiAgent || isSelected
+                      ? 'opacity-100 bg-slate-950/95 border-slate-800 text-slate-300'
+                      : 'opacity-0 group-hover/port:opacity-100 bg-slate-950/95 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  <span className="font-bold" style={{ color: colors.hex }}>{shortBadge}</span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* SPECIAL AI AGENT BOTTOM PORTS (n8n Style: Model, Memory, and Multi-Tool Sockets with Persistent '+' Terminal) */}
+      {isAiAgent && (
+        <div className="absolute -bottom-3 left-0 right-0 flex items-start justify-around px-2 z-30 pointer-events-auto">
+          {/* 1. CHAT MODEL SUB-NODE (Single slot: Only 1 connection allowed) */}
+          {(() => {
+            const port = node.inputs.find((p) => p.id === 'in_model');
+            if (!port) return null;
+            const colors = getPortColorDef(port.type);
+            const isConnectingActive = Boolean(activeConnectingPortType);
+            const isSelfNode = activeConnectingNodeId === node.id;
+            const connectedSources = getPortConnections(port.id, false);
+            const isConnected = connectedSources.length > 0;
+            // Sirf ek hi baar connection ban sakta hai: agar already connected hai to incompatible
+            const isCompatible =
+              isConnectingActive &&
+              !isSelfNode &&
+              !isConnected &&
+              isPortCompatible(activeConnectingPortType!, port.type, false);
+            const isIncompatible = isConnectingActive && (!isCompatible || isSelfNode || isConnected);
+            const modelConn = connections.find((c) => c.toNodeId === node.id && c.toPortId === 'in_model');
+
+            return (
+              <div key="in_model" className="relative flex flex-col items-center group/bottomport">
+                {/* Diamond Port Socket */}
+                <div
+                  id={`port-${node.id}-${port.id}`}
+                  data-port="true"
+                  data-node-id={node.id}
+                  data-port-id={port.id}
+                  data-is-output="false"
+                  data-is-compatible={isCompatible ? 'true' : 'false'}
+                  title={
+                    isConnected
+                      ? `Chat Model: 1/1 Connected (${connectedSources[0]?.name}) - Click 'x' to disconnect`
+                      : isIncompatible
+                      ? `❌ Incompatible: Requires Chat Model`
+                      : isCompatible
+                      ? `✓ Connect Chat Model (${colors.name})`
+                      : `Chat Model (Available: 1 connection only)`
+                  }
+                  className={`w-5 h-5 rotate-45 rounded-xs bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-md shadow-black group/port cursor-pointer ${
+                    isCompatible
+                      ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                      : isIncompatible
+                      ? 'opacity-30 border-slate-700 cursor-not-allowed scale-90'
+                      : isConnected
+                      ? `${colors.border} ring-1 ${colors.ring} hover:scale-125`
+                      : `${colors.border} ${colors.hover} hover:scale-125`
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isIncompatible || isConnected) return;
+                    if (onConnectToThisNode) {
+                      onConnectToThisNode(node.id, port.id);
+                    } else {
+                      onPortClick?.(node.id, port.id, false);
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation();
+                    if (isIncompatible || isConnected) return;
+                    onPortMouseUp(node.id, port.id, false);
+                  }}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-xs ${colors.bg} ${
+                      isCompatible ? 'scale-125 bg-white' : ''
+                    } group-hover/port:bg-white transition-colors shadow-sm`}
+                  />
+                </div>
+
+                <div className="mt-1 flex items-center gap-0.5 text-[10px] font-sans font-medium tracking-tight text-slate-300 whitespace-nowrap">
+                  <span>Chat Model</span>
+                  <span className="text-rose-500 font-bold ml-0.5">*</span>
+                  {isConnected && <span className="text-[9px] text-purple-400 font-mono ml-0.5">(1/1)</span>}
+                </div>
+
+                {isConnected && (
+                  <div
+                    className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-950/90 border border-purple-800 text-purple-200 truncate max-w-[85px] mt-0.5 shadow-sm"
+                    title={connectedSources[0]?.name}
+                  >
+                    <span className="truncate">{connectedSources[0]?.name.split(' ')[0]}</span>
+                    {modelConn && onDeleteConnection && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteConnection(modelConn.id);
+                        }}
+                        className="text-purple-400 hover:text-white p-0.5 rounded cursor-pointer shrink-0"
+                        title="Disconnect Model"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Single connection indicator: when connected, show active dot; ONLY when empty, show '+' button */}
+                {isConnected ? (
+                  <div
+                    className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-sm shadow-purple-500/70 ring-2 ring-purple-500/30 mt-1.5"
+                    title="Chat Model: 1/1 Connected (Single connection only)"
+                  />
+                ) : (
+                  <>
+                    <div className="w-[1.5px] h-3 bg-slate-500/80 my-0.5" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isConnecting) {
+                          if (onConnectToThisNode) {
+                            onConnectToThisNode(node.id, port.id);
+                          } else {
+                            onPortClick?.(node.id, port.id, false);
+                          }
+                        } else {
+                          onQuickAddSubNode?.(node.id, 'model');
+                        }
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                        if (isIncompatible) return;
+                        onPortMouseUp(node.id, port.id, false);
+                      }}
+                      data-port="true"
+                      data-node-id={node.id}
+                      data-port-id={port.id}
+                      data-is-output="false"
+                      className="w-5 h-5 rounded-md bg-slate-800/95 hover:bg-slate-700 border border-slate-600/90 hover:border-purple-400 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-110 active:scale-95 group/btn"
+                      title="Add / Connect Chat Model (+)"
+                    >
+                      <Plus className="w-3 h-3 stroke-[2.5] text-slate-300 group-hover/btn:text-purple-300" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 2. MEMORY SUB-NODE (Single slot: Only 1 connection allowed) */}
+          {(() => {
+            const port = node.inputs.find((p) => p.id === 'in_memory');
+            if (!port) return null;
+            const colors = getPortColorDef(port.type);
+            const isConnectingActive = Boolean(activeConnectingPortType);
+            const isSelfNode = activeConnectingNodeId === node.id;
+            const connectedSources = getPortConnections(port.id, false);
+            const isConnected = connectedSources.length > 0;
+            // Sirf ek hi baar connection ban sakta hai: agar already connected hai to incompatible
+            const isCompatible =
+              isConnectingActive &&
+              !isSelfNode &&
+              !isConnected &&
+              isPortCompatible(activeConnectingPortType!, port.type, false);
+            const isIncompatible = isConnectingActive && (!isCompatible || isSelfNode || isConnected);
+            const memConn = connections.find((c) => c.toNodeId === node.id && c.toPortId === 'in_memory');
+
+            return (
+              <div key="in_memory" className="relative flex flex-col items-center group/bottomport">
+                {/* Diamond Port Socket */}
+                <div
+                  id={`port-${node.id}-${port.id}`}
+                  data-port="true"
+                  data-node-id={node.id}
+                  data-port-id={port.id}
+                  data-is-output="false"
+                  data-is-compatible={isCompatible ? 'true' : 'false'}
+                  title={
+                    isConnected
+                      ? `Memory: 1/1 Connected (${connectedSources[0]?.name}) - Click 'x' to disconnect`
+                      : isIncompatible
+                      ? `❌ Incompatible: Requires Memory node`
+                      : isCompatible
+                      ? `✓ Connect Memory (${colors.name})`
+                      : `Memory (Available: 1 connection only)`
+                  }
+                  className={`w-5 h-5 rotate-45 rounded-xs bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-md shadow-black group/port cursor-pointer ${
+                    isCompatible
+                      ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                      : isIncompatible
+                      ? 'opacity-30 border-slate-700 cursor-not-allowed scale-90'
+                      : isConnected
+                      ? `${colors.border} ring-1 ${colors.ring} hover:scale-125`
+                      : `${colors.border} ${colors.hover} hover:scale-125`
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isIncompatible || isConnected) return;
+                    if (onConnectToThisNode) {
+                      onConnectToThisNode(node.id, port.id);
+                    } else {
+                      onPortClick?.(node.id, port.id, false);
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    e.stopPropagation();
+                    if (isIncompatible || isConnected) return;
+                    onPortMouseUp(node.id, port.id, false);
+                  }}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-xs ${colors.bg} ${
+                      isCompatible ? 'scale-125 bg-white' : ''
+                    } group-hover/port:bg-white transition-colors shadow-sm`}
+                  />
+                </div>
+
+                <div className="mt-1 flex items-center gap-0.5 text-[10px] font-sans font-medium tracking-tight text-slate-300 whitespace-nowrap">
+                  <span>Memory</span>
+                  {isConnected && <span className="text-[9px] text-amber-400 font-mono ml-0.5">(1/1)</span>}
+                </div>
+
+                {isConnected && (
+                  <div
+                    className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-950/90 border border-amber-800 text-amber-200 truncate max-w-[85px] mt-0.5 shadow-sm"
+                    title={connectedSources[0]?.name}
+                  >
+                    <span className="truncate">{connectedSources[0]?.name.split(' ')[0]}</span>
+                    {memConn && onDeleteConnection && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteConnection(memConn.id);
+                        }}
+                        className="text-amber-400 hover:text-white p-0.5 rounded cursor-pointer shrink-0"
+                        title="Disconnect Memory"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Single connection indicator: when connected, show active dot; ONLY when empty, show '+' button */}
+                {isConnected ? (
+                  <div
+                    className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-500/70 ring-2 ring-amber-500/30 mt-1.5"
+                    title="Memory: 1/1 Connected (Single connection only)"
+                  />
+                ) : (
+                  <>
+                    <div className="w-[1.5px] h-3 bg-slate-500/80 my-0.5" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isConnecting) {
+                          if (onConnectToThisNode) {
+                            onConnectToThisNode(node.id, port.id);
+                          } else {
+                            onPortClick?.(node.id, port.id, false);
+                          }
+                        } else {
+                          onQuickAddSubNode?.(node.id, 'memory');
+                        }
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                        if (isIncompatible) return;
+                        onPortMouseUp(node.id, port.id, false);
+                      }}
+                      data-port="true"
+                      data-node-id={node.id}
+                      data-port-id={port.id}
+                      data-is-output="false"
+                      className="w-5 h-5 rounded-md bg-slate-800/95 hover:bg-slate-700 border border-slate-600/90 hover:border-amber-400 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-110 active:scale-95 group/btn"
+                      title="Add / Connect Memory (+)"
+                    >
+                      <Plus className="w-3 h-3 stroke-[2.5] text-slate-300 group-hover/btn:text-amber-300" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* 3. TOOLS SUB-NODES (Multiple tools connectable + Persistent empty '+' Terminal!) */}
+          {(() => {
+            const port = node.inputs.find((p) => p.id === 'in_tools');
+            if (!port) return null;
+            const colors = getPortColorDef('tool');
+            const isConnectingActive = Boolean(activeConnectingPortType);
+            const isSelfNode = activeConnectingNodeId === node.id;
+            const isCompatible =
+              isConnectingActive &&
+              !isSelfNode &&
+              isPortCompatible(activeConnectingPortType!, 'tool', false);
+            const isIncompatible = isConnectingActive && (!isCompatible || isSelfNode);
+
+            // All tool connections into this agent
+            const currentToolConns = connections.filter(
+              (c) => c.toNodeId === node.id && (c.toPortId === 'in_tools' || c.toPortId.startsWith('in_tools'))
+            );
+
+            return (
+              <div key="in_tools_section" className="relative flex items-start gap-2.5 group/toolsection">
+                {/* Render each connected tool in its own distinct socket with disconnect 'x' button */}
+                {currentToolConns.map((tConn, idx) => {
+                  const sourceNode = allNodes.find((n) => n.id === tConn.fromNodeId);
+                  const toolName = sourceNode?.name || `Tool ${idx + 1}`;
+
+                  return (
+                    <div key={tConn.id} className="relative flex flex-col items-center group/toolsocket">
+                      {/* Tool Socket Diamond (Wire from this tool lands right here!) */}
+                      <div
+                        id={`port-${node.id}-in_tools-${tConn.id}`}
+                        data-port="true"
+                        data-node-id={node.id}
+                        data-port-id="in_tools"
+                        data-conn-id={tConn.id}
+                        data-is-output="false"
+                        title={`Connected: ${toolName} - Click 'x' to disconnect`}
+                        className={`w-5 h-5 rotate-45 rounded-xs bg-slate-900 border-2 ${colors.border} ring-1 ${colors.ring} flex items-center justify-center relative shadow-md shadow-black transition-all hover:scale-125 cursor-pointer`}
+                      >
+                        <div className={`w-2 h-2 rounded-xs ${colors.bg} shadow-sm`} />
+                      </div>
+
+                      <div className="mt-1 flex items-center gap-0.5 text-[10px] font-sans font-medium tracking-tight text-emerald-300 whitespace-nowrap">
+                        <span>Tool {idx + 1}</span>
+                      </div>
+
+                      {/* Tool Name Pill with Disconnect 'x' */}
+                      <div
+                        className="flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-800 text-emerald-200 truncate max-w-[85px] mt-0.5 shadow-sm"
+                        title={toolName}
+                      >
+                        <span className="truncate">{toolName.split(' ')[0]}</span>
+                        {onDeleteConnection && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteConnection(tConn.id);
+                            }}
+                            className="text-emerald-400 hover:text-white p-0.5 rounded cursor-pointer shrink-0"
+                            title={`Disconnect ${toolName}`}
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="w-[1.5px] h-3 bg-emerald-500/60 my-0.5" />
+
+                      {/* Active indicator dot */}
+                      <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-500/50" />
+                    </div>
+                  );
+                })}
+
+                {/* THE PERSISTENT EMPTY '+' TERMINAL (Always stays empty so multiple nodes can connect!) */}
+                <div className="relative flex flex-col items-center group/emptyplus">
+                  {/* Empty Port Diamond Socket (Accepts wire drops & clicks) */}
+                  <div
+                    id={`port-${node.id}-in_tools`}
+                    data-port="true"
+                    data-node-id={node.id}
+                    data-port-id="in_tools"
+                    data-is-output="false"
+                    data-is-compatible={isCompatible ? 'true' : 'false'}
+                    title={
+                      isIncompatible
+                        ? `❌ Incompatible: Requires a tool node or action`
+                        : isCompatible
+                        ? `✓ Connect Tool (${colors.name})`
+                        : `Tools Terminal (+ Available) - Connect any node as tool`
+                    }
+                    className={`w-5 h-5 rotate-45 rounded-xs bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-md shadow-black group/port cursor-pointer ${
+                      isCompatible
+                        ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                        : isIncompatible
+                        ? 'opacity-30 border-slate-700 cursor-not-allowed scale-90'
+                        : `${colors.border} ${colors.hover} hover:scale-125 border-dashed`
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isIncompatible) return;
+                      if (onConnectToThisNode) {
+                        onConnectToThisNode(node.id, 'in_tools');
+                      } else {
+                        onPortClick?.(node.id, 'in_tools', false);
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      e.stopPropagation();
+                      if (isIncompatible) return;
+                      onPortMouseUp(node.id, 'in_tools', false);
+                    }}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-xs ${colors.bg} ${
+                        isCompatible ? 'scale-125 bg-white' : ''
+                      } group-hover/port:bg-white transition-colors shadow-sm`}
+                    />
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-0.5 text-[10px] font-sans font-medium tracking-tight text-slate-300 whitespace-nowrap">
+                    <span>{currentToolConns.length > 0 ? '+ Tool' : 'Tools'}</span>
+                  </div>
+
+                  {currentToolConns.length === 0 && (
+                    <div className="text-[9px] font-mono px-1 py-0.2 rounded bg-slate-950/90 border border-slate-800 text-slate-400 mt-0.5">
+                      Empty
+                    </div>
+                  )}
+
+                  <div className="w-[1.5px] h-3 bg-slate-500/80 my-0.5" />
+
+                  {/* Square '+' Terminal Button (Always stays available & empty so multiple nodes can connect) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isConnecting) {
+                        if (onConnectToThisNode) {
+                          onConnectToThisNode(node.id, 'in_tools');
+                        } else {
+                          onPortClick?.(node.id, 'in_tools', false);
+                        }
+                      } else {
+                        onQuickAddSubNode?.(node.id, 'tool');
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      e.stopPropagation();
+                      if (isIncompatible) return;
+                      onPortMouseUp(node.id, 'in_tools', false);
+                    }}
+                    data-port="true"
+                    data-node-id={node.id}
+                    data-port-id="in_tools"
+                    data-is-output="false"
+                    className="w-5.5 h-5.5 rounded-md bg-slate-800/95 hover:bg-slate-700 border border-dashed border-emerald-500/80 hover:border-emerald-400 text-emerald-300 hover:text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-110 active:scale-95 group/btn"
+                    title="Add / Connect another Tool (+) - Drops here"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5] text-emerald-300 group-hover/btn:text-white" />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Output Ports (Right) with Protruding Outward '+' Terminal (n8n Style) */}
+      <div className="absolute top-1/2 -right-7 -translate-y-1/2 flex flex-col gap-4 z-20 pointer-events-auto">
+        {node.outputs.map((port) => {
+          const colors = getPortColorDef(port.type);
+          const isDraggingThis = isConnecting && activeConnectingNodeId === node.id;
+          const isConnectingActive = Boolean(activeConnectingPortType);
+          const isConnected = getPortConnections(port.id, true).length > 0;
+
+          let shortBadge = '';
+          if (isAiAgent) {
+            shortBadge = 'OUT: Response →';
+          } else if (node.type.startsWith('ai_model_')) {
+            shortBadge = 'OUT: Model →';
+          } else if (node.type.startsWith('ai_memory_')) {
+            shortBadge = 'OUT: Memory →';
+          } else if (node.type.startsWith('ai_tool_')) {
+            shortBadge = 'OUT: Tool →';
+          } else if (node.type === 'logic_if') {
+            shortBadge = port.id === 'out_true' ? 'TRUE ✓' : 'FALSE ✗';
+          } else {
+            shortBadge = port.label ? `OUT: ${port.label} →` : 'OUT →';
+          }
+
+          return (
+            <div key={port.id} className="relative flex items-center group/outport">
+              {/* Horizontal Stem / Arm bridging from node body to protruding terminal */}
+              <div className="w-4 h-[2px] bg-slate-600/90 group-hover/outport:bg-cyan-400/80 transition-colors shadow-sm" />
+
+              {/* Protruding '+' Terminal Button (Extended outward from node) */}
+              <button
+                type="button"
+                id={`port-${node.id}-${port.id}`}
+                data-port="true"
+                data-node-id={node.id}
+                data-port-id={port.id}
                 data-is-output="true"
-                title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect`}
-                className={`w-6 h-6 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-lg shadow-black group/port relative cursor-pointer ${
+                title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect wire to another node (IN)`}
+                className={`w-6.5 h-6.5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-lg shadow-black relative cursor-pointer z-10 group/btn ${
                   isDraggingThis
-                    ? `ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40`
+                    ? `ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
                     : isConnectingActive
                     ? 'opacity-40 cursor-default'
+                    : isConnected
+                    ? `ring-2 ${colors.ring} hover:scale-125 hover:border-white shadow-cyan-500/40`
                     : `${colors.hover} hover:scale-125 hover:border-white hover:shadow-cyan-500/50`
                 }`}
                 onClick={(e) => {
@@ -854,23 +1417,24 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                   });
                 }}
               >
-                <div className={`w-2 h-2 rounded-full ${colors.bg} group-hover/port:bg-white transition-colors`} />
-                <span className="absolute left-7 text-[10px] font-mono tracking-tight text-cyan-200 bg-slate-950/95 px-2 py-0.5 rounded-lg border border-cyan-800 opacity-0 group-hover/port:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-40 shadow-xl">
-                  {port.label || 'Click or Drag to Connect'}
-                </span>
-              </div>
+                {/* Bold Plus Icon inside protruding terminal */}
+                <Plus
+                  className={`w-3.5 h-3.5 stroke-[2.8] text-slate-300 group-hover/btn:text-white group-hover/btn:scale-110 transition-transform ${
+                    isConnected ? 'text-cyan-300' : ''
+                  }`}
+                  style={{ color: isConnected ? colors.hex : undefined }}
+                />
 
-              {/* Quick Connect '+' Button (n8n style) */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onQuickConnect?.(node.id, port.id);
-                }}
-                className="w-4 h-4 ml-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black flex items-center justify-center text-[10px] shadow-sm hover:scale-125 transition cursor-pointer opacity-70 group-hover:opacity-100"
-                title="Quick Add & Connect Next Step (+)"
-              >
-                +
+                {/* Permanent or hover badge */}
+                <span
+                  className={`absolute left-8 text-[10px] font-mono tracking-tight px-2 py-0.5 rounded-lg border transition-all whitespace-nowrap pointer-events-none z-40 shadow-xl ${
+                    isAiAgent || isSelected || node.type === 'logic_if' || node.type.startsWith('ai_')
+                      ? 'opacity-100 bg-slate-950/95 border-slate-800 text-slate-300'
+                      : 'opacity-0 group-hover/outport:opacity-100 bg-slate-950/95 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  <span className="font-bold" style={{ color: colors.hex }}>{shortBadge}</span>
+                </span>
               </button>
             </div>
           );
