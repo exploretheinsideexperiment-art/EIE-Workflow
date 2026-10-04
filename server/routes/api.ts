@@ -836,14 +836,14 @@ router.get('/stats', (req: Request, res: Response) => {
 
 // --- AI FIXER: AUTONOMOUS ROBOT CHAT, TROUBLESHOOTER & WORKFLOW ARCHITECT ---
 const handleFixerChatRequest = async (req: Request, res: Response) => {
-  const { message, workflow, latestExecution, language } = req.body;
+  const { message, workflow, latestExecution, language, history } = req.body;
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required.' });
   }
 
   try {
-    const aiResult = await handleEiDoctorChat(message, workflow, latestExecution, language);
+    const aiResult = await handleEiDoctorChat(message, workflow, latestExecution, language, history);
     return res.json(aiResult);
   } catch (err: any) {
     console.error('[AI Fixer Error]', err);

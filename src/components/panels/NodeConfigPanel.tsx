@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Play,
@@ -159,32 +159,151 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   // Current selected credential
   const selectedCredential = credentials.find((c) => c.id === node.credentialId);
 
-  // Filter relevant credentials for this node type
+  // Filter relevant credentials strictly for this node type
   const relevantCredentials = useMemo(() => {
     const typeLower = node.type.toLowerCase();
-    if (typeLower.includes('telegram')) return credentials.filter((c) => c.type === 'telegram' || c.type === 'generic');
-    if (typeLower.includes('slack')) return credentials.filter((c) => c.type === 'slack' || c.type === 'generic');
-    if (typeLower.includes('sheets') || typeLower.includes('google')) return credentials.filter((c) => c.type === 'google' || c.type === 'gemini');
+    if (typeLower.includes('telegram')) return credentials.filter((c) => c.type === 'telegram');
+    if (typeLower.includes('slack')) return credentials.filter((c) => c.type === 'slack');
+    if (typeLower.includes('discord')) return credentials.filter((c) => c.type === 'discord');
+    if (typeLower.includes('sheets') || typeLower.includes('gmail') || typeLower.includes('google')) {
+      return credentials.filter((c) => c.type === 'google' || c.type === 'google_sheets' || c.type === 'gmail');
+    }
     if (typeLower.includes('gemini')) return credentials.filter((c) => c.type === 'gemini');
     if (typeLower.includes('openai')) return credentials.filter((c) => c.type === 'openai');
-    return credentials;
+    if (typeLower.includes('anthropic') || typeLower.includes('claude')) return credentials.filter((c) => c.type === 'anthropic');
+    if (typeLower.includes('postgres') || typeLower.includes('supabase')) return credentials.filter((c) => c.type === 'postgres' || c.type === 'supabase');
+    return credentials.filter((c) => c.type === 'generic');
   }, [credentials, node.type]);
+
+  // Clean state resets when active node changes
+  useEffect(() => {
+    setShowNewCredModal(false);
+    setCredentialDropdownOpen(false);
+    setNewCredName('');
+    setNewCredKey('');
+  }, [node.id]);
+
+  // Ensure current node does not hold an unrelated credential (e.g. Telegram token on an OpenAI node)
+  useEffect(() => {
+    if (node.credentialId && credentials.length > 0) {
+      const currentCred = credentials.find((c) => c.id === node.credentialId);
+      if (currentCred) {
+        const typeLower = node.type.toLowerCase();
+        let isMismatched = false;
+        if (typeLower.includes('openai') && currentCred.type !== 'openai') isMismatched = true;
+        if (typeLower.includes('gemini') && currentCred.type !== 'gemini') isMismatched = true;
+        if (typeLower.includes('anthropic') && currentCred.type !== 'anthropic') isMismatched = true;
+        if (typeLower.includes('telegram') && currentCred.type !== 'telegram') isMismatched = true;
+        if (typeLower.includes('slack') && currentCred.type !== 'slack') isMismatched = true;
+        if (typeLower.includes('discord') && currentCred.type !== 'discord') isMismatched = true;
+
+        if (isMismatched) {
+          const matching = relevantCredentials[0];
+          onUpdateConfig(node.id, { credentialId: matching ? matching.id : undefined });
+        }
+      }
+    }
+  }, [node.id, node.type, node.credentialId, credentials, relevantCredentials]);
+
+  // Dynamic Credential Meta by Node Type (no hardcoded Telegram leaks)
+  const getCredDefaults = () => {
+    const t = node.type.toLowerCase();
+    if (t.includes('telegram')) {
+      return {
+        title: 'Telegram Bot Token',
+        nameDefault: 'Telegram Bot Account',
+        namePlaceholder: 'e.g. My Alerts Bot',
+        keyLabel: 'Telegram Bot Token (from @BotFather)',
+        keyPlaceholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...',
+        type: 'telegram',
+      };
+    }
+    if (t.includes('openai')) {
+      return {
+        title: 'OpenAI API Key',
+        nameDefault: 'OpenAI Production Key',
+        namePlaceholder: 'e.g. OpenAI Production Key',
+        keyLabel: 'OpenAI Secret API Key (sk-...)',
+        keyPlaceholder: 'sk-proj-... or sk-...',
+        type: 'openai',
+      };
+    }
+    if (t.includes('gemini')) {
+      return {
+        title: 'Google Gemini API Key',
+        nameDefault: 'Google Gemini Pro Key',
+        namePlaceholder: 'e.g. Gemini 1.5 Pro Key',
+        keyLabel: 'Gemini API Key (AIzaSy...)',
+        keyPlaceholder: 'AIzaSy...',
+        type: 'gemini',
+      };
+    }
+    if (t.includes('anthropic') || t.includes('claude')) {
+      return {
+        title: 'Anthropic Claude Key',
+        nameDefault: 'Claude 3.5 Sonnet Key',
+        namePlaceholder: 'e.g. Anthropic Claude Key',
+        keyLabel: 'Claude API Key (sk-ant-...)',
+        keyPlaceholder: 'sk-ant-api03-...',
+        type: 'anthropic',
+      };
+    }
+    if (t.includes('slack')) {
+      return {
+        title: 'Slack Bot Token',
+        nameDefault: 'Slack Workspace Bot',
+        namePlaceholder: 'e.g. Slack Alerts Bot',
+        keyLabel: 'Bot User OAuth Token (xoxb-...)',
+        keyPlaceholder: 'xoxb-...',
+        type: 'slack',
+      };
+    }
+    if (t.includes('discord')) {
+      return {
+        title: 'Discord Webhook Connection',
+        nameDefault: 'Discord Channel Webhook',
+        namePlaceholder: 'e.g. Discord Alerts Webhook',
+        keyLabel: 'Discord Webhook URL',
+        keyPlaceholder: 'https://discord.com/api/webhooks/...',
+        type: 'discord',
+      };
+    }
+    if (t.includes('sheets') || t.includes('gmail') || t.includes('google')) {
+      return {
+        title: 'Google Workspace Account',
+        nameDefault: 'Google Sheets Account',
+        namePlaceholder: 'e.g. Google Sheets Account',
+        keyLabel: 'OAuth Access Token or Service Account Key',
+        keyPlaceholder: 'OAuth token / Service Account JSON',
+        type: 'google_sheets',
+      };
+    }
+    return {
+      title: `${node.name} Credential`,
+      nameDefault: `${node.name} Key`,
+      namePlaceholder: `e.g. ${node.name} Production Key`,
+      keyLabel: 'API Key or Access Secret',
+      keyPlaceholder: 'API Key / Secret Token',
+      type: 'generic',
+    };
+  };
 
   // Handle Quick Credential Creation
   const handleSaveQuickCredential = () => {
-    if (!newCredName.trim() || !onCreateCredential) return;
-    let credType = 'generic';
-    if (node.type.includes('telegram')) credType = 'telegram';
-    if (node.type.includes('slack')) credType = 'slack';
-    if (node.type.includes('gemini')) credType = 'gemini';
-    if (node.type.includes('openai')) credType = 'openai';
+    const defs = getCredDefaults();
+    const finalName = (newCredName || defs.nameDefault).trim();
+    if (!finalName || !onCreateCredential) return;
 
     const newId = `c_${Date.now()}`;
     onCreateCredential({
       id: newId,
-      name: newCredName.trim(),
-      type: credType,
-      data: { apiKey: newCredKey.trim(), botToken: newCredKey.trim() },
+      name: finalName,
+      type: defs.type,
+      data: {
+        apiKey: newCredKey.trim(),
+        botToken: newCredKey.trim(),
+        webhookUrl: newCredKey.trim(),
+      },
     });
     onUpdateConfig(node.id, { credentialId: newId });
     setNewCredName('');
@@ -195,7 +314,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
   // Check if node requires/supports credentials
   const supportsCredentials = useMemo(() => {
-    const t = node.type;
+    const t = node.type.toLowerCase();
     return (
       t.includes('telegram') ||
       t.includes('slack') ||
@@ -205,6 +324,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       t.includes('gemini') ||
       t.includes('openai') ||
       t.includes('claude') ||
+      t.includes('anthropic') ||
+      t.includes('discord') ||
+      t.includes('mailchimp') ||
+      t.includes('notion') ||
+      t.includes('supabase') ||
+      t.includes('postgres') ||
+      t.includes('mysql') ||
       t === 'http_request'
     );
   }, [node.type]);
@@ -535,41 +661,69 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                       </div>
 
                       {/* Modal for Quick Credential Creation */}
-                      {showNewCredModal && (
-                        <div className="p-3 mt-2 rounded-xl bg-slate-950 border border-purple-500/50 space-y-2.5">
-                          <span className="text-xs font-bold text-white block">Add New Credential</span>
-                          <input
-                            type="text"
-                            value={newCredName}
-                            onChange={(e) => setNewCredName(e.target.value)}
-                            placeholder="e.g. Telegram account 2"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-purple-500 focus:outline-none"
-                          />
-                          <input
-                            type="password"
-                            value={newCredKey}
-                            onChange={(e) => setNewCredKey(e.target.value)}
-                            placeholder="API Key / Bot Token"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-purple-500 focus:outline-none"
-                          />
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowNewCredModal(false)}
-                              className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 hover:text-white"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleSaveQuickCredential}
-                              className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold"
-                            >
-                              Save Credential
-                            </button>
+                      {showNewCredModal && (() => {
+                        const defs = getCredDefaults();
+                        return (
+                          <div className="p-3 mt-2 rounded-xl bg-slate-950 border border-purple-500/50 space-y-2.5 animate-in fade-in zoom-in-95">
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                                Add New {defs.title}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowNewCredModal(false)}
+                                className="text-slate-400 hover:text-white text-xs cursor-pointer p-0.5"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-1">Credential Name</label>
+                              <input
+                                type="text"
+                                value={newCredName}
+                                onChange={(e) => setNewCredName(e.target.value)}
+                                placeholder={defs.namePlaceholder}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
+                                data-lpignore="true"
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-1">{defs.keyLabel}</label>
+                              <input
+                                type="password"
+                                value={newCredKey}
+                                onChange={(e) => setNewCredKey(e.target.value)}
+                                placeholder={defs.keyPlaceholder}
+                                autoComplete="new-password"
+                                data-lpignore="true"
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowNewCredModal(false)}
+                                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSaveQuickCredential}
+                                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow-md shadow-purple-600/30"
+                              >
+                                Save Credential
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -912,7 +1066,529 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     </div>
                   )}
 
-                  {/* 9. FALLBACK FOR ANY OTHER NODE TYPE */}
+                  {/* 9. OPENAI CHATGPT */}
+                  {(node.type === 'app_openai' || node.type === 'ai_model_openai' || node.type === 'ai_openai') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Model</label>
+                        <select
+                          value={config.model || 'gpt-4o'}
+                          onChange={(e) => handleConfigChange('model', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                        >
+                          <option value="gpt-4o">gpt-4o (Omni Flagship - Multimodal)</option>
+                          <option value="gpt-4o-mini">gpt-4o-mini (Fast & Cost Efficient)</option>
+                          <option value="o1-preview">o1-preview (Advanced Deep Reasoning)</option>
+                          <option value="o3-mini">o3-mini (High-Speed Reasoning)</option>
+                          <option value="gpt-4-turbo">gpt-4-turbo (128k High Context)</option>
+                          <option value="gpt-3.5-turbo">gpt-3.5-turbo (Legacy Standard)</option>
+                        </select>
+                      </div>
+
+                      {/* Prompt / Message */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">Prompt / User Message</label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedField({
+                                key: 'prompt',
+                                label: 'OpenAI Prompt',
+                                value: config.prompt || '',
+                              })
+                            }
+                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span>Expand</span>
+                          </button>
+                        </div>
+                        <div className="relative flex items-stretch">
+                          <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-emerald-400 font-bold select-none italic">
+                            fx
+                          </span>
+                          <textarea
+                            rows={3}
+                            value={config.prompt || ''}
+                            onChange={(e) => handleConfigChange('prompt', e.target.value)}
+                            placeholder="Summarize the following payload: {{$json}}"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none resize-y"
+                          />
+                        </div>
+                        {renderExpressionEvaluator(config.prompt)}
+                      </div>
+
+                      {/* System Instructions */}
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">System Instructions (Optional)</label>
+                        <textarea
+                          rows={2}
+                          value={config.systemPrompt || ''}
+                          onChange={(e) => handleConfigChange('systemPrompt', e.target.value)}
+                          placeholder="You are an expert AI assistant that outputs structured, concise results."
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none resize-y"
+                        />
+                      </div>
+
+                      {/* Temperature Slider */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">
+                            Temperature: <span className="text-emerald-400 font-mono">{config.temperature ?? 0.7}</span>
+                          </label>
+                          <span className="text-[10px] text-slate-500">0.0 = Precise, 1.0 = Creative</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={config.temperature ?? 0.7}
+                          onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                          className="w-full accent-emerald-500"
+                        />
+                      </div>
+
+                      {/* Max Tokens & Format */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Max Tokens</label>
+                          <input
+                            type="number"
+                            value={config.maxTokens ?? 2048}
+                            onChange={(e) => handleConfigChange('maxTokens', parseInt(e.target.value) || 2048)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-emerald-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Response Format</label>
+                          <select
+                            value={config.responseFormat || 'text'}
+                            onChange={(e) => handleConfigChange('responseFormat', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                          >
+                            <option value="text">Text Response</option>
+                            <option value="json_object">JSON Object</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 10. ANTHROPIC CLAUDE */}
+                  {(node.type === 'app_anthropic' || node.type === 'ai_model_anthropic') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Model</label>
+                        <select
+                          value={config.model || 'claude-3-5-sonnet'}
+                          onChange={(e) => handleConfigChange('model', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
+                        >
+                          <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (State-of-the-Art)</option>
+                          <option value="claude-3-5-haiku">Claude 3.5 Haiku (Lightning Fast)</option>
+                          <option value="claude-3-opus">Claude 3 Opus (Deep Complex Analysis)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">User Prompt</label>
+                        <textarea
+                          rows={3}
+                          value={config.prompt || ''}
+                          onChange={(e) => handleConfigChange('prompt', e.target.value)}
+                          placeholder="Analyze and extract key parameters from {{$json}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none resize-y"
+                        />
+                        {renderExpressionEvaluator(config.prompt)}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">
+                            Temperature: <span className="text-amber-400 font-mono">{config.temperature ?? 0.5}</span>
+                          </label>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={config.temperature ?? 0.5}
+                          onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 11. SLACK NODE */}
+                  {(node.type === 'app_slack' || node.type === 'comm_slack') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                        <select
+                          value={config.operation || 'postMessage'}
+                          onChange={(e) => handleConfigChange('operation', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-purple-500 focus:outline-none"
+                        >
+                          <option value="postMessage">Post Message to Channel</option>
+                          <option value="sendDirectMessage">Send Direct Message to User</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Channel / User</label>
+                        <input
+                          type="text"
+                          value={config.channel || ''}
+                          onChange={(e) => handleConfigChange('channel', e.target.value)}
+                          placeholder="#general, #alerts or @user"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-purple-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.channel)}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Message Text</label>
+                        <textarea
+                          rows={3}
+                          value={config.text || ''}
+                          onChange={(e) => handleConfigChange('text', e.target.value)}
+                          placeholder="🚀 Workflow notification: {{$json.summary || 'Completed successfully'}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-purple-500 focus:outline-none resize-y"
+                        />
+                        {renderExpressionEvaluator(config.text)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 12. DISCORD NODE */}
+                  {(node.type === 'app_discord' || node.type === 'comm_discord') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Webhook URL</label>
+                        <input
+                          type="text"
+                          value={config.webhookUrl || ''}
+                          onChange={(e) => handleConfigChange('webhookUrl', e.target.value)}
+                          placeholder="https://discord.com/api/webhooks/..."
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Content / Message</label>
+                        <textarea
+                          rows={3}
+                          value={config.content || ''}
+                          onChange={(e) => handleConfigChange('content', e.target.value)}
+                          placeholder="⚡ EIE-Workflow: Alert triggered for {{$json.id || 'Job'}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-indigo-500 focus:outline-none resize-y"
+                        />
+                        {renderExpressionEvaluator(config.content)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 13. GMAIL & EMAIL NODE */}
+                  {(node.type === 'app_gmail' || node.type === 'comm_email') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                        <select
+                          value={config.operation || 'send'}
+                          onChange={(e) => handleConfigChange('operation', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-red-500 focus:outline-none"
+                        >
+                          <option value="send">Send Email</option>
+                          <option value="draft">Create Draft</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">To Email Address</label>
+                        <input
+                          type="text"
+                          value={config.to || ''}
+                          onChange={(e) => handleConfigChange('to', e.target.value)}
+                          placeholder="recipient@domain.com, {{$json.email}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-red-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.to)}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Subject</label>
+                        <input
+                          type="text"
+                          value={config.subject || ''}
+                          onChange={(e) => handleConfigChange('subject', e.target.value)}
+                          placeholder="Automated Alert: {{$json.event || 'Notification'}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-red-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.subject)}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Email Body (HTML/Text)</label>
+                        <textarea
+                          rows={4}
+                          value={config.body || ''}
+                          onChange={(e) => handleConfigChange('body', e.target.value)}
+                          placeholder="<p>Hello,</p><p>Process completed: {{$json}}</p>"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-red-500 focus:outline-none resize-y"
+                        />
+                        {renderExpressionEvaluator(config.body)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 14. CODE NODE (JAVASCRIPT / PYTHON) */}
+                  {(node.type === 'core_code' || node.type === 'code') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Language</label>
+                        <select
+                          value={config.language || 'javascript'}
+                          onChange={(e) => handleConfigChange('language', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-cyan-500 focus:outline-none"
+                        >
+                          <option value="javascript">JavaScript (ES2024)</option>
+                          <option value="python">Python (Pyodide)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Execute Code</label>
+                        <textarea
+                          rows={6}
+                          value={config.code || '// Write custom JavaScript to transform data\nreturn $input.all().map(item => ({\n  ...item.json,\n  processedAt: new Date().toISOString()\n}));'}
+                          onChange={(e) => handleConfigChange('code', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none resize-y"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 15. IF CONDITION NODE */}
+                  {(node.type === 'condition_if' || node.type === 'core_if') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Value 1 (Expression)</label>
+                        <input
+                          type="text"
+                          value={config.fieldPath || config.value1 || ''}
+                          onChange={(e) => {
+                            handleConfigChange('fieldPath', e.target.value);
+                            handleConfigChange('value1', e.target.value);
+                          }}
+                          placeholder="{{$json.status}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.fieldPath || config.value1)}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operator</label>
+                        <select
+                          value={config.operator || '=='}
+                          onChange={(e) => handleConfigChange('operator', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-amber-500 focus:outline-none font-mono"
+                        >
+                          <option value="==">== (Equal To)</option>
+                          <option value="!=">!= (Not Equal To)</option>
+                          <option value=">">&gt; (Greater Than)</option>
+                          <option value="<">&lt; (Less Than)</option>
+                          <option value="contains">contains (Substring / Array Includes)</option>
+                          <option value="not_contains">does not contain</option>
+                          <option value="isEmpty">is empty / null</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Value 2 (Comparison)</label>
+                        <input
+                          type="text"
+                          value={config.value || config.value2 || ''}
+                          onChange={(e) => {
+                            handleConfigChange('value', e.target.value);
+                            handleConfigChange('value2', e.target.value);
+                          }}
+                          placeholder="success, true, or number"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 16. EDIT FIELDS (SET) NODE */}
+                  {(node.type === 'core_edit_fields' || node.type === 'core_set') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field Name (Key)</label>
+                        <input
+                          type="text"
+                          value={config.fieldName || config.key || ''}
+                          onChange={(e) => {
+                            handleConfigChange('fieldName', e.target.value);
+                            handleConfigChange('key', e.target.value);
+                          }}
+                          placeholder="leadScore or formattedMessage"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-teal-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Field Value (String or Expression)</label>
+                        <input
+                          type="text"
+                          value={config.fieldValue || config.value || ''}
+                          onChange={(e) => {
+                            handleConfigChange('fieldValue', e.target.value);
+                            handleConfigChange('value', e.target.value);
+                          }}
+                          placeholder="{{$json.name.toUpperCase()}}"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-teal-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.fieldValue || config.value)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 17. WAIT / DELAY NODE */}
+                  {node.type === 'core_wait' && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Wait Duration</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            value={config.amount || config.seconds || 5}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 1;
+                              handleConfigChange('amount', val);
+                              handleConfigChange('seconds', val);
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
+                          />
+                          <select
+                            value={config.unit || 'seconds'}
+                            onChange={(e) => handleConfigChange('unit', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="seconds">Seconds</option>
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 18. GOOGLE DRIVE */}
+                  {node.type === 'app_google_drive' && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                        <select
+                          value={config.operation || 'upload'}
+                          onChange={(e) => handleConfigChange('operation', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="upload">Upload File</option>
+                          <option value="createFolder">Create Folder</option>
+                          <option value="download">Download File</option>
+                          <option value="search">Search Files</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Folder ID / Path</label>
+                        <input
+                          type="text"
+                          value={config.folderId || 'root'}
+                          onChange={(e) => handleConfigChange('folderId', e.target.value)}
+                          placeholder="root or folder_id"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 19. GOOGLE CALENDAR */}
+                  {node.type === 'app_google_calendar' && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                        <select
+                          value={config.operation || 'createEvent'}
+                          onChange={(e) => handleConfigChange('operation', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-green-500 focus:outline-none"
+                        >
+                          <option value="createEvent">Create Scheduled Event</option>
+                          <option value="getEvents">Get Upcoming Agenda</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Event Summary</label>
+                        <input
+                          type="text"
+                          value={config.summary || ''}
+                          onChange={(e) => handleConfigChange('summary', e.target.value)}
+                          placeholder="Client Onboarding Strategy Session"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-green-500 focus:outline-none"
+                        />
+                        {renderExpressionEvaluator(config.summary)}
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Duration (Minutes)</label>
+                        <input
+                          type="number"
+                          value={config.durationMinutes || 30}
+                          onChange={(e) => handleConfigChange('durationMinutes', parseInt(e.target.value) || 30)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-green-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 20. DATABASE (POSTGRESQL / SUPABASE) */}
+                  {(node.type === 'db_postgres' || node.type === 'app_supabase' || node.type === 'db_mysql') && (
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Operation</label>
+                        <select
+                          value={config.operation || 'execute_query'}
+                          onChange={(e) => handleConfigChange('operation', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="execute_query">Execute SQL Query</option>
+                          <option value="insert">Insert Record</option>
+                          <option value="update">Update Record</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">SQL Query / Table</label>
+                        <textarea
+                          rows={4}
+                          value={config.query || config.table || 'SELECT * FROM users WHERE active = true LIMIT 50;'}
+                          onChange={(e) => {
+                            handleConfigChange('query', e.target.value);
+                            handleConfigChange('table', e.target.value);
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none resize-y"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 21. FALLBACK FOR ANY OTHER NODE TYPE */}
                   {![
                     'app_telegram',
                     'comm_telegram',
@@ -923,6 +1599,29 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     'ai_agent',
                     'ai_model_gemini',
                     'app_google_sheets',
+                    'app_openai',
+                    'ai_model_openai',
+                    'ai_openai',
+                    'app_anthropic',
+                    'ai_model_anthropic',
+                    'app_slack',
+                    'comm_slack',
+                    'app_discord',
+                    'comm_discord',
+                    'app_gmail',
+                    'comm_email',
+                    'core_code',
+                    'code',
+                    'condition_if',
+                    'core_if',
+                    'core_edit_fields',
+                    'core_set',
+                    'core_wait',
+                    'app_google_drive',
+                    'app_google_calendar',
+                    'db_postgres',
+                    'app_supabase',
+                    'db_mysql',
                   ].includes(node.type) && (
                     <div className="space-y-3.5">
                       {Object.keys(config).length === 0 ? (

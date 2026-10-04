@@ -319,7 +319,7 @@ export function autoRepairWorkflow(
             position: { x: Math.max(40, (node.position?.x ?? 200) - 320), y: Math.max(40, (node.position?.y ?? 120) - 120) },
             inputs: geminiDef.inputs,
             outputs: geminiDef.outputs,
-            config: { model: 'gemini-2.5-flash', temperature: 0.2 },
+            config: { model: 'gemini-3.8-flash', temperature: 0.2 },
           };
           nodes.push(modelNode);
           connections.push({
@@ -329,7 +329,7 @@ export function autoRepairWorkflow(
             toNodeId: node.id,
             toPortId: 'in_model',
           });
-          fixesApplied.push(`Connected Google Gemini 2.5 Flash model (purple) to "${node.name}"`);
+          fixesApplied.push(`Connected Google Gemini 3.8 Flash model (purple) to "${node.name}"`);
         }
       }
 

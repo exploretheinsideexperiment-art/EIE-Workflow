@@ -330,43 +330,57 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       }
       // If connectingState:
       if (connectingState) {
-        // 1. Check if released over ANY target node card!
+        // 1. Check if released directly over an INPUT port!
         const el = document.elementFromPoint(e.clientX, e.clientY);
-        const nodeCard = el?.closest('[id^="node-"]');
-        if (nodeCard) {
-          const targetNodeId = nodeCard.id.replace('node-', '');
-          if (targetNodeId && targetNodeId !== connectingState.fromNodeId) {
-            handleConnectToNode(targetNodeId);
+        const portEl = el?.closest('[data-port="true"]');
+        if (portEl) {
+          const isOutput = portEl.getAttribute('data-is-output') === 'true';
+          const targetNodeId = portEl.getAttribute('data-node-id');
+          const targetPortId = portEl.getAttribute('data-port-id');
+          if (!isOutput && targetNodeId && targetPortId && targetNodeId !== connectingState.fromNodeId) {
+            handleConnectToNode(targetNodeId, targetPortId);
             return;
           }
         }
 
-        // 2. If it was click mode, keep it active in Click-to-Connect mode!
-        if (connectingState.isClickMode) {
+        // 2. Check if released within snapping radius (32px) of any compatible input port
+        const allInputPorts = document.querySelectorAll<HTMLElement>(
+          '[data-port="true"][data-is-output="false"]'
+        );
+        let matchedNodeId: string | null = null;
+        let matchedPortId: string | null = null;
+        let bestDist = 32;
+
+        for (let i = 0; i < allInputPorts.length; i++) {
+          const p = allInputPorts[i];
+          const pNodeId = p.getAttribute('data-node-id');
+          const pPortId = p.getAttribute('data-port-id');
+          const isComp = p.getAttribute('data-is-compatible') !== 'false';
+          if (pNodeId && pPortId && pNodeId !== connectingState.fromNodeId && isComp) {
+            const rect = p.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+            if (dist < bestDist) {
+              bestDist = dist;
+              matchedNodeId = pNodeId;
+              matchedPortId = pPortId;
+            }
+          }
+        }
+
+        if (matchedNodeId && matchedPortId) {
+          handleConnectToNode(matchedNodeId, matchedPortId);
           return;
         }
 
-        // 3. If mouse barely moved (< 20px), treat it as a click and stay in Click-to-Connect mode!
-        if (!connectingState.dragDist || connectingState.dragDist < 20) {
+        // 3. If it was click mode or mouse barely moved (< 15px), keep in Click-to-Connect mode
+        if (connectingState.isClickMode || (!connectingState.dragDist || connectingState.dragDist < 15)) {
           setConnectingState((prev) => (prev ? { ...prev, isClickMode: true } : null));
           return;
         }
 
-        // 4. If it was a real drag-and-drop on empty canvas, open Add Node modal right at drop point!
-        const containerRect = containerRef.current?.getBoundingClientRect();
-        if (containerRect) {
-          const dropWorldX = snapVal((e.clientX - containerRect.left - viewport.x) / viewport.zoom);
-          const dropWorldY = snapVal((e.clientY - containerRect.top - viewport.y) / viewport.zoom);
-          const fromNode = workflow.nodes.find((n) => n.id === connectingState.fromNodeId);
-
-          setAutoConnectState({
-            fromNodeId: connectingState.fromNodeId,
-            fromPortId: connectingState.fromPortId,
-            fromNodeName: fromNode?.name,
-            targetPos: { x: dropWorldX, y: dropWorldY },
-          });
-          setAddNodeModalOpen(true);
-        }
+        // 4. Released on empty space / non-port: cleanly cancel connection
         setConnectingState(null);
         setPendingSourcePort(null);
       }
@@ -705,6 +719,54 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     pushHistory(updatedWorkflow);
   };
 
+  // Exact wire port position calculator matching DOM flexbox coordinates
+  const getNodePortPos = (nodeId: string, portId: string, isOutput: boolean) => {
+    const node = workflow.nodes.find((n) => n.id === nodeId);
+    if (!node) return { x: 0, y: 0 };
+
+    // 1. Try exact DOM measurement first - 100% pixel-accurate to real port element
+    const portEl = document.getElementById(`port-${nodeId}-${portId}`);
+    const container = containerRef.current;
+    if (portEl && container) {
+      const portRect = portEl.getBoundingClientRect();
+      const contRect = container.getBoundingClientRect();
+      return {
+        x: (portRect.left + portRect.width / 2 - contRect.left - viewport.x) / viewport.zoom,
+        y: (portRect.top + portRect.height / 2 - contRect.top - viewport.y) / viewport.zoom,
+      };
+    }
+
+    // 2. High-precision fallback
+    const isExpanded = Boolean(node.isExpanded);
+    const isAiAgent = node.type === 'ai_agent';
+    const nodeWidth = isExpanded ? (isAiAgent ? 420 : 390) : (isAiAgent ? 280 : 264);
+
+    const nodeEl = document.getElementById(`node-${nodeId}`);
+    let actualHeight = 120;
+    if (nodeEl && container) {
+      const r = nodeEl.getBoundingClientRect();
+      actualHeight = r.height / viewport.zoom;
+    } else {
+      actualHeight = isExpanded ? (isAiAgent ? 260 : 180) : (isAiAgent ? 200 : 120);
+    }
+
+    const ports = isOutput ? node.outputs : node.inputs;
+    const portIndex = ports.findIndex((p) => p.id === portId);
+    const totalPorts = Math.max(ports.length, 1);
+    const idx = portIndex >= 0 ? portIndex : 0;
+
+    // CSS: top-1/2 -translate-y-1/2 flex flex-col gap-2.5 (24px port + 10px gap = 34px pitch)
+    const portPitch = 34;
+    const totalPortStackHeight = totalPorts * 24 + (totalPorts - 1) * 10;
+    const stackTop = (actualHeight - totalPortStackHeight) / 2;
+    const portCenterY = node.position.y + stackTop + idx * portPitch + 12;
+
+    return {
+      x: isOutput ? node.position.x + nodeWidth : node.position.x,
+      y: portCenterY,
+    };
+  };
+
   // --- CONNECTING NODES (CLICK-TO-CONNECT & DRAG) ---
   const startConnectFromNode = (nodeId: string, portId?: string) => {
     const fromNode = workflow.nodes.find((n) => n.id === nodeId);
@@ -712,23 +774,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     const activePortId = portId || fromNode.outputs[0]?.id || 'out_main';
     const portType = getPortTypeFromNode(fromNode, activePortId, true);
-
-    const portIdx = Math.max(0, fromNode.outputs.findIndex((p) => p.id === activePortId));
-    const isExpanded = Boolean(fromNode.isExpanded);
-    const isAiAgent = fromNode.type === 'ai_agent';
-    const nodeWidth = isExpanded ? (isAiAgent ? 420 : 390) : (isAiAgent ? 280 : 264);
-
-    const worldStart = {
-      x: fromNode.position.x + nodeWidth,
-      y: fromNode.position.y + 36 + portIdx * 24,
-    };
+    const worldStart = getNodePortPos(nodeId, activePortId, true);
 
     setConnectingState({
       fromNodeId: nodeId,
       fromPortId: activePortId,
       portType,
       startPos: worldStart,
-      currentPos: { x: worldStart.x + 40, y: worldStart.y },
+      currentPos: { x: worldStart.x + 30, y: worldStart.y },
       isClickMode: true,
       dragDist: 0,
     });
@@ -748,13 +801,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     screenPos: { x: number; y: number }
   ) => {
     if (!isOutput || !containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-
-    const worldStart = {
-      x: (screenPos.x - containerRect.left - viewport.x) / viewport.zoom,
-      y: (screenPos.y - containerRect.top - viewport.y) / viewport.zoom,
-    };
-
+    const worldStart = getNodePortPos(nodeId, portId, true);
     const fromNode = workflow.nodes.find((n) => n.id === nodeId);
     const portType = getPortTypeFromNode(fromNode, portId, true);
 
@@ -1671,31 +1718,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeIds, selectedConnectionId, historyIndex, history, workflow]);
 
-  // Exact wire port position calculator matching DOM flexbox coordinates
-  const getNodePortPos = (nodeId: string, portId: string, isOutput: boolean) => {
-    const node = workflow.nodes.find((n) => n.id === nodeId);
-    if (!node) return { x: 0, y: 0 };
-
-    const isExpanded = Boolean(node.isExpanded);
-    const nodeWidth = isExpanded ? (node.type === 'ai_agent' ? 420 : 390) : (node.type === 'ai_agent' ? 280 : 264);
-    const nodeHeight = isExpanded ? (node.type === 'ai_agent' ? 240 : 160) : (node.type === 'ai_agent' ? 204 : 84);
-    const ports = isOutput ? node.outputs : node.inputs;
-    const portIndex = ports.findIndex((p) => p.id === portId);
-    const totalPorts = Math.max(ports.length, 1);
-
-    // Port container has CSS: top-1/2 -translate-y-1/2 flex flex-col gap-2.5 (20px port + 10px gap)
-    const portPitch = 30;
-    const totalPortContainerHeight = totalPorts * 20 + (totalPorts - 1) * 10;
-    const startY = (nodeHeight - totalPortContainerHeight) / 2 + 10;
-    const idx = portIndex >= 0 ? portIndex : 0;
-    const portY = node.position.y + startY + idx * portPitch;
-
-    return {
-      x: isOutput ? node.position.x + nodeWidth : node.position.x,
-      y: portY,
-    };
-  };
-
   const editingNode = workflow.nodes.find((n) => n.id === editingNodeId) || null;
   const isPanActive = canvasMode === 'pan' || isSpacePressed;
 
@@ -1915,7 +1937,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 isPendingSource={pendingSourcePort?.nodeId === node.id || connectingState?.fromNodeId === node.id}
                 isConnectTargetCandidate={Boolean(
                   (connectingState || pendingSourcePort) &&
-                  (connectingState?.fromNodeId || pendingSourcePort?.nodeId) !== node.id
+                  (connectingState?.fromNodeId || pendingSourcePort?.nodeId) !== node.id &&
+                  node.inputs.some((p) =>
+                    isPortCompatible(
+                      connectingState?.portType || pendingSourcePort?.portType || '',
+                      p.type,
+                      false
+                    )
+                  )
                 )}
                 activeConnectingPortType={connectingState?.portType || pendingSourcePort?.portType || null}
                 activeConnectingNodeId={connectingState?.fromNodeId || pendingSourcePort?.nodeId || null}

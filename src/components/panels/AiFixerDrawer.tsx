@@ -31,6 +31,11 @@ import {
   isWorkflowGenerationPrompt,
   synthesizeWorkflowFromPrompt,
 } from '../../utils/workflowSynthesizer';
+import {
+  auditWorkflowDataCompleteness,
+  extractNodeConfigFromText,
+  fillDemoDataForWorkflow,
+} from '../../utils/workflowDataAuditor';
 
 interface BuiltWorkflowPreview {
   name: string;
@@ -63,7 +68,7 @@ interface ChatMessage {
   builtWorkflow?: BuiltWorkflowPreview;
   actions?: {
     label: string;
-    actionType: 'auto_fix' | 'test_run' | 'apply_workflow' | 'create_new_workflow';
+    actionType: 'auto_fix' | 'test_run' | 'apply_workflow' | 'create_new_workflow' | 'fill_demo_data';
   }[];
 }
 
@@ -216,29 +221,22 @@ ${
 
     const lowerQuery = query.toLowerCase();
 
-    // Check if query is an explicit auto-fix command
-    const isFixCommand =
-      lowerQuery.includes('auto-fix') ||
-      lowerQuery.includes('auto fix') ||
-      lowerQuery.includes('theek kar') ||
-      lowerQuery.includes('thik kar') ||
-      lowerQuery.includes('repair all') ||
-      lowerQuery.includes('sara issue') ||
-      lowerQuery.includes('sare issue') ||
-      lowerQuery.includes('sab issue') ||
-      lowerQuery.includes('fix issue') ||
-      lowerQuery.includes('fix problem');
-
-    if (isFixCommand) {
+    // Only trigger immediate auto-repair if user explicitly commands it as an action
+    if (lowerQuery === 'auto_fix' || lowerQuery === '/fix') {
       setTimeout(() => {
         handleAutoRepair(detected);
         setIsLoading(false);
-      }, 400);
+      }, 300);
       return;
     }
 
     try {
-      // Send request to AI Fixer backend
+      // Send request to AI Fixer backend with conversation history
+      const historyPayload = messages.slice(-8).map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        text: m.text,
+      }));
+
       const response = await fetch('/api/fixer/chat', {
         method: 'POST',
         headers: {
@@ -249,6 +247,7 @@ ${
           workflow,
           latestExecution,
           language: detected,
+          history: historyPayload,
         }),
       });
 
@@ -272,10 +271,36 @@ ${
         return;
       }
 
+      if (data.action === 'update_node_config' && data.builtWorkflow) {
+        onUpdateWorkflow(
+          {
+            ...workflow,
+            name: data.builtWorkflow.name || workflow.name,
+            description: data.builtWorkflow.description || workflow.description,
+            nodes: data.builtWorkflow.nodes,
+            connections: data.builtWorkflow.connections || workflow.connections,
+          },
+          'AI Fixer Node Configured'
+        );
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `fixer_${Date.now()}`,
+            sender: 'fixer',
+            text: data.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            language: detected,
+            actions: data.actions || [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+          },
+        ]);
+        return;
+      }
+
       if (data.action === 'build_workflow' && data.builtWorkflow?.nodes?.length) {
         const built = data.builtWorkflow;
 
-        // Auto-apply directly to canvas if user explicitly requested
+        // Auto-apply directly to canvas
         applyWorkflowToCanvasDirectly(built);
 
         setMessages((prev) => [
@@ -291,7 +316,8 @@ ${
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
             builtWorkflow: built,
-            actions: [
+            actions: data.actions || [
+              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
               { label: '🧪 Test Run Built Workflow', actionType: 'test_run' },
               { label: '✨ Create as Separate Workflow', actionType: 'create_new_workflow' },
             ],
@@ -307,29 +333,71 @@ ${
             text: data.reply || (detected === 'en' ? 'Understood!' : 'Samajh gaya!'),
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
-            actions:
-              report.issues.length > 0
-                ? [
-                    { label: '⚡ Auto-Fix All Problems', actionType: 'auto_fix' },
-                    { label: '🧪 Test Run Workflow', actionType: 'test_run' },
-                  ]
-                : [{ label: '🧪 Test Run Workflow', actionType: 'test_run' }],
+            actions: data.actions || [
+              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
+              { label: '🧪 Test Run Workflow', actionType: 'test_run' },
+            ],
           },
         ]);
       }
     } catch (err: any) {
       console.warn('[AI Fixer Drawer] Backend fallback:', err);
-      // Fallback synthesizer
-      if (isWorkflowGenerationPrompt(query)) {
-        const synth = synthesizeWorkflowFromPrompt(query, detected);
-        applyWorkflowToCanvasDirectly(synth);
+
+      // Local parameter extraction fallback
+      const localExtraction = extractNodeConfigFromText(query, workflow);
+      if (localExtraction.hasUpdates) {
+        onUpdateWorkflow(localExtraction.updatedWorkflow, 'AI Fixer Local Node Configured');
+        const audit = auditWorkflowDataCompleteness(localExtraction.updatedWorkflow, detected);
+        const updateSummary = localExtraction.appliedUpdates
+          .map((u) => `• **${u.nodeName}**: \`${u.key}\` = "${u.value}"`)
+          .join('\n');
+
+        let replyMsg = detected === 'en'
+          ? `✓ **Node Configuration Saved!**\n\nI updated the parameters on your canvas:\n${updateSummary}\n\n`
+          : `✓ **Node Parameters Save Ho Gaye!**\n\nMaine aapka data nodes me save kar diya hai:\n${updateSummary}\n\n`;
+
+        if (audit.isComplete) {
+          replyMsg += detected === 'en'
+            ? `🎉 **Workflow is 100% complete and ready to run!** Click "Test Run" below to test.`
+            : `🎉 **Sabhi required details set ho chuki hain!** Workflow real me execute hone ke liye taiyar hai.`;
+        } else {
+          replyMsg += audit.promptText;
+        }
 
         setMessages((prev) => [
           ...prev,
           {
             id: `fixer_${Date.now()}`,
             sender: 'fixer',
-            text: synth.explanation,
+            text: replyMsg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            language: detected,
+            actions: [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+          },
+        ]);
+        return;
+      }
+
+      // Fallback synthesizer
+      if (isWorkflowGenerationPrompt(query)) {
+        const synth = synthesizeWorkflowFromPrompt(query, detected);
+        applyWorkflowToCanvasDirectly(synth);
+        const audit = auditWorkflowDataCompleteness(
+          { ...workflow, nodes: synth.nodes, connections: synth.connections },
+          detected
+        );
+
+        let synthReply = synth.explanation;
+        if (!audit.isComplete) {
+          synthReply += `\n\n${audit.promptText}`;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `fixer_${Date.now()}`,
+            sender: 'fixer',
+            text: synthReply,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
             builtWorkflow: {
@@ -339,27 +407,29 @@ ${
               connections: synth.connections,
             },
             actions: [
+              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
               { label: '🧪 Test Run Built Workflow', actionType: 'test_run' },
-              { label: '✨ Create as Separate Workflow', actionType: 'create_new_workflow' },
             ],
           },
         ]);
       } else {
+        const audit = auditWorkflowDataCompleteness(workflow, detected);
         setMessages((prev) => [
           ...prev,
           {
             id: `fixer_${Date.now()}`,
             sender: 'fixer',
-            text:
-              detected === 'en'
-                ? `I analyzed your workflow. All node configurations have been validated. You can test run the workflow or click "Auto-Fix All" if issues are flagged.`
-                : `Maine aapka workflow check kiya. Sabhi configurations theek hain. Aap "Auto-Fix All" par click karke sabhi issues clear kar sakte hain.`,
+            text: audit.isComplete
+              ? (detected === 'en'
+                  ? `I reviewed your workflow "${workflow.name}". All nodes are properly configured and ready for live execution!`
+                  : `Maine aapka workflow "${workflow.name}" check kiya. Sabhi nodes configured hain aur real execution ke liye taiyar hain!`)
+              : audit.promptText,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
-            actions:
-              report.issues.length > 0
-                ? [{ label: '⚡ Auto-Fix All Problems', actionType: 'auto_fix' }]
-                : [{ label: '🧪 Test Run Workflow', actionType: 'test_run' }],
+            actions: [
+              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
+              { label: '🧪 Test Run Workflow', actionType: 'test_run' },
+            ],
           },
         ]);
       }
@@ -371,6 +441,23 @@ ${
   const handleActionClick = async (actionType: string, msgBuiltWf?: BuiltWorkflowPreview) => {
     if (actionType === 'auto_fix') {
       handleAutoRepair();
+    } else if (actionType === 'fill_demo_data') {
+      const { updatedWorkflow, filledCount, summary } = fillDemoDataForWorkflow(workflow);
+      onUpdateWorkflow(updatedWorkflow, 'AI Fixer Fill Demo Data');
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `demo_${Date.now()}`,
+          sender: 'fixer',
+          text:
+            userLang === 'en'
+              ? `✓ **Demo & Test Data Successfully Configured!**\n\nI populated working test credentials across ${filledCount} field(s):\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ready to run! Click **"🧪 Test Run Workflow Now"** below!`
+              : `✓ **Demo Data Set Ho Gaya!**\n\nMaine ${filledCount} fields me working test parameters configure kar diye hain:\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ab aap **"🧪 Test Run Workflow Now"** par click karein aur live test dekhein!`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          language: userLang,
+          actions: [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+        },
+      ]);
     } else if (actionType === 'test_run') {
       if (onTestWorkflow) {
         onTestWorkflow();
@@ -599,6 +686,8 @@ ${
                             <Wrench className="w-3 h-3 text-amber-400" />
                           ) : act.actionType === 'test_run' ? (
                             <Play className="w-3 h-3 text-emerald-400" />
+                          ) : act.actionType === 'fill_demo_data' ? (
+                            <Zap className="w-3 h-3 text-amber-300" />
                           ) : (
                             <Sparkles className="w-3 h-3 text-cyan-400" />
                           )}
