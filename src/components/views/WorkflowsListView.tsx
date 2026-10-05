@@ -113,7 +113,7 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>+ Create Workflow</span>
+            <span>Create Workflow</span>
           </button>
         </div>
       </div>
@@ -177,7 +177,7 @@ export const WorkflowsListView: React.FC<WorkflowsListViewProps> = ({
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/25 hover:bg-cyan-400 transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>+ Create Workflow</span>
+              <span>Create Workflow</span>
             </button>
             <button
               onClick={onOpenTemplates}

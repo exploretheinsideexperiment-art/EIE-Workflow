@@ -52,7 +52,7 @@ export const ApiKeysView: React.FC<ApiKeysViewProps> = ({ apiKeys, onCreateKey, 
           className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-blue-500 transition cursor-pointer"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>+ Create API Key</span>
+          <span>Create API Key</span>
         </button>
       </div>
 
@@ -72,7 +72,7 @@ export const ApiKeysView: React.FC<ApiKeysViewProps> = ({ apiKeys, onCreateKey, 
             {apiKeys.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-12 text-center text-slate-500">
-                  No active API keys found. Click "+ Create API Key" to generate a token.
+                  No active API keys found. Click "Create API Key" to generate a token.
                 </td>
               </tr>
             ) : (
