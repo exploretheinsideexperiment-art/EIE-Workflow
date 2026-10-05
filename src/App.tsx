@@ -400,7 +400,8 @@ export default function App() {
 
   const handleSaveWorkflow = async (updatedWf: Workflow) => {
     setWorkflows((prev) => {
-      const updated = prev.map((w) => (w.id === updatedWf.id ? updatedWf : w));
+      const exists = prev.some((w) => w.id === updatedWf.id);
+      const updated = exists ? prev.map((w) => (w.id === updatedWf.id ? updatedWf : w)) : [updatedWf, ...prev];
       try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
       return updated;
     });
@@ -509,14 +510,47 @@ export default function App() {
     }
   };
 
-  const handleAddCredential = async (credData: { name: string; type: string; data: Record<string, string> }) => {
-    const res = await fetch('/api/credentials', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credData),
+  const handleAddCredential = async (credData: { id?: string; name: string; type: string; data: Record<string, string> }): Promise<Credential> => {
+    let savedCred: Credential | null = null;
+    try {
+      const res = await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credData),
+      });
+      if (res.ok) {
+        savedCred = await res.json();
+      }
+    } catch (e) {
+      console.warn('API error saving credential, falling back to local store:', e);
+    }
+
+    if (!savedCred) {
+      savedCred = {
+        id: credData.id || `cred_${Date.now()}`,
+        workspaceId: 'ws_default_01',
+        name: credData.name,
+        type: credData.type,
+        data: credData.data || {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const finalCred: Credential = savedCred;
+
+    setCredentials((prev) => {
+      const filtered = prev.filter((c) => c.id !== finalCred.id);
+      const next = [...filtered, finalCred];
+      try {
+        localStorage.setItem('eie_credentials', JSON.stringify(next));
+      } catch {
+        // storage quota fallback
+      }
+      return next;
     });
-    const newCred = await res.json();
-    setCredentials((prev) => [...prev, newCred]);
+
+    return finalCred;
   };
 
   const handleDeleteCredential = async (id: string) => {
@@ -684,6 +718,7 @@ export default function App() {
               onSave={handleSaveWorkflow}
               onToggleActive={() => handleToggleActive(activeWorkflow.id)}
               onCreateNewWorkflow={handleCreateNewWorkflow}
+              onCreateCredential={handleAddCredential}
             />
           )}
 

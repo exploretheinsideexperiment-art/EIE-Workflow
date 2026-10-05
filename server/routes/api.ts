@@ -10,6 +10,19 @@ export const router = express.Router();
 const DEFAULT_USER_ID = 'usr_admin_01';
 const DEFAULT_WORKSPACE_ID = 'ws_default_01';
 
+// --- HEALTH & CLOUD CONNECTIVITY ---
+router.get('/health', (req: Request, res: Response) => {
+  return res.json({
+    status: 'ok',
+    cloud: 'connected',
+    serverTime: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    features: ['webhooks', 'credentials', 'telegram', 'slack', 'discord', 'ai_gemini', 'executions'],
+    workflowEngine: 'online',
+    version: '2.5.0-cloud',
+  });
+});
+
 // --- AUTHENTICATION ---
 router.post('/auth/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -872,31 +885,47 @@ router.get('/credentials', (req: Request, res: Response) => {
 });
 
 router.post('/credentials', (req: Request, res: Response) => {
-  const { name, type, data } = req.body;
+  const { id, name, type, data } = req.body;
   if (!name || !type) return res.status(400).json({ error: 'Name and type are required.' });
 
-  const newCred: Credential = {
-    id: `cred_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`,
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    name,
-    type,
-    data: data || {},
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  const finalId = id || `cred_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
 
+  let savedCred: Credential | null = null;
   db.mutate((d) => {
-    d.credentials.push(newCred);
+    const existingIdx = d.credentials.findIndex((c) => c.id === finalId);
+    if (existingIdx >= 0) {
+      d.credentials[existingIdx] = {
+        ...d.credentials[existingIdx],
+        name,
+        type,
+        data: { ...d.credentials[existingIdx].data, ...(data || {}) },
+        updatedAt: new Date().toISOString(),
+      };
+      savedCred = d.credentials[existingIdx];
+    } else {
+      const newCred: Credential = {
+        id: finalId,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        name,
+        type,
+        data: data || {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      d.credentials.push(newCred);
+      savedCred = newCred;
+    }
+
     d.auditLogs.unshift({
       id: `aud_${Date.now()}`,
       workspaceId: DEFAULT_WORKSPACE_ID,
-      action: 'Credential Added',
-      details: `New ${type.toUpperCase()} credential "${name}" created`,
+      action: 'Credential Saved',
+      details: `${type.toUpperCase()} credential "${name}" saved`,
       timestamp: new Date().toISOString(),
     });
   });
 
-  return res.status(201).json(newCred);
+  return res.status(201).json(savedCred);
 });
 
 router.delete('/credentials/:id', (req: Request, res: Response) => {

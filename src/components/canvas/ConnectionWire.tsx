@@ -85,7 +85,11 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
 
   return (
     <g
-      className="group cursor-pointer select-none"
+      className="group cursor-pointer select-none pointer-events-auto"
+      style={{ pointerEvents: 'all' }}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onSelect?.(connection.id);
@@ -95,9 +99,10 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
       <path
         d={pathData}
         fill="none"
-        stroke="transparent"
-        strokeWidth="22"
+        stroke="rgba(0, 0, 0, 0.001)"
+        strokeWidth="32"
         strokeLinecap="round"
+        style={{ pointerEvents: 'stroke' }}
       />
 
       {/* Background shadow path */}
@@ -133,7 +138,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
 
       {/* Port type indicator pill along wire when hovered or selected */}
       {isSelected && (
-        <g transform={`translate(${midX}, ${midY - 14})`}>
+        <g transform={`translate(${midX}, ${midY - 16})`}>
           <rect
             x="-32"
             y="-10"
@@ -166,18 +171,35 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         </circle>
       )}
 
-      {/* Hover delete handle */}
+      {/* Hover and Selected delete handle */}
       <g
-        className="opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        className={`${
+          isSelected ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100'
+        } transition-all duration-150 cursor-pointer`}
         transform={`translate(${midX}, ${midY})`}
+        style={{ pointerEvents: 'all' }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onDelete?.(connection.id);
         }}
       >
-        <circle r="12" fill="#0f172a" stroke="#ef4444" strokeWidth="1.5" />
-        <line x1="-4" y1="-4" x2="4" y2="4" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
-        <line x1="4" y1="-4" x2="-4" y2="4" stroke="#f87171" strokeWidth="2" strokeLinecap="round" />
+        <title>Delete Wire</title>
+        {/* Invisible wider hit circle */}
+        <circle r="20" fill="rgba(0, 0, 0, 0.001)" />
+        {/* High contrast visual delete badge */}
+        <circle
+          r="14"
+          fill="#1c0a0e"
+          stroke="#ef4444"
+          strokeWidth="2.5"
+          filter="drop-shadow(0 0 8px rgba(239, 68, 68, 0.9))"
+        />
+        <line x1="-5" y1="-5" x2="5" y2="5" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="5" y1="-5" x2="-5" y2="5" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
       </g>
     </g>
   );

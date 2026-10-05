@@ -124,17 +124,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Engine Health Status */}
+      {/* Bottom Cloud Engine Health Status */}
       <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1.5 text-[11px]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-slate-300">Engine Active</span>
+            <span className="font-semibold text-slate-200">Cloud Engine Active</span>
           </div>
-          <span className="text-[10px] font-mono text-cyan-400">{activeWorkflowsCount} Live</span>
+          <span className="text-[10px] font-mono text-emerald-300 font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60">
+            {activeWorkflowsCount > 0 ? `${activeWorkflowsCount} Live` : 'READY'}
+          </span>
         </div>
-        <p className="text-[10px] text-slate-500 leading-tight">
-          Webhook listeners and execution queue ready.
+        <p className="text-[10px] text-slate-400 leading-tight">
+          Cloud webhooks, Telegram, Slack & AI models connected to internet.
         </p>
       </div>
     </aside>

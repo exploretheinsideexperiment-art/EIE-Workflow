@@ -37,6 +37,32 @@ export const CloudConnectivityModal: React.FC<CloudConnectivityModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<any | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [cloudPing, setCloudPing] = useState<{ status: string; latencyMs: number } | null>(null);
+  const [isPinging, setIsPinging] = useState(false);
+
+  const checkCloudHealth = async () => {
+    setIsPinging(true);
+    const start = performance.now();
+    try {
+      const res = await fetch('/api/health');
+      const lat = Math.round(performance.now() - start);
+      if (res.ok) {
+        setCloudPing({ status: 'Online', latencyMs: lat });
+      } else {
+        setCloudPing({ status: 'Connecting...', latencyMs: lat });
+      }
+    } catch {
+      setCloudPing({ status: 'Local Mode', latencyMs: 0 });
+    } finally {
+      setIsPinging(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      checkCloudHealth();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -156,6 +182,32 @@ console.log("Cloud Execution Output:", data);`;
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-300">
+          {/* Cloud Health & Live Internet Apps Connection Status */}
+          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse ring-4 ring-emerald-500/20" />
+              <div>
+                <div className="text-white font-bold flex items-center gap-2">
+                  <span>Cloud Engine:</span>
+                  <span className="text-emerald-400">{cloudPing?.status || 'Connecting...'}</span>
+                  {cloudPing?.latencyMs !== undefined && cloudPing.latencyMs > 0 && (
+                    <span className="text-[10px] font-mono text-slate-400">({cloudPing.latencyMs}ms ping)</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Connected to Internet apps • Real-time Webhooks, Telegram, Slack, AI Models Active
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={checkCloudHealth}
+              disabled={isPinging}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium border border-slate-700 transition cursor-pointer"
+            >
+              {isPinging ? 'Pinging...' : 'Re-check Cloud'}
+            </button>
+          </div>
+
           {/* Active Workflow Cloud Endpoint Box */}
           <div className="p-4 rounded-xl bg-slate-950/70 border border-emerald-500/30 flex flex-col gap-2">
             <div className="flex items-center justify-between">

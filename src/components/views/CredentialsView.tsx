@@ -4,7 +4,7 @@ import { Credential } from '../../types/workflow';
 
 interface CredentialsViewProps {
   credentials: Credential[];
-  onAddCredential: (cred: { name: string; type: string; data: Record<string, string> }) => Promise<void>;
+  onAddCredential: (cred: { id?: string; name: string; type: string; data: Record<string, string> }) => Promise<any>;
   onDeleteCredential: (id: string) => Promise<void>;
 }
 
@@ -15,32 +15,96 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [credName, setCredName] = useState('');
-  const [credType, setCredType] = useState('gemini');
+  const [credType, setCredType] = useState('telegram');
   const [secretVal, setSecretVal] = useState('');
   const [hostVal, setHostVal] = useState('');
+  const [extraVal, setExtraVal] = useState('');
+  const [userVal, setUserVal] = useState('');
+  const [portVal, setPortVal] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!credName) return;
 
+    let name = credName.trim();
+    if (!name) {
+      const defaultNames: Record<string, string> = {
+        telegram: 'Telegram Bot Account',
+        openai: 'OpenAI Production Key',
+        gemini: 'Google Gemini Pro Key',
+        anthropic: 'Claude Sonnet Key',
+        slack: 'Slack Workspace Connection',
+        discord: 'Discord Webhook Connection',
+        postgres: 'PostgreSQL Database',
+        mysql: 'MySQL Database',
+        github: 'GitHub Personal Token',
+        google_sheets: 'Google Sheets Account',
+        custom_api: 'Custom REST API Key',
+      };
+      name = defaultNames[credType] || `${credType.toUpperCase()} Credential`;
+    }
+
+    if (!secretVal.trim()) {
+      setFormError('Please enter the secret token / API key / password');
+      return;
+    }
+
+    setFormError(null);
     setIsSubmitting(true);
     try {
-      const data: Record<string, string> = {};
-      if (credType === 'gemini') data.apiKey = secretVal;
-      else if (credType === 'telegram') data.botToken = secretVal;
-      else if (credType === 'postgres' || credType === 'mysql') {
-        data.host = hostVal || 'localhost';
-        data.password = secretVal;
-      } else {
-        data.token = secretVal;
+      const data: Record<string, string> = {
+        apiKey: secretVal.trim(),
+        token: secretVal.trim(),
+        botToken: secretVal.trim(),
+        webhookUrl: secretVal.trim(),
+        secret: secretVal.trim(),
+      };
+
+      if (credType === 'telegram') {
+        data.botToken = secretVal.trim();
+        if (extraVal.trim()) data.chatId = extraVal.trim();
+      } else if (credType === 'slack') {
+        data.webhookUrl = secretVal.trim();
+        data.botToken = secretVal.trim();
+        if (extraVal.trim()) data.channel = extraVal.trim();
+      } else if (credType === 'discord') {
+        data.webhookUrl = secretVal.trim();
+      } else if (credType === 'postgres' || credType === 'mysql') {
+        data.password = secretVal.trim();
+        data.host = hostVal.trim() || 'localhost';
+        data.port = portVal.trim() || (credType === 'postgres' ? '5432' : '3306');
+        data.database = extraVal.trim() || 'postgres';
+        data.user = userVal.trim() || 'postgres';
+      } else if (credType === 'gemini') {
+        data.apiKey = secretVal.trim();
+      } else if (credType === 'openai') {
+        data.apiKey = secretVal.trim();
+        if (extraVal.trim()) data.orgId = extraVal.trim();
+      } else if (credType === 'anthropic') {
+        data.apiKey = secretVal.trim();
+      } else if (credType === 'github') {
+        data.token = secretVal.trim();
+      } else if (credType === 'google_sheets' || credType === 'google') {
+        data.apiKey = secretVal.trim();
+        data.token = secretVal.trim();
       }
 
-      await onAddCredential({ name: credName, type: credType, data });
+      await onAddCredential({ name, type: credType, data });
+      setToastMessage(`✓ Credential "${name}" saved successfully!`);
+      setTimeout(() => setToastMessage(null), 3500);
+
       setModalOpen(false);
       setCredName('');
       setSecretVal('');
       setHostVal('');
+      setExtraVal('');
+      setUserVal('');
+      setPortVal('');
+      setFormError(null);
+    } catch (err: any) {
+      setFormError(`Error saving: ${err.message || 'Please check inputs'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +141,14 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
           Credentials are encrypted at rest with AES-256. Workflow definitions store only unique identifier pointers (e.g. <code className="text-cyan-400">cred_1042</code>) preventing credential leakage during export.
         </p>
       </div>
+
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200 shadow-lg shadow-emerald-950/50">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Credentials Table */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
@@ -162,46 +234,158 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
                   onChange={(e) => setCredType(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none"
                 >
-                  <option value="gemini">Google Gemini AI</option>
-                  <option value="telegram">Telegram Bot Token</option>
-                  <option value="slack">Slack Incoming Webhook</option>
-                  <option value="discord">Discord Webhook</option>
+                  <option value="telegram">Telegram Bot (Token & Alerts)</option>
+                  <option value="slack">Slack (Incoming Webhooks & Bot)</option>
+                  <option value="discord">Discord (Channel Webhook)</option>
+                  <option value="gemini">Google Gemini AI (3.8 Flash / Pro)</option>
+                  <option value="openai">OpenAI (ChatGPT / GPT-4o / Reasoning)</option>
+                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+                  <option value="google_sheets">Google Workspace (Sheets, Gmail, Calendar)</option>
                   <option value="postgres">PostgreSQL Database</option>
                   <option value="mysql">MySQL Database</option>
-                  <option value="github">GitHub Personal Access Token</option>
-                  <option value="custom_api">Custom Bearer Token / API Key</option>
+                  <option value="github">GitHub (Personal Access Token)</option>
+                  <option value="custom_api">Custom REST API / Webhook (Bearer Token)</option>
                 </select>
               </div>
 
-              {(credType === 'postgres' || credType === 'mysql') && (
+              {/* Main Secret / Token / Password Input */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  {credType === 'telegram'
+                    ? 'Telegram Bot Token (from @BotFather)'
+                    : credType === 'slack' || credType === 'discord'
+                    ? 'Webhook URL'
+                    : credType === 'postgres' || credType === 'mysql'
+                    ? 'Database Password'
+                    : credType === 'gemini'
+                    ? 'Gemini API Key (AIzaSy...)'
+                    : credType === 'openai'
+                    ? 'OpenAI Secret API Key (sk-...)'
+                    : credType === 'anthropic'
+                    ? 'Anthropic Claude API Key (sk-ant-...)'
+                    : credType === 'google_sheets'
+                    ? 'Google OAuth Token / Service Account Key'
+                    : 'API Key / Secret Token'}
+                </label>
+                <input
+                  type={credType === 'slack' || credType === 'discord' ? 'text' : 'password'}
+                  required
+                  value={secretVal}
+                  onChange={(e) => setSecretVal(e.target.value)}
+                  placeholder={
+                    credType === 'telegram'
+                      ? '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ'
+                      : credType === 'slack'
+                      ? 'https://hooks.slack.com/services/...'
+                      : credType === 'discord'
+                      ? 'https://discord.com/api/webhooks/...'
+                      : '••••••••••••••••••••••••'
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Telegram Optional Chat ID */}
+              {credType === 'telegram' && (
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Database Host</label>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Default Chat ID / Channel (Optional)</label>
                   <input
                     type="text"
-                    value={hostVal}
-                    onChange={(e) => setHostVal(e.target.value)}
-                    placeholder="db.eie-cloud.internal"
+                    value={extraVal}
+                    onChange={(e) => setExtraVal(e.target.value)}
+                    placeholder="e.g. -100123456789 or @my_channel"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                  />
+                </div>
+              )}
+
+              {/* Slack Optional Channel */}
+              {credType === 'slack' && (
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Default Channel (Optional)</label>
+                  <input
+                    type="text"
+                    value={extraVal}
+                    onChange={(e) => setExtraVal(e.target.value)}
+                    placeholder="#general or #alerts"
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
               )}
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">API Key / Token / Password</label>
-                <input
-                  type="password"
-                  required
-                  value={secretVal}
-                  onChange={(e) => setSecretVal(e.target.value)}
-                  placeholder="••••••••••••••••••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
+              {/* OpenAI Optional Org ID */}
+              {credType === 'openai' && (
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Organization ID (Optional)</label>
+                  <input
+                    type="text"
+                    value={extraVal}
+                    onChange={(e) => setExtraVal(e.target.value)}
+                    placeholder="org-..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                  />
+                </div>
+              )}
+
+              {/* Database Specific Fields */}
+              {(credType === 'postgres' || credType === 'mysql') && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Database Host</label>
+                    <input
+                      type="text"
+                      value={hostVal}
+                      onChange={(e) => setHostVal(e.target.value)}
+                      placeholder="localhost"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Port</label>
+                    <input
+                      type="text"
+                      value={portVal}
+                      onChange={(e) => setPortVal(e.target.value)}
+                      placeholder={credType === 'postgres' ? '5432' : '3306'}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Database Name</label>
+                    <input
+                      type="text"
+                      value={extraVal}
+                      onChange={(e) => setExtraVal(e.target.value)}
+                      placeholder="postgres"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={userVal}
+                      onChange={(e) => setUserVal(e.target.value)}
+                      placeholder="postgres"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500/60 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <span>{formError}</span>
+                </div>
+              )}
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => {
+                    setModalOpen(false);
+                    setFormError(null);
+                  }}
                   className="px-3 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
                 >
                   Cancel
@@ -209,9 +393,10 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 transition"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold transition cursor-pointer shadow-md shadow-cyan-500/20"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Credential'}
+                  {isSubmitting && <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />}
+                  <span>{isSubmitting ? 'Saving...' : 'Save Credential'}</span>
                 </button>
               </div>
             </form>

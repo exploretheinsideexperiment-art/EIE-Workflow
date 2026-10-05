@@ -44,18 +44,64 @@ interface WorkflowCanvasProps {
     starterNodes?: WorkflowNodeData[],
     starterConnections?: WorkflowConnection[]
   ) => Promise<void>;
+  onCreateCredential?: (cred: any) => Promise<any> | void;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   workflow: initialWorkflow,
-  credentials,
+  credentials: initialCredentials,
   isSidebarOpen = true,
   onToggleSidebar,
   onSave,
   onToggleActive,
   onCreateNewWorkflow,
+  onCreateCredential,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(initialWorkflow);
+  const [credentialsList, setCredentialsList] = useState<Credential[]>(initialCredentials);
+
+  // Sync credentials if prop updates
+  useEffect(() => {
+    setCredentialsList(initialCredentials);
+  }, [initialCredentials]);
+
+  const handleCreateCredential = async (credData: any) => {
+    if (onCreateCredential) {
+      const res = await onCreateCredential(credData);
+      if (res && res.id) {
+        setCredentialsList((prev) => [...prev.filter((c) => c.id !== res.id), res]);
+      }
+      return res;
+    }
+
+    // Direct fallback
+    const newCred: Credential = {
+      id: credData.id || `cred_${Date.now()}`,
+      workspaceId: 'ws_default_01',
+      name: credData.name,
+      type: credData.type,
+      data: credData.data || {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credData),
+      });
+    } catch {
+      // offline fallback
+    }
+    setCredentialsList((prev) => {
+      const next = [...prev.filter((c) => c.id !== newCred.id), newCred];
+      try {
+        localStorage.setItem('eie_credentials', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    return newCred;
+  };
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -126,9 +172,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [isExecuting, setIsExecuting] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const workflowRef = useRef<Workflow>(workflow);
+
+  useEffect(() => {
+    workflowRef.current = workflow;
+  }, [workflow]);
 
   // Sync when initialWorkflow changes from parent
   useEffect(() => {
+    workflowRef.current = initialWorkflow;
     setWorkflow(initialWorkflow);
     setViewport(initialWorkflow.viewport || { x: 120, y: 120, zoom: 1 });
     setHistory([initialWorkflow]);
@@ -138,6 +190,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // History Push Helper
   const pushHistory = useCallback((newWf: Workflow) => {
+    workflowRef.current = newWf;
     setWorkflow(newWf);
     setHasUnsavedChanges(true);
     setHistory((prev) => {
@@ -1216,6 +1269,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     };
     pushHistory(updated);
     setSelectedConnectionId(null);
+    setConnectionSuccessToast('✓ Wire deleted');
+    setTimeout(() => setConnectionSuccessToast(null), 2500);
   };
 
   const handleDeleteSelected = () => {
@@ -1276,11 +1331,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   }, [selectedNodeIds, selectedConnectionId, workflow, connectingState, pendingSourcePort]);
 
   const handleUpdateNodeConfig = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
-    const updated = {
-      ...workflow,
-      nodes: workflow.nodes.map((n) => (n.id === nodeId ? { ...n, ...updates } : n)),
-    };
-    setWorkflow(updated);
+    setWorkflow((prev) => {
+      const updatedNodes = prev.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        return {
+          ...n,
+          ...updates,
+          config: {
+            ...(n.config || {}),
+            ...(updates.config || {}),
+          },
+          executionSettings: {
+            ...(n.executionSettings || {}),
+            ...(updates.executionSettings || {}),
+          },
+        };
+      });
+      const nextWf: Workflow = {
+        ...prev,
+        nodes: updatedNodes,
+      };
+      workflowRef.current = nextWf;
+      // Auto persist to localStorage and backend
+      onSave(nextWf).catch(() => {});
+      return nextWf;
+    });
     setHasUnsavedChanges(true);
   };
 
@@ -1662,15 +1737,53 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const current = workflowRef.current;
       const payload: Workflow = {
-        ...workflow,
+        ...current,
         viewport,
       };
       await onSave(payload);
       setHasUnsavedChanges(false);
+      setConnectionSuccessToast('✓ Workflow saved successfully!');
+      setTimeout(() => setConnectionSuccessToast(null), 3000);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleExportWorkflow = () => {
+    const current = workflowRef.current;
+    const exportData = {
+      name: current.name || 'Workflow',
+      nodes: current.nodes || [],
+      connections: current.connections || [],
+      active: Boolean(current.active),
+      settings: {
+        executionOrder: 'v1',
+        saveManualExecutions: true,
+        callerPolicy: 'workflowsFromSameOwner',
+      },
+      versionId: current.id,
+      meta: {
+        templateCredsSetupCompleted: true,
+        instanceId: 'eie_workflow_studio',
+      },
+      tags: [],
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const sanitizedName = (current.name || 'workflow').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    a.href = url;
+    a.download = `${sanitizedName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setConnectionSuccessToast(`✓ Workflow downloaded as ${sanitizedName}.json`);
+    setTimeout(() => setConnectionSuccessToast(null), 3500);
   };
 
   // --- UNDO / REDO ---
@@ -1728,10 +1841,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNodeIds.length > 0) {
-          selectedNodeIds.forEach(handleDeleteNode);
-        } else if (selectedConnectionId) {
-          handleDeleteConnection(selectedConnectionId);
+        if (selectedNodeIds.length > 0 || selectedConnectionId) {
+          e.preventDefault();
+          handleDeleteSelected();
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
@@ -1806,6 +1918,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }}
         onRunWorkflow={handleTestWorkflow}
         onSaveWorkflow={handleSave}
+        onExportWorkflow={handleExportWorkflow}
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
         canConnectSelected={selectedNodeIds.length === 2}
         onConnectSelectedNodes={handleConnectSelectedNodes}
@@ -2197,14 +2310,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           key={editingNode.id}
           node={editingNode}
           workflow={workflow}
-          credentials={credentials}
+          credentials={credentialsList}
           inputData={resolveNodeInputData(editingNode.id, workflow, latestExecution)}
           executionResult={latestExecution?.nodeResults[editingNode.id]}
-          onClose={() => setEditingNodeId(null)}
+          onClose={async () => {
+            const current = workflowRef.current;
+            const payload: Workflow = {
+              ...current,
+              viewport,
+            };
+            await onSave(payload);
+            setHasUnsavedChanges(false);
+            setEditingNodeId(null);
+          }}
+          onSaveStep={handleSave}
           onUpdateConfig={handleUpdateNodeConfig}
           onDeleteNode={handleDeleteNode}
           onTestNode={handleTestSingleNode}
           onOpenLiveChat={() => setChatDrawerOpen(true)}
+          onCreateCredential={handleCreateCredential}
         />
       )}
 

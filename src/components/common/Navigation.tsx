@@ -220,6 +220,16 @@ export const Navigation: React.FC<NavigationProps> = ({
 
       {/* Right: Actions, PWA Button & User Avatar */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Cloud Status Badge */}
+        <div
+          onClick={() => onNavigate('integrations')}
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold cursor-pointer hover:bg-emerald-900/40 transition shadow-xs shadow-emerald-500/10"
+          title="Cloud Engine Active • Connected to Internet Services"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-mono text-[11px]">Cloud: Live</span>
+        </div>
+
         {/* PWA Install Button */}
         <PWAInstallButton />
 

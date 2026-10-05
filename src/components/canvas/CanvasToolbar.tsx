@@ -23,7 +23,8 @@ import {
   Link2,
   Edit3,
   Check,
-  CloudLightning
+  CloudLightning,
+  Download
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -61,6 +62,7 @@ interface CanvasToolbarProps {
   onOpenAddNode: () => void;
   onRunWorkflow: () => void;
   onSaveWorkflow: () => void;
+  onExportWorkflow?: () => void;
   onToggleActive: () => void;
   onOpenCloudModal?: () => void;
   onOpenEiDoctor?: () => void;
@@ -103,6 +105,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onOpenAddNode,
   onRunWorkflow,
   onSaveWorkflow,
+  onExportWorkflow,
   onToggleActive,
   onOpenCloudModal,
   onOpenEiDoctor,
@@ -341,16 +344,16 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0 group ${
                 isActive
                   ? 'border-emerald-500/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 shadow-sm shadow-emerald-500/20'
-                  : 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300'
+                  : 'border-cyan-500/40 bg-slate-900 hover:bg-slate-800 text-cyan-300 shadow-sm shadow-cyan-500/10'
               }`}
-              title="Open Cloud API & Webhook details to connect external applications"
+              title="Open Cloud Connection, Webhooks & External App Integrations"
             >
-              <CloudLightning className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
-              <span className="font-bold hidden sm:inline">Cloud API</span>
+              <CloudLightning className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
+              <span className="font-bold hidden sm:inline">Cloud Connect</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
               }`}>
-                {isActive ? 'LIVE' : 'OFF'}
+                {isActive ? 'LIVE' : 'CONNECTED'}
               </span>
             </button>
           )}
@@ -390,6 +393,18 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}</span>
           </button>
+
+          {/* Export / Download Workflow (n8n JSON) */}
+          {onExportWorkflow && (
+            <button
+              onClick={onExportWorkflow}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/50 transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              title="Download workflow as n8n JSON file"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Export JSON</span>
+            </button>
+          )}
         </div>
       </div>
 

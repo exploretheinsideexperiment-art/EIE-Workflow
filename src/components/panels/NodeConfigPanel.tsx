@@ -56,6 +56,7 @@ interface NodeConfigPanelProps {
   onTestNode: (node: WorkflowNodeData) => Promise<any>;
   onOpenLiveChat?: () => void;
   onCreateCredential?: (cred: Partial<Credential>) => void;
+  onSaveStep?: () => Promise<void>;
 }
 
 export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
@@ -70,6 +71,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   onTestNode,
   onOpenLiveChat,
   onCreateCredential,
+  onSaveStep,
 }) => {
   // Center tabs: strictly Parameters & Settings (exactly matching n8n)
   const [activeCenterTab, setActiveCenterTab] = useState<'params' | 'settings'>('params');
@@ -77,11 +79,39 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   // Mobile pane view: 'input' | 'center' | 'output' (default 'center')
   const [mobilePane, setMobilePane] = useState<'input' | 'center' | 'output'>('center');
 
+  // Step saving & feedback state
+  const [isSavingStep, setIsSavingStep] = useState(false);
+  const [stepSavedToast, setStepSavedToast] = useState(false);
+
   // Credential dropdown state
   const [credentialDropdownOpen, setCredentialDropdownOpen] = useState(false);
   const [showNewCredModal, setShowNewCredModal] = useState(false);
   const [newCredName, setNewCredName] = useState('');
   const [newCredKey, setNewCredKey] = useState('');
+  const [newCredSecondary, setNewCredSecondary] = useState('');
+  const [newCredTertiary, setNewCredTertiary] = useState('');
+  const [newCredExtra, setNewCredExtra] = useState('');
+  const [isSavingCred, setIsSavingCred] = useState(false);
+  const [credSaveError, setCredSaveError] = useState<string | null>(null);
+  const [credSavedToast, setCredSavedToast] = useState<string | null>(null);
+
+  const handleSaveAndClose = async () => {
+    setIsSavingStep(true);
+    try {
+      if (onSaveStep) {
+        await onSaveStep();
+      }
+      setStepSavedToast(true);
+      setTimeout(() => {
+        onClose();
+      }, 350);
+    } catch (err) {
+      console.warn('Step save error:', err);
+      onClose();
+    } finally {
+      setIsSavingStep(false);
+    }
+  };
 
   // Expression expanded modal state
   const [expandedField, setExpandedField] = useState<{ key: string; label: string; value: string } | null>(null);
@@ -110,8 +140,17 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const handleConfigChange = (key: string, value: any) => {
     onUpdateConfig(node.id, {
       config: {
-        ...node.config,
+        ...(node.config || {}),
         [key]: value,
+      },
+    });
+  };
+
+  const handleConfigBatch = (changes: Record<string, any>) => {
+    onUpdateConfig(node.id, {
+      config: {
+        ...(node.config || {}),
+        ...changes,
       },
     });
   };
@@ -162,17 +201,21 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   // Filter relevant credentials strictly for this node type
   const relevantCredentials = useMemo(() => {
     const typeLower = node.type.toLowerCase();
-    if (typeLower.includes('telegram')) return credentials.filter((c) => c.type === 'telegram');
-    if (typeLower.includes('slack')) return credentials.filter((c) => c.type === 'slack');
-    if (typeLower.includes('discord')) return credentials.filter((c) => c.type === 'discord');
-    if (typeLower.includes('sheets') || typeLower.includes('gmail') || typeLower.includes('google')) {
-      return credentials.filter((c) => c.type === 'google' || c.type === 'google_sheets' || c.type === 'gmail');
+    let filtered: Credential[] = [];
+    if (typeLower.includes('telegram')) filtered = credentials.filter((c) => c.type === 'telegram');
+    else if (typeLower.includes('slack')) filtered = credentials.filter((c) => c.type === 'slack');
+    else if (typeLower.includes('discord')) filtered = credentials.filter((c) => c.type === 'discord');
+    else if (typeLower.includes('sheets') || typeLower.includes('gmail') || typeLower.includes('google')) {
+      filtered = credentials.filter((c) => c.type === 'google' || c.type === 'google_sheets' || c.type === 'gmail');
+    } else if (typeLower.includes('gemini')) filtered = credentials.filter((c) => c.type === 'gemini');
+    else if (typeLower.includes('openai')) filtered = credentials.filter((c) => c.type === 'openai');
+    else if (typeLower.includes('anthropic') || typeLower.includes('claude')) filtered = credentials.filter((c) => c.type === 'anthropic');
+    else if (typeLower.includes('postgres') || typeLower.includes('mysql') || typeLower.includes('supabase')) {
+      filtered = credentials.filter((c) => c.type === 'postgres' || c.type === 'mysql' || c.type === 'supabase');
+    } else {
+      filtered = credentials.filter((c) => c.type === 'generic');
     }
-    if (typeLower.includes('gemini')) return credentials.filter((c) => c.type === 'gemini');
-    if (typeLower.includes('openai')) return credentials.filter((c) => c.type === 'openai');
-    if (typeLower.includes('anthropic') || typeLower.includes('claude')) return credentials.filter((c) => c.type === 'anthropic');
-    if (typeLower.includes('postgres') || typeLower.includes('supabase')) return credentials.filter((c) => c.type === 'postgres' || c.type === 'supabase');
-    return credentials.filter((c) => c.type === 'generic');
+    return filtered.length > 0 ? filtered : credentials;
   }, [credentials, node.type]);
 
   // Clean state resets when active node changes
@@ -181,6 +224,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     setCredentialDropdownOpen(false);
     setNewCredName('');
     setNewCredKey('');
+    setNewCredSecondary('');
+    setNewCredTertiary('');
   }, [node.id]);
 
   // Ensure current node does not hold an unrelated credential (e.g. Telegram token on an OpenAI node)
@@ -215,6 +260,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         namePlaceholder: 'e.g. My Alerts Bot',
         keyLabel: 'Telegram Bot Token (from @BotFather)',
         keyPlaceholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...',
+        secondaryLabel: 'Default Chat ID / Channel ID',
+        secondaryPlaceholder: 'e.g. -100123456789 or @channel',
         type: 'telegram',
       };
     }
@@ -225,6 +272,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         namePlaceholder: 'e.g. OpenAI Production Key',
         keyLabel: 'OpenAI Secret API Key (sk-...)',
         keyPlaceholder: 'sk-proj-... or sk-...',
+        secondaryLabel: 'Organization ID (optional)',
+        secondaryPlaceholder: 'org-...',
         type: 'openai',
       };
     }
@@ -232,7 +281,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       return {
         title: 'Google Gemini API Key',
         nameDefault: 'Google Gemini Pro Key',
-        namePlaceholder: 'e.g. Gemini 1.5 Pro Key',
+        namePlaceholder: 'e.g. Gemini 1.5/2.5 Pro Key',
         keyLabel: 'Gemini API Key (AIzaSy...)',
         keyPlaceholder: 'AIzaSy...',
         type: 'gemini',
@@ -250,11 +299,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     }
     if (t.includes('slack')) {
       return {
-        title: 'Slack Bot Token',
-        nameDefault: 'Slack Workspace Bot',
-        namePlaceholder: 'e.g. Slack Alerts Bot',
-        keyLabel: 'Bot User OAuth Token (xoxb-...)',
-        keyPlaceholder: 'xoxb-...',
+        title: 'Slack Webhook & Token',
+        nameDefault: 'Slack Workspace Connection',
+        namePlaceholder: 'e.g. Slack Alerts Connection',
+        keyLabel: 'Incoming Webhook URL or Bot Token (xoxb-...)',
+        keyPlaceholder: 'https://hooks.slack.com/services/... or xoxb-...',
+        secondaryLabel: 'Default Channel (optional)',
+        secondaryPlaceholder: 'e.g. #general',
         type: 'slack',
       };
     }
@@ -268,10 +319,24 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         type: 'discord',
       };
     }
+    if (t.includes('postgres') || t.includes('mysql') || t.includes('supabase')) {
+      return {
+        title: 'Database Connection',
+        nameDefault: 'Database Connection',
+        namePlaceholder: 'e.g. Production PostgreSQL DB',
+        keyLabel: 'Database Password',
+        keyPlaceholder: 'Secret database password',
+        secondaryLabel: 'Database Host',
+        secondaryPlaceholder: 'localhost or db.eie-cloud.internal',
+        tertiaryLabel: 'Database User',
+        tertiaryPlaceholder: 'postgres',
+        type: 'postgres',
+      };
+    }
     if (t.includes('sheets') || t.includes('gmail') || t.includes('google')) {
       return {
         title: 'Google Workspace Account',
-        nameDefault: 'Google Sheets Account',
+        nameDefault: 'Google Sheets / Gmail Account',
         namePlaceholder: 'e.g. Google Sheets Account',
         keyLabel: 'OAuth Access Token or Service Account Key',
         keyPlaceholder: 'OAuth token / Service Account JSON',
@@ -284,32 +349,141 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       namePlaceholder: `e.g. ${node.name} Production Key`,
       keyLabel: 'API Key or Access Secret',
       keyPlaceholder: 'API Key / Secret Token',
+      secondaryLabel: 'Base URL / Host (optional)',
+      secondaryPlaceholder: 'https://api.example.com',
       type: 'generic',
     };
   };
 
   // Handle Quick Credential Creation
-  const handleSaveQuickCredential = () => {
+  const handleSaveQuickCredential = async () => {
     const defs = getCredDefaults();
     const finalName = (newCredName || defs.nameDefault).trim();
-    if (!finalName || !onCreateCredential) return;
+    const secretKey = newCredKey.trim();
 
-    const newId = `c_${Date.now()}`;
-    onCreateCredential({
-      id: newId,
-      name: finalName,
-      type: defs.type,
-      data: {
-        apiKey: newCredKey.trim(),
-        botToken: newCredKey.trim(),
-        webhookUrl: newCredKey.trim(),
-      },
-    });
-    onUpdateConfig(node.id, { credentialId: newId });
-    setNewCredName('');
-    setNewCredKey('');
-    setShowNewCredModal(false);
-    setCredentialDropdownOpen(false);
+    if (!finalName) {
+      setCredSaveError('Please enter a credential name');
+      return;
+    }
+    if (!secretKey) {
+      setCredSaveError(`Please enter ${defs.keyLabel || 'the API key or Token'}`);
+      return;
+    }
+
+    setCredSaveError(null);
+    setIsSavingCred(true);
+
+    try {
+      const data: Record<string, string> = {
+        apiKey: secretKey,
+        token: secretKey,
+        botToken: secretKey,
+        webhookUrl: secretKey,
+        secret: secretKey,
+      };
+
+      if (defs.type === 'telegram') {
+        data.botToken = secretKey;
+        if (newCredSecondary.trim()) data.chatId = newCredSecondary.trim();
+      } else if (defs.type === 'slack') {
+        data.webhookUrl = secretKey;
+        data.botToken = secretKey;
+        if (newCredSecondary.trim()) data.channel = newCredSecondary.trim();
+      } else if (defs.type === 'discord') {
+        data.webhookUrl = secretKey;
+      } else if (defs.type === 'postgres' || defs.type === 'mysql') {
+        data.password = secretKey;
+        if (newCredSecondary.trim()) data.host = newCredSecondary.trim();
+        if (newCredTertiary.trim()) data.user = newCredTertiary.trim();
+        if (newCredExtra.trim()) data.database = newCredExtra.trim();
+      } else if (defs.type === 'gemini') {
+        data.apiKey = secretKey;
+      } else if (defs.type === 'openai') {
+        data.apiKey = secretKey;
+        if (newCredSecondary.trim()) data.orgId = newCredSecondary.trim();
+      } else if (defs.type === 'anthropic') {
+        data.apiKey = secretKey;
+      } else if (defs.type === 'google_sheets' || defs.type === 'google') {
+        data.apiKey = secretKey;
+        data.token = secretKey;
+      } else if (newCredSecondary.trim()) {
+        data.host = newCredSecondary.trim();
+        data.baseUrl = newCredSecondary.trim();
+      }
+
+      const newId = `cred_${Date.now()}`;
+      const newCred: any = {
+        id: newId,
+        name: finalName,
+        type: defs.type,
+        data,
+        createdAt: new Date().toISOString(),
+      };
+
+      let savedResult: any = null;
+      if (onCreateCredential) {
+        savedResult = await onCreateCredential(newCred);
+      }
+
+      const finalCredId = savedResult?.id || newId;
+
+      // Update node config with credential ID AND direct parameters for seamless execution
+      onUpdateConfig(node.id, {
+        credentialId: finalCredId,
+        config: {
+          ...node.config,
+          credentialId: finalCredId,
+          ...(defs.type === 'telegram'
+            ? {
+                botToken: secretKey,
+                tokenId: secretKey,
+                chatId: data.chatId || node.config?.chatId || '@alerts_channel',
+              }
+            : {}),
+          ...(defs.type === 'slack'
+            ? {
+                webhookUrl: secretKey,
+                channel: data.channel || node.config?.channel || '#general',
+              }
+            : {}),
+          ...(defs.type === 'discord'
+            ? {
+                webhookUrl: secretKey,
+              }
+            : {}),
+          ...(defs.type === 'openai'
+            ? {
+                apiKey: secretKey,
+              }
+            : {}),
+          ...(defs.type === 'gemini'
+            ? {
+                apiKey: secretKey,
+              }
+            : {}),
+          ...(defs.type === 'anthropic'
+            ? {
+                apiKey: secretKey,
+              }
+            : {}),
+        },
+      });
+
+      setCredSavedToast(`✓ ${finalName} saved & connected!`);
+      setTimeout(() => setCredSavedToast(null), 3500);
+
+      setNewCredName('');
+      setNewCredKey('');
+      setNewCredSecondary('');
+      setNewCredTertiary('');
+      setNewCredExtra('');
+      setShowNewCredModal(false);
+      setCredentialDropdownOpen(false);
+    } catch (err: any) {
+      setCredSaveError(`Failed to save: ${err.message || 'Check connection'}`);
+    } finally {
+      setIsSavingCred(false);
+    }
   };
 
   // Check if node requires/supports credentials
@@ -389,8 +563,23 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </a>
           </div>
 
-          {/* Right Action Icons: Delete Step & Close */}
+          {/* Right Action Icons: Save Step, Delete Step & Close */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isSavingStep}
+              onClick={handleSaveAndClose}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/25 transition cursor-pointer active:scale-95"
+              title="Save step configuration and close"
+            >
+              {isSavingStep ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              )}
+              <span>{isSavingStep ? 'Saving...' : 'Save Step'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => onDeleteNode(node.id)}
@@ -402,9 +591,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleSaveAndClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-              title="Close (Esc)"
+              title="Save & Close (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
@@ -705,25 +894,74 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                                 className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-purple-500 focus:outline-none"
                               />
                             </div>
+
+                            {defs.secondaryLabel && (
+                              <div>
+                                <label className="text-[10px] text-slate-400 block mb-1">{defs.secondaryLabel}</label>
+                                <input
+                                  type="text"
+                                  value={newCredSecondary}
+                                  onChange={(e) => setNewCredSecondary(e.target.value)}
+                                  placeholder={defs.secondaryPlaceholder || ''}
+                                  autoComplete="off"
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
+                            )}
+
+                            {defs.tertiaryLabel && (
+                              <div>
+                                <label className="text-[10px] text-slate-400 block mb-1">{defs.tertiaryLabel}</label>
+                                <input
+                                  type="text"
+                                  value={newCredTertiary}
+                                  onChange={(e) => setNewCredTertiary(e.target.value)}
+                                  placeholder={defs.tertiaryPlaceholder || ''}
+                                  autoComplete="off"
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
+                            )}
+
+                            {credSaveError && (
+                              <div className="p-2 rounded-lg bg-rose-950/80 border border-rose-500/60 text-rose-300 text-[11px] flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                <span>{credSaveError}</span>
+                              </div>
+                            )}
+
                             <div className="flex items-center justify-end gap-2 pt-1">
                               <button
                                 type="button"
-                                onClick={() => setShowNewCredModal(false)}
+                                onClick={() => {
+                                  setShowNewCredModal(false);
+                                  setCredSaveError(null);
+                                }}
                                 className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs cursor-pointer"
                               >
                                 Cancel
                               </button>
                               <button
                                 type="button"
+                                disabled={isSavingCred}
                                 onClick={handleSaveQuickCredential}
-                                className="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow-md shadow-purple-600/30"
+                                className="flex items-center gap-1.5 px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs cursor-pointer shadow-md shadow-purple-600/30"
                               >
-                                Save Credential
+                                {isSavingCred && <Loader2 className="w-3 h-3 animate-spin" />}
+                                <span>{isSavingCred ? 'Saving...' : 'Save Credential'}</span>
                               </button>
                             </div>
                           </div>
                         );
                       })()}
+
+                      {/* Toast notification after credential save */}
+                      {credSavedToast && (
+                        <div className="mt-2 p-2 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-1.5 animate-in fade-in duration-200">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>{credSavedToast}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -742,8 +980,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             type="text"
                             value={config.chatId || config.chat_id || ''}
                             onChange={(e) => {
-                              handleConfigChange('chatId', e.target.value);
-                              handleConfigChange('chat_id', e.target.value);
+                              handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
                             }}
                             placeholder="5102553052"
                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
@@ -780,8 +1017,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             rows={4}
                             value={config.text || config.message || ''}
                             onChange={(e) => {
-                              handleConfigChange('text', e.target.value);
-                              handleConfigChange('message', e.target.value);
+                              handleConfigBatch({ text: e.target.value, message: e.target.value });
                             }}
                             placeholder='().map((w, i) => { const c = $("Split Cities").all()[i].json.city; return c; })'
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none resize-y"
@@ -1381,8 +1617,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="text"
                           value={config.fieldPath || config.value1 || ''}
                           onChange={(e) => {
-                            handleConfigChange('fieldPath', e.target.value);
-                            handleConfigChange('value1', e.target.value);
+                            handleConfigBatch({ fieldPath: e.target.value, value1: e.target.value });
                           }}
                           placeholder="{{$json.status}}"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
@@ -1413,8 +1648,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="text"
                           value={config.value || config.value2 || ''}
                           onChange={(e) => {
-                            handleConfigChange('value', e.target.value);
-                            handleConfigChange('value2', e.target.value);
+                            handleConfigBatch({ value: e.target.value, value2: e.target.value });
                           }}
                           placeholder="success, true, or number"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-amber-500 focus:outline-none"
@@ -1432,8 +1666,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="text"
                           value={config.fieldName || config.key || ''}
                           onChange={(e) => {
-                            handleConfigChange('fieldName', e.target.value);
-                            handleConfigChange('key', e.target.value);
+                            handleConfigBatch({ fieldName: e.target.value, key: e.target.value });
                           }}
                           placeholder="leadScore or formattedMessage"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-teal-500 focus:outline-none"
@@ -1446,8 +1679,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="text"
                           value={config.fieldValue || config.value || ''}
                           onChange={(e) => {
-                            handleConfigChange('fieldValue', e.target.value);
-                            handleConfigChange('value', e.target.value);
+                            handleConfigBatch({ fieldValue: e.target.value, value: e.target.value });
                           }}
                           placeholder="{{$json.name.toUpperCase()}}"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-teal-500 focus:outline-none"
@@ -1469,8 +1701,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             value={config.amount || config.seconds || 5}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 1;
-                              handleConfigChange('amount', val);
-                              handleConfigChange('seconds', val);
+                              handleConfigBatch({ amount: val, seconds: val });
                             }}
                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                           />
@@ -1579,8 +1810,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           rows={4}
                           value={config.query || config.table || 'SELECT * FROM users WHERE active = true LIMIT 50;'}
                           onChange={(e) => {
-                            handleConfigChange('query', e.target.value);
-                            handleConfigChange('table', e.target.value);
+                            handleConfigBatch({ query: e.target.value, table: e.target.value });
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none resize-y"
                         />
@@ -1807,6 +2037,29 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Center Pane Footer: Status and Save Step Button */}
+            <div className="p-3 border-t border-slate-800 bg-slate-950/95 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] text-slate-300 font-mono">
+                  {stepSavedToast ? '✓ Saved to Workflow' : 'All Changes Auto-Saved'}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isSavingStep}
+                onClick={handleSaveAndClose}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition cursor-pointer active:scale-95"
+              >
+                {isSavingStep ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                )}
+                <span>{isSavingStep ? 'Saving...' : 'Save & Close'}</span>
+              </button>
             </div>
           </div>
 

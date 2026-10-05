@@ -563,6 +563,18 @@
       },
       "createdAt": "2026-09-26T03:23:13.182Z",
       "updatedAt": "2026-09-26T03:23:13.182Z"
+    },
+    {
+      "id": "cred_1791206925233_4a47",
+      "workspaceId": "ws_default_01",
+      "name": "Telegram Test Bot",
+      "type": "telegram",
+      "data": {
+        "botToken": "123456789:ABCDEF123456789",
+        "chatId": "-100123456789"
+      },
+      "createdAt": "2026-10-05T13:28:45.233Z",
+      "updatedAt": "2026-10-05T13:28:45.233Z"
     }
   ],
   "executions": [
@@ -2989,6 +3001,27 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1791208050237",
+      "workspaceId": "ws_default_01",
+      "action": "Credential Deleted",
+      "details": "Credential cred_test_123 removed",
+      "timestamp": "2026-10-05T13:47:30.237Z"
+    },
+    {
+      "id": "aud_1791208047273",
+      "workspaceId": "ws_default_01",
+      "action": "Credential Saved",
+      "details": "TELEGRAM credential \"Test Telegram Bot\" saved",
+      "timestamp": "2026-10-05T13:47:27.273Z"
+    },
+    {
+      "id": "aud_1791206925233",
+      "workspaceId": "ws_default_01",
+      "action": "Credential Added",
+      "details": "New TELEGRAM credential \"Telegram Test Bot\" created",
+      "timestamp": "2026-10-05T13:28:45.233Z"
+    },
     {
       "id": "aud_1791108148689",
       "workspaceId": "ws_default_01",

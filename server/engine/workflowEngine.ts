@@ -15,8 +15,8 @@ const workflowVariablesStore: Record<string, any> = {};
 const rateLimitStore: Record<string, { count: number; resetAt: number }> = {};
 
 // Helper to initialize GoogleGenAI with required headers
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
+  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return null;
   }
@@ -64,29 +64,67 @@ export function evaluateExpressions(template: any, context: { json: any; nodes: 
 
 function resolveSingleExpression(expr: string, context: { json: any; nodes: Record<string, any> }): any {
   try {
+    const trimmed = expr.trim();
+
+    // Built-in timestamps
+    if (trimmed === '$now') return new Date().toISOString();
+    if (trimmed === '$today') return new Date().toISOString().split('T')[0];
+    if (trimmed === '$executionId') return `exec_${Date.now()}`;
+
+    // Standard n8n syntax: $('Node Name').item.json.field or $('Node Name').all()[0].json.field or $('Node Name').json.field
+    const n8nDollarMatch = trimmed.match(/^\$\(['"](.*?)['"]\)(.*)$/);
+    if (n8nDollarMatch) {
+      const nodeName = n8nDollarMatch[1];
+      const rest = n8nDollarMatch[2] || '';
+      const nodeData = context.nodes[nodeName];
+      if (!nodeData) return undefined;
+      if (!rest) return nodeData.json || nodeData;
+
+      // Clean chaining: .item.json.prop -> prop, .first().json.prop -> prop, .all()[0].json.prop -> prop
+      const cleanPath = rest
+        .replace(/^\.all\(\)\[\d+\]\.json\./, '')
+        .replace(/^\.all\(\)\[\d+\]\.json/, '')
+        .replace(/^\.first\(\)\.json\./, '')
+        .replace(/^\.first\(\)\.json/, '')
+        .replace(/^\.item\.json\./, '')
+        .replace(/^\.item\.json/, '')
+        .replace(/^\.json\./, '')
+        .replace(/^\.json/, '')
+        .replace(/^\./, '');
+
+      if (!cleanPath) return nodeData.json || nodeData;
+      return getNestedProperty(nodeData.json || nodeData, cleanPath);
+    }
+
     // Check if references $node["..."]
-    const nodeMatch = expr.match(/^\$node\[['"](.*?)['"]\](\.json.*)?$/);
+    const nodeMatch = trimmed.match(/^\$node\[['"](.*?)['"]\](\.json.*)?$/);
     if (nodeMatch) {
       const nodeName = nodeMatch[1];
       const rest = nodeMatch[2] || '';
       const nodeData = context.nodes[nodeName];
       if (!nodeData) return undefined;
-      if (!rest) return nodeData;
+      if (!rest) return nodeData.json || nodeData;
       // Strip .json
       const propPath = rest.replace(/^\.json/, '').replace(/^\./, '');
       if (!propPath) return nodeData.json || nodeData;
       return getNestedProperty(nodeData.json || nodeData, propPath);
     }
 
+    // $prev or prev references
+    if (trimmed.startsWith('$prev.') || trimmed.startsWith('prev.')) {
+      const propPath = trimmed.replace(/^\$prev\./, '').replace(/^prev\./, '');
+      return getNestedProperty(context.json, propPath);
+    }
+
     // $json.foo.bar
-    if (expr.startsWith('$json')) {
-      const propPath = expr.replace(/^\$json/, '').replace(/^\./, '');
+    if (trimmed.startsWith('$json')) {
+      const propPath = trimmed.replace(/^\$json/, '').replace(/^\./, '');
       if (!propPath) return context.json;
       return getNestedProperty(context.json, propPath);
     }
 
     // Direct property fallback
-    return getNestedProperty(context.json, expr);
+    return getNestedProperty(context.json, trimmed);
   } catch {
     return undefined;
   }
@@ -645,6 +683,35 @@ export class WorkflowEngine {
   ): Promise<any> {
     const config = node.config || {};
 
+    // Resolve attached credential for this node from database
+    let credential: any = null;
+    const allCreds = db.get('credentials') || [];
+    const credId = node.credentialId || config.credentialId;
+    if (credId) {
+      credential = allCreds.find((c: any) => c.id === credId) || null;
+    }
+    // Smart fallback: if no specific ID linked, find any matching credential for this node type
+    if (!credential) {
+      const typeLower = node.type.toLowerCase();
+      if (typeLower.includes('telegram')) {
+        credential = allCreds.find((c: any) => c.type === 'telegram');
+      } else if (typeLower.includes('gemini')) {
+        credential = allCreds.find((c: any) => c.type === 'gemini');
+      } else if (typeLower.includes('openai')) {
+        credential = allCreds.find((c: any) => c.type === 'openai');
+      } else if (typeLower.includes('anthropic') || typeLower.includes('claude')) {
+        credential = allCreds.find((c: any) => c.type === 'anthropic');
+      } else if (typeLower.includes('slack')) {
+        credential = allCreds.find((c: any) => c.type === 'slack');
+      } else if (typeLower.includes('discord')) {
+        credential = allCreds.find((c: any) => c.type === 'discord');
+      } else if (typeLower.includes('sheets') || typeLower.includes('gmail') || typeLower.includes('google')) {
+        credential = allCreds.find((c: any) => c.type === 'google_sheets' || c.type === 'google');
+      } else if (typeLower.includes('postgres') || typeLower.includes('mysql') || typeLower.includes('database')) {
+        credential = allCreds.find((c: any) => c.type === 'postgres' || c.type === 'mysql');
+      }
+    }
+
     switch (node.type) {
       // 1. Trigger nodes
       case 'trigger_schedule': {
@@ -697,6 +764,14 @@ export class WorkflowEngine {
             if (h.key && h.value) {
               headers[evaluateExpressions(h.key, context)] = evaluateExpressions(h.value, context);
             }
+          }
+        }
+
+        // Attach authorization header from credential if present
+        if (credential?.data) {
+          const secret = credential.data.token || credential.data.apiKey || credential.data.secret;
+          if (secret && !headers['Authorization'] && !headers['authorization']) {
+            headers['Authorization'] = `Bearer ${secret}`;
           }
         }
 
@@ -758,13 +833,17 @@ export class WorkflowEngine {
         const memConn = workflow?.connections.find((c) => c.toNodeId === node.id && c.toPortId === 'in_memory');
         const memNode = memConn ? workflow?.nodes.find((n) => n.id === memConn.fromNodeId) : null;
 
-        const toolConns = workflow?.connections.filter((c) => c.toNodeId === node.id && c.toPortId === 'in_tools') || [];
+        const toolConns =
+          workflow?.connections.filter(
+            (c) => c.toNodeId === node.id && (c.toPortId === 'in_tools' || c.toPortId.startsWith('in_tools'))
+          ) || [];
         const toolNodes = toolConns.map((tc) => workflow?.nodes.find((n) => n.id === tc.fromNodeId)).filter(Boolean) as WorkflowNodeData[];
 
         const modelName = modelNode?.name || config.model || 'Google Gemini 2.5 Flash';
         const modelId = modelNode?.config?.model || config.model || 'gemini-2.5-flash';
 
-        const ai = getGeminiClient();
+        const customKey = credential?.data?.apiKey || modelNode?.config?.apiKey || config.apiKey;
+        const ai = getGeminiClient(customKey);
         const systemInstruction = evaluateExpressions(
           config.systemPrompt || 'You are an intelligent workflow automation AI agent. Provide accurate, structured, and helpful responses.',
           context
@@ -1138,32 +1217,52 @@ export class WorkflowEngine {
       // 9. Communication: Telegram
       case 'app_telegram':
       case 'comm_telegram': {
-        const chatId = evaluateExpressions(config.chatId || '@alerts_channel', context);
-        const rawMsg = config.message || config.text || incomingData?.text || incomingData?.summary || (incomingData?.output?.briefing) || (typeof incomingData === 'string' ? incomingData : 'Workflow alert: ' + JSON.stringify(incomingData));
+        const botToken =
+          credential?.data?.botToken ||
+          credential?.data?.apiKey ||
+          credential?.data?.token ||
+          config.botToken ||
+          config.tokenId;
+        const targetChatId = evaluateExpressions(
+          config.chatId || credential?.data?.chatId || '@alerts_channel',
+          context
+        );
+        const rawMsg =
+          config.message ||
+          config.text ||
+          incomingData?.text ||
+          incomingData?.summary ||
+          incomingData?.output?.briefing ||
+          (typeof incomingData === 'string'
+            ? incomingData
+            : 'Workflow alert: ' + JSON.stringify(incomingData));
         const message = evaluateExpressions(rawMsg, context);
-        const botToken = config.botToken || config.tokenId;
 
         let realTelegramResponse: any = null;
+        let realTelegramError: string | null = null;
         if (botToken && botToken.includes(':')) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
             const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: chatId,
+                chat_id: targetChatId,
                 text: message,
-                parse_mode: config.parseMode || 'HTML'
+                parse_mode: config.parseMode || 'HTML',
               }),
-              signal: controller.signal
+              signal: controller.signal,
             });
             clearTimeout(timeoutId);
+            const tgData = await tgRes.json();
             if (tgRes.ok) {
-              realTelegramResponse = await tgRes.json();
+              realTelegramResponse = tgData;
+            } else {
+              realTelegramError = tgData?.description || `HTTP ${tgRes.status}`;
             }
-          } catch (e) {
-            // Fallback gracefully to simulated delivery
+          } catch (e: any) {
+            realTelegramError = e.message;
           }
         }
 
@@ -1171,47 +1270,112 @@ export class WorkflowEngine {
         return {
           sent: true,
           platform: 'Telegram',
-          chatId,
+          chatId: targetChatId,
           message,
           text: message,
           messageId: msgId,
-          connectedExternally: Boolean(realTelegramResponse?.ok || botToken),
+          connectedExternally: Boolean(realTelegramResponse?.ok),
           deliveredAt: new Date().toISOString(),
           status: 'success',
           output: {
             delivered: true,
-            chatId,
+            chatId: targetChatId,
             botTokenConfigured: Boolean(botToken),
             realDispatched: Boolean(realTelegramResponse?.ok),
+            apiNotice: realTelegramError || (realTelegramResponse?.ok ? 'Dispatched to Telegram Bot API' : 'Simulated (configure valid bot token for live broadcast)'),
             messagePreview: message.slice(0, 160),
             messageId: msgId,
-            status: 'sent'
-          }
+            status: 'sent',
+          },
         };
       }
 
       // 10. Communication: Slack
+      case 'app_slack':
       case 'comm_slack': {
-        const channel = evaluateExpressions(config.channel || '#alerts', context);
-        const text = evaluateExpressions(config.messageText || 'EIE-Workflow Notification', context);
+        const channel = evaluateExpressions(config.channel || credential?.data?.channel || '#general', context);
+        const text = evaluateExpressions(config.text || config.messageText || 'EIE-Workflow Notification: ' + JSON.stringify(incomingData || {}), context);
+        const webhookUrl = credential?.data?.webhookUrl || credential?.data?.token || config.webhookUrl;
+
+        let realSlackDispatched = false;
+        let realSlackError: string | null = null;
+        if (webhookUrl && webhookUrl.startsWith('http')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const slRes = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, channel }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            realSlackDispatched = slRes.ok;
+            if (!slRes.ok) realSlackError = `HTTP ${slRes.status}`;
+          } catch (e: any) {
+            realSlackError = e.message;
+          }
+        }
 
         return {
           sent: true,
           platform: 'Slack',
           channel,
           text,
-          timestamp: new Date().toISOString()
+          connectedExternally: realSlackDispatched,
+          apiNotice: realSlackDispatched ? 'Dispatched to Slack webhook' : realSlackError || 'Simulated (set Slack Webhook URL to send live)',
+          timestamp: new Date().toISOString(),
+          output: {
+            channel,
+            text,
+            realDispatched: realSlackDispatched,
+            status: 'success',
+          },
         };
       }
 
       // 11. Communication: Discord
+      case 'app_discord':
       case 'comm_discord': {
-        const content = evaluateExpressions(config.content || 'EIE-Workflow notification', context);
+        const channel = config.channel || '#announcements';
+        const rawContent = config.content || config.message || config.text || (typeof incomingData === 'string' ? incomingData : 'Notification from EIE Workflow: ' + JSON.stringify(incomingData || {}));
+        const content = evaluateExpressions(rawContent, context);
+        const webhookUrl = credential?.data?.webhookUrl || credential?.data?.token || config.webhookUrl;
+
+        let realDiscordDispatched = false;
+        let realDiscordError: string | null = null;
+        if (webhookUrl && webhookUrl.startsWith('http')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const dcRes = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            realDiscordDispatched = dcRes.ok;
+            if (!dcRes.ok) realDiscordError = `HTTP ${dcRes.status}`;
+          } catch (e: any) {
+            realDiscordError = e.message;
+          }
+        }
+
         return {
           sent: true,
           platform: 'Discord',
+          channel,
           content,
-          timestamp: new Date().toISOString()
+          connectedExternally: realDiscordDispatched,
+          apiNotice: realDiscordDispatched ? 'Dispatched to Discord webhook' : realDiscordError || 'Simulated (set Discord Webhook URL to send live)',
+          timestamp: new Date().toISOString(),
+          output: {
+            channel,
+            content,
+            realDispatched: realDiscordDispatched,
+            status: 'success',
+          },
         };
       }
 
@@ -1392,18 +1556,43 @@ export class WorkflowEngine {
 
       case 'app_slack': {
         const channel = config.channel || '#general';
-        const text = evaluateExpressions(config.text || config.messageText || 'Workflow automation executed successfully', context);
+        const rawText = config.text || config.messageText || incomingData?.text || 'Workflow automation executed successfully';
+        const text = evaluateExpressions(rawText, context);
+        const webhookUrl = credential?.data?.webhookUrl || config.webhookUrl;
+
+        let realSlackResponse: any = null;
+        let realSlackError: string | null = null;
+        if (webhookUrl && webhookUrl.startsWith('http')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const slRes = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, channel }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            realSlackResponse = { ok: slRes.ok, status: slRes.status };
+          } catch (e: any) {
+            realSlackError = e.message;
+          }
+        }
+
         const result = {
           posted: true,
           channel,
           message: text,
           text,
+          connectedExternally: Boolean(realSlackResponse?.ok),
+          externalError: realSlackError,
           ts: String(Date.now() / 1000),
           status: 'success',
         };
         return {
           ...result,
           output: result,
+          text: `Slack message posted to ${channel}: "${text}"`,
         };
       }
 
@@ -1499,12 +1688,36 @@ export class WorkflowEngine {
 
       case 'app_discord': {
         const channel = config.channel || '#announcements';
-        const content = evaluateExpressions(config.content || config.message || 'Notification from EIE Workflow', context);
+        const rawContent = config.content || config.message || incomingData?.text || 'Notification from EIE Workflow';
+        const content = evaluateExpressions(rawContent, context);
+        const webhookUrl = credential?.data?.webhookUrl || config.webhookUrl;
+
+        let realDiscordResponse: any = null;
+        let realDiscordError: string | null = null;
+        if (webhookUrl && webhookUrl.startsWith('http')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const dRes = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            realDiscordResponse = { ok: dRes.ok, status: dRes.status };
+          } catch (e: any) {
+            realDiscordError = e.message;
+          }
+        }
+
         const result = {
           messageId: `disc_${Date.now()}`,
           channel,
           content,
           delivered: true,
+          connectedExternally: Boolean(realDiscordResponse?.ok),
+          externalError: realDiscordError,
           status: 'success',
         };
         return {
@@ -1663,16 +1876,96 @@ export class WorkflowEngine {
         };
       }
 
-      case 'app_openai':
       case 'app_google_gemini': {
-        const modelName = node.type === 'app_openai' ? (config.model || 'gpt-4o') : (config.model || 'gemini-2.5-flash');
-        const prompt = evaluateExpressions(config.prompt || config.userPrompt || 'Analyze input data and summarize', context);
-        const answer = `[${modelName} Analysis] Processed payload successfully. High priority event identified. Recommended action: Auto-approve downstream routing.`;
+        const modelName = config.model || 'gemini-2.5-flash';
+        const rawPrompt = config.prompt || config.userPrompt || incomingData?.text || incomingData?.message || 'Analyze input data and summarize';
+        const prompt = evaluateExpressions(rawPrompt, context);
+        const customKey = credential?.data?.apiKey || config.apiKey;
+
+        let answer = '';
+        let realGenAiUsed = false;
+        try {
+          const gemini = getGeminiClient(customKey);
+          if (gemini) {
+            const resp = await gemini.models.generateContent({
+              model: modelName,
+              contents: prompt,
+            });
+            if (resp.text) {
+              answer = resp.text;
+              realGenAiUsed = true;
+            }
+          }
+        } catch (e: any) {
+          console.warn('[Gemini Node Execution Warning]:', e.message);
+        }
+
+        if (!answer) {
+          answer = `[Gemini ${modelName} Analysis]: Successfully processed workflow payload for prompt "${prompt.slice(0, 60)}...". Context passed to downstream nodes.`;
+        }
+
         const result = {
           model: modelName,
           prompt,
           response: answer,
-          tokens: 142,
+          text: answer,
+          connectedExternally: realGenAiUsed,
+          tokens: Math.ceil((prompt.length + answer.length) / 4),
+          status: 'success',
+        };
+        return {
+          ...result,
+          output: result,
+          text: answer,
+        };
+      }
+
+      case 'app_openai': {
+        const modelName = config.model || 'gpt-4o';
+        const rawPrompt = config.prompt || config.userPrompt || incomingData?.text || incomingData?.message || 'Analyze input data and summarize';
+        const prompt = evaluateExpressions(rawPrompt, context);
+        const apiKey = credential?.data?.apiKey || config.apiKey;
+
+        let answer = '';
+        let realOpenAiUsed = false;
+        if (apiKey && apiKey.startsWith('sk-')) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
+            const oaRes = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: prompt }],
+              }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            if (oaRes.ok) {
+              const data = await oaRes.json();
+              answer = data?.choices?.[0]?.message?.content || '';
+              realOpenAiUsed = Boolean(answer);
+            }
+          } catch (e: any) {
+            console.warn('[OpenAI Node Execution Warning]:', e.message);
+          }
+        }
+
+        if (!answer) {
+          answer = `[OpenAI ${modelName} Analysis]: Processed payload successfully for prompt "${prompt.slice(0, 60)}...". Action approved for downstream execution.`;
+        }
+
+        const result = {
+          model: modelName,
+          prompt,
+          response: answer,
+          text: answer,
+          connectedExternally: realOpenAiUsed,
+          tokens: Math.ceil((prompt.length + answer.length) / 4),
           status: 'success',
         };
         return {
