@@ -20,6 +20,72 @@
   ],
   "workflows": [
     {
+      "id": "wf_test_chat_tg",
+      "name": "Chat to Telegram Test",
+      "active": true,
+      "nodes": [
+        {
+          "id": "node_chat",
+          "type": "chat_trigger",
+          "name": "Live Chat Trigger",
+          "category": "Chat",
+          "position": {
+            "x": 100,
+            "y": 100
+          },
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "config": {}
+        },
+        {
+          "id": "node_tg",
+          "type": "app_telegram",
+          "name": "Telegram Alert",
+          "category": "Applications",
+          "position": {
+            "x": 400,
+            "y": 100
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main"
+            }
+          ],
+          "config": {
+            "chatId": "@test_chat",
+            "text": "New Telegram message: {{$json.message}}"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c1",
+          "fromNodeId": "node_chat",
+          "fromPortId": "out_main",
+          "toNodeId": "node_tg",
+          "toPortId": "in_main"
+        }
+      ],
+      "updatedAt": "2026-10-06T11:04:29.778Z",
+      "executionCount": 1,
+      "lastExecutedAt": "2026-10-06T11:04:29.780Z"
+    },
+    {
       "id": "test_screenshot_wf",
       "name": "Screenshot Workflow",
       "nodes": [
@@ -315,8 +381,8 @@
         }
       ],
       "updatedAt": "2026-09-29T03:45:09.178Z",
-      "executionCount": 5,
-      "lastExecutedAt": "2026-09-30T19:09:37.850Z"
+      "executionCount": 6,
+      "lastExecutedAt": "2026-10-06T11:04:19.436Z"
     },
     {
       "id": "wf_sample_ai_lead",
@@ -578,6 +644,280 @@
     }
   ],
   "executions": [
+    {
+      "id": "exec_1791284669780_05979d",
+      "workflowId": "wf_test_chat_tg",
+      "workflowName": "Chat to Telegram Test",
+      "triggerType": "chat",
+      "status": "success",
+      "startedAt": "2026-10-06T11:04:29.780Z",
+      "nodeResults": {
+        "node_chat": {
+          "nodeId": "node_chat",
+          "nodeName": "Live Chat Trigger",
+          "nodeType": "chat_trigger",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:29.781Z",
+          "input": {
+            "message": "Hello Telegram!",
+            "text": "Hello Telegram!"
+          },
+          "finishedAt": "2026-10-06T11:04:29.781Z",
+          "durationMs": 0,
+          "output": {
+            "message": "Hello Telegram!",
+            "text": "Hello Telegram!",
+            "query": "Hello Telegram!",
+            "sessionId": "chat_sess_1791284669781",
+            "user": {
+              "name": "Live Chat User",
+              "id": "usr_guest"
+            },
+            "timestamp": "2026-10-06T11:04:29.781Z",
+            "status": "success",
+            "output": {
+              "message": "Hello Telegram!",
+              "text": "Hello Telegram!",
+              "query": "Hello Telegram!",
+              "sessionId": "chat_sess_1791284669781",
+              "timestamp": "2026-10-06T11:04:29.781Z"
+            }
+          }
+        },
+        "node_tg": {
+          "nodeId": "node_tg",
+          "nodeName": "Telegram Alert",
+          "nodeType": "app_telegram",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:29.782Z",
+          "input": {
+            "message": "Hello Telegram!",
+            "text": "Hello Telegram!",
+            "query": "Hello Telegram!",
+            "sessionId": "chat_sess_1791284669781",
+            "user": {
+              "name": "Live Chat User",
+              "id": "usr_guest"
+            },
+            "timestamp": "2026-10-06T11:04:29.781Z",
+            "status": "success",
+            "output": {
+              "message": "Hello Telegram!",
+              "text": "Hello Telegram!",
+              "query": "Hello Telegram!",
+              "sessionId": "chat_sess_1791284669781",
+              "timestamp": "2026-10-06T11:04:29.781Z"
+            }
+          },
+          "finishedAt": "2026-10-06T11:04:30.493Z",
+          "durationMs": 711,
+          "output": {
+            "sent": true,
+            "platform": "Telegram",
+            "chatId": "@test_chat",
+            "message": "New Telegram message: Hello Telegram!",
+            "text": "New Telegram message: Hello Telegram!",
+            "reply": "New Telegram message: Hello Telegram!",
+            "messageId": 10682,
+            "connectedExternally": false,
+            "deliveredAt": "2026-10-06T11:04:30.493Z",
+            "status": "success",
+            "output": {
+              "delivered": true,
+              "chatId": "@test_chat",
+              "message": "New Telegram message: Hello Telegram!",
+              "text": "New Telegram message: Hello Telegram!",
+              "reply": "New Telegram message: Hello Telegram!",
+              "botTokenConfigured": true,
+              "realDispatched": false,
+              "apiNotice": "Not Found",
+              "messagePreview": "New Telegram message: Hello Telegram!",
+              "messageId": 10682,
+              "status": "sent"
+            }
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-10-06T11:04:29.780Z",
+          "level": "info",
+          "message": "Workflow \"Chat to Telegram Test\" started via chat trigger."
+        },
+        {
+          "timestamp": "2026-10-06T11:04:29.782Z",
+          "level": "info",
+          "message": "Node \"Live Chat Trigger\" (chat_trigger) executed successfully in 0ms.",
+          "nodeId": "node_chat"
+        },
+        {
+          "timestamp": "2026-10-06T11:04:30.493Z",
+          "level": "info",
+          "message": "Node \"Telegram Alert\" (app_telegram) executed successfully in 711ms.",
+          "nodeId": "node_tg"
+        },
+        {
+          "timestamp": "2026-10-06T11:04:30.493Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 713ms."
+        }
+      ],
+      "finishedAt": "2026-10-06T11:04:30.493Z",
+      "durationMs": 713
+    },
+    {
+      "id": "exec_1791284659436_f95133",
+      "workflowId": "wf_tpl_n8n_ai_agent",
+      "workflowName": "n8n Autonomous AI Agent (Tools + Memory + LLM Model)",
+      "triggerType": "chat",
+      "status": "success",
+      "startedAt": "2026-10-06T11:04:19.436Z",
+      "nodeResults": {
+        "agent_model": {
+          "nodeId": "agent_model",
+          "nodeName": "Google Gemini 3.8 Flash",
+          "nodeType": "ai_model_gemini",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:19.443Z",
+          "finishedAt": "2026-10-06T11:04:19.443Z",
+          "durationMs": 15,
+          "output": {
+            "modelId": "gemini-2.5-flash",
+            "provider": "Google Gemini",
+            "temperature": 0.2,
+            "maxTokens": 2048,
+            "status": "ready",
+            "capabilities": [
+              "multimodal",
+              "function_calling",
+              "structured_outputs"
+            ],
+            "attachedAt": "2026-10-06T11:04:19.443Z"
+          }
+        },
+        "agent_calc": {
+          "nodeId": "agent_calc",
+          "nodeName": "Calculator Tool",
+          "nodeType": "ai_tool_calculator",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:19.443Z",
+          "finishedAt": "2026-10-06T11:04:19.443Z",
+          "durationMs": 15,
+          "output": {
+            "toolName": "calculator",
+            "type": "math_tool",
+            "description": "Calculates mathematical equations and financial metrics with precision",
+            "status": "registered",
+            "sampleExecution": {
+              "expression": "1250 * 1.18",
+              "result": 1475
+            }
+          }
+        },
+        "agent_wh": {
+          "nodeId": "agent_wh",
+          "nodeName": "Chat Inbound Trigger",
+          "nodeType": "trigger_webhook",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:19.443Z",
+          "input": {
+            "message": "Order 9821 status check",
+            "text": "Order 9821 status check"
+          },
+          "finishedAt": "2026-10-06T11:04:19.443Z",
+          "durationMs": 0,
+          "output": {
+            "message": "Order 9821 status check",
+            "text": "Trigger event initialized with 2 attributes",
+            "triggered": true,
+            "status": "success",
+            "output": {
+              "message": "Order 9821 status check",
+              "text": "Order 9821 status check"
+            }
+          }
+        },
+        "agent_core": {
+          "nodeId": "agent_core",
+          "nodeName": "Autonomous AI Agent",
+          "nodeType": "ai_agent",
+          "status": "success",
+          "startedAt": "2026-10-06T11:04:19.443Z",
+          "input": {
+            "message": "Order 9821 status check",
+            "text": "Trigger event initialized with 2 attributes",
+            "triggered": true,
+            "status": "success",
+            "output": {
+              "message": "Order 9821 status check",
+              "text": "Order 9821 status check"
+            }
+          },
+          "finishedAt": "2026-10-06T11:04:19.817Z",
+          "durationMs": 374,
+          "output": {
+            "text": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+            "reply": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+            "message": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+            "output": {
+              "reply": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+              "text": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+              "message": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+              "summary": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+              "inquiry": "Order 9821 status check",
+              "urgencyScore": 88,
+              "status": "approved"
+            },
+            "result": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+            "summary": "AI Assistant (Google Gemini 3.8 Flash): I have processed your inquiry: \"Order 9821 status check\". All automated steps and integrations verified.",
+            "urgencyScore": 88,
+            "estimatedContractTier": "Tier 1",
+            "data": {
+              "message": "Order 9821 status check",
+              "text": "Trigger event initialized with 2 attributes",
+              "triggered": true,
+              "status": "success",
+              "output": {
+                "message": "Order 9821 status check",
+                "text": "Order 9821 status check"
+              }
+            },
+            "status": "success",
+            "modelUsed": "Google Gemini 3.8 Flash",
+            "memoryUsed": "Window Buffer Memory",
+            "toolsUsed": [
+              "Calculator Tool"
+            ]
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-10-06T11:04:19.436Z",
+          "level": "info",
+          "message": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" started via chat trigger."
+        },
+        {
+          "timestamp": "2026-10-06T11:04:19.443Z",
+          "level": "info",
+          "message": "Node \"Chat Inbound Trigger\" (trigger_webhook) executed successfully in 0ms.",
+          "nodeId": "agent_wh"
+        },
+        {
+          "timestamp": "2026-10-06T11:04:19.817Z",
+          "level": "info",
+          "message": "Node \"Autonomous AI Agent\" (ai_agent) executed successfully in 374ms.",
+          "nodeId": "agent_core"
+        },
+        {
+          "timestamp": "2026-10-06T11:04:19.818Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 382ms."
+        }
+      ],
+      "finishedAt": "2026-10-06T11:04:19.818Z",
+      "durationMs": 382
+    },
     {
       "id": "exec_1791108140003_57943e",
       "workflowId": "wf_sample_ai_lead",
@@ -3001,6 +3341,18 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1791284670493",
+      "action": "Execution exec_1791284669780_05979d",
+      "details": "Workflow \"Chat to Telegram Test\" completed: SUCCESS (713ms)",
+      "timestamp": "2026-10-06T11:04:30.493Z"
+    },
+    {
+      "id": "aud_1791284659818",
+      "action": "Execution exec_1791284659436_f95133",
+      "details": "Workflow \"n8n Autonomous AI Agent (Tools + Memory + LLM Model)\" completed: SUCCESS (382ms)",
+      "timestamp": "2026-10-06T11:04:19.818Z"
+    },
     {
       "id": "aud_1791208050237",
       "workspaceId": "ws_default_01",

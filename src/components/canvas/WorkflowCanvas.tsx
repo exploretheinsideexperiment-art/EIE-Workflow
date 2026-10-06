@@ -21,7 +21,7 @@ import { AiFixerDrawer } from '../panels/AiFixerDrawer';
 import { WorkflowLiveChatDrawer } from '../panels/WorkflowLiveChatDrawer';
 import { CloudConnectivityModal } from '../modals/CloudConnectivityModal';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
-import { resolveNodeInputData } from '../../utils/workflowDataFlow';
+import { resolveNodeInputData, evaluateExpressionInContext } from '../../utils/workflowDataFlow';
 import { diagnoseWorkflow, autoRepairWorkflow } from '../../utils/workflowDoctor';
 import {
   validateConnection,
@@ -1426,7 +1426,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           .map((c) => c.toNodeId)
       );
       const rootNodes = workflow.nodes.filter((n) => !isProvider(n) && !mainTargetIds.has(n.id));
-      const triggers = rootNodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_'));
+      const triggers = rootNodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_') || n.type === 'chat_trigger');
       const otherRoots = rootNodes.filter((n) => !triggers.some((t) => t.id === n.id));
       const startNodes = [...triggers, ...otherRoots];
 
@@ -1461,6 +1461,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             if (up.rows) stepInput.rows = up.rows;
             if (up.data) stepInput.data = up.data;
             if (up.text) stepInput.text = up.text;
+            if (up.message) stepInput.message = up.message;
+            if (up.reply) stepInput.reply = up.reply;
+            if (up.query) stepInput.query = up.query;
+            if (up.chatId) stepInput.chatId = up.chatId;
           }
         }
 
@@ -1468,7 +1472,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         let stepOutput: any = {};
         let duration = 35;
 
-        if (curr.type === 'trigger_schedule') {
+        if (curr.type === 'chat_trigger') {
+          duration = 20;
+          const userMsg = stepInput?.message || stepInput?.text || stepInput?.query || curr.config?.welcomeMessage || 'Hello! How can I help you today?';
+          stepOutput = {
+            message: userMsg,
+            text: userMsg,
+            query: userMsg,
+            sessionId: stepInput?.sessionId || `chat_sess_${Date.now()}`,
+            user: stepInput?.user || { name: 'Live Chat User', id: 'usr_guest' },
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            output: { message: userMsg, text: userMsg, query: userMsg },
+          };
+        } else if (curr.type === 'trigger_schedule') {
           const nowStr = new Date().toISOString();
           duration = 15;
           stepOutput = {
@@ -1502,9 +1519,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         } else if (curr.type === 'ai_agent') {
           duration = 380;
           const hasRows = stepInput?.rows && Array.isArray(stepInput.rows);
+          const incomingUserMsg = stepInput?.message || stepInput?.text || stepInput?.query;
           let briefingText = '';
 
-          if (hasRows) {
+          if (incomingUserMsg) {
+            briefingText = `AI Assistant Response: I have analyzed your inquiry: "${incomingUserMsg}". All downstream actions and integrations are updated in real-time.`;
+          } else if (hasRows) {
             const rowSummary = stepInput.rows
               .slice(0, 3)
               .map((r: any) => `• ${r.customer || r.name}: ${r.revenue || '$15k'} (${r.priority || 'Active'})`)
@@ -1517,8 +1537,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
           stepOutput = {
             text: briefingText,
+            reply: briefingText,
+            message: briefingText,
             output: {
               briefing: briefingText,
+              reply: briefingText,
+              message: briefingText,
+              text: briefingText,
               urgencyScore: 88,
               priority: 'Tier 1 Critical',
               status: 'approved',
@@ -1533,17 +1558,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           };
         } else if (curr.type === 'app_telegram' || curr.type === 'comm_telegram') {
           duration = 95;
-          const msg = curr.config?.message || curr.config?.text || stepInput?.text || stepInput?.summary || 'Operations report delivered';
+          const rawCandidate = curr.config?.text || curr.config?.message || stepInput?.reply || stepInput?.message || stepInput?.text || stepInput?.summary || 'Operations report delivered';
+          const msg = evaluateExpressionInContext(rawCandidate, stepInput, workflow);
+          const targetChat = curr.config?.chatId || curr.config?.chat_id || stepInput?.chatId || '@operations_alerts';
           stepOutput = {
             sent: true,
             platform: 'Telegram',
-            chatId: curr.config?.chatId || '@operations_alerts',
+            chatId: targetChat,
             message: msg,
             text: msg,
+            reply: msg,
             messageId: 10429,
             deliveredAt: new Date().toISOString(),
             status: 'success',
-            output: { delivered: true, chatId: curr.config?.chatId || '@operations_alerts', messageId: 10429 },
+            output: { delivered: true, chatId: targetChat, message: msg, text: msg, reply: msg, messageId: 10429 },
           };
         } else {
           duration = 50;
@@ -2436,15 +2464,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onTriggerExecution={async (payload) => {
           setIsExecuting(true);
           try {
-            const res = await fetch(`/api/workflows/${workflow.id}/run`, {
+            const currentWf = workflowRef.current;
+            const res = await fetch(`/api/workflows/${currentWf.id}/run`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ triggerType: 'chat', payload }),
+              body: JSON.stringify({
+                triggerType: 'chat',
+                payload,
+                workflow: currentWf,
+              }),
             });
             const execution = await res.json();
             setLatestExecution(execution);
             return execution;
           } catch (e) {
+            console.error('Chat execution failed:', e);
             return {
               id: `exec_${Date.now()}`,
               output: { reply: 'Echo from workflow: ' + (payload?.message || payload?.text || 'Received') }

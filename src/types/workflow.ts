@@ -107,7 +107,7 @@ export interface Execution {
   id: string;
   workflowId: string;
   workflowName: string;
-  triggerType: 'manual' | 'webhook' | 'schedule' | 'api';
+  triggerType: 'manual' | 'webhook' | 'schedule' | 'api' | 'chat';
   status: 'running' | 'success' | 'failed' | 'cancelled';
   startedAt: string;
   finishedAt?: string;

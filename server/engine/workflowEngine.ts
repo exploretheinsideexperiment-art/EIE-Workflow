@@ -66,6 +66,23 @@ function resolveSingleExpression(expr: string, context: { json: any; nodes: Reco
   try {
     const trimmed = expr.trim();
 
+    // Support logical OR expressions like: $json.message || $json.text || "Default"
+    if (trimmed.includes('||')) {
+      const parts = trimmed.split('||');
+      for (const part of parts) {
+        const p = part.trim();
+        if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+          const strVal = p.slice(1, -1);
+          if (strVal) return strVal;
+        }
+        const evaluated = resolveSingleExpression(p, context);
+        if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+          return evaluated;
+        }
+      }
+      return undefined;
+    }
+
     // Built-in timestamps
     if (trimmed === '$now') return new Date().toISOString();
     if (trimmed === '$today') return new Date().toISOString().split('T')[0];
@@ -144,7 +161,7 @@ function getNestedProperty(obj: any, path: string): any {
 export class WorkflowEngine {
   public static async executeWorkflow(
     workflow: Workflow,
-    triggerType: 'manual' | 'webhook' | 'schedule' | 'api',
+    triggerType: 'manual' | 'webhook' | 'schedule' | 'api' | 'chat',
     initialPayload: any = {}
   ): Promise<Execution> {
     const executionId = `exec_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
@@ -221,7 +238,7 @@ export class WorkflowEngine {
     }
 
     // 2. Identify start action nodes
-    // Find all root nodes that have 0 incoming execution connections (e.g. Schedule Trigger, Google Sheets, Webhook, etc.)
+    // Find all root nodes that have 0 incoming execution connections (e.g. Schedule Trigger, Google Sheets, Webhook, Chat Trigger, etc.)
     const mainTargetNodeIds = new Set(
       workflow.connections
         .filter((c) => !['in_model', 'in_memory', 'in_tools'].includes(c.toPortId))
@@ -229,10 +246,25 @@ export class WorkflowEngine {
     );
     const rootNodes = workflow.nodes.filter((n) => !isProviderNode(n) && !mainTargetNodeIds.has(n.id));
 
-    // Sort triggers first, then other root inputs (like Google Sheets)
-    const triggers = rootNodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_'));
-    const otherRoots = rootNodes.filter((n) => !triggers.some((t) => t.id === n.id));
-    let startNodes = [...triggers, ...otherRoots];
+    let startNodes: WorkflowNodeData[] = [];
+    if (triggerType === 'chat') {
+      const chatTriggers = rootNodes.filter((n) => n.type === 'chat_trigger' || n.type.startsWith('chat_'));
+      if (chatTriggers.length > 0) {
+        startNodes = chatTriggers;
+      }
+    } else if (triggerType === 'webhook') {
+      const webhookTriggers = rootNodes.filter((n) => n.type === 'trigger_webhook' || n.category === 'Triggers');
+      if (webhookTriggers.length > 0) {
+        startNodes = webhookTriggers;
+      }
+    }
+
+    if (startNodes.length === 0) {
+      // Sort triggers first, then other root inputs (like Google Sheets)
+      const triggers = rootNodes.filter((n) => n.category === 'Triggers' || n.type.startsWith('trigger_') || n.type === 'chat_trigger');
+      const otherRoots = rootNodes.filter((n) => !triggers.some((t) => t.id === n.id));
+      startNodes = [...triggers, ...otherRoots];
+    }
 
     // Fallback if still empty: take the first non-provider node
     if (startNodes.length === 0 && workflow.nodes.length > 0) {
@@ -281,6 +313,10 @@ export class WorkflowEngine {
           if (upOutput.rows) resolvedInput.rows = upOutput.rows;
           if (upOutput.data) resolvedInput.data = upOutput.data;
           if (upOutput.text) resolvedInput.text = upOutput.text;
+          if (upOutput.message) resolvedInput.message = upOutput.message;
+          if (upOutput.reply) resolvedInput.reply = upOutput.reply;
+          if (upOutput.query) resolvedInput.query = upOutput.query;
+          if (upOutput.chatId) resolvedInput.chatId = upOutput.chatId;
         }
       }
 
@@ -844,14 +880,25 @@ export class WorkflowEngine {
 
         const customKey = credential?.data?.apiKey || modelNode?.config?.apiKey || config.apiKey;
         const ai = getGeminiClient(customKey);
+        const incomingUserMessage =
+          incomingData?.message ||
+          incomingData?.text ||
+          incomingData?.query ||
+          incomingData?.prompt ||
+          context?.json?.message ||
+          context?.json?.text ||
+          context?.json?.query;
+
         const systemInstruction = evaluateExpressions(
           config.systemPrompt || 'You are an intelligent workflow automation AI agent. Provide accurate, structured, and helpful responses.',
           context
         );
-        const prompt = evaluateExpressions(
-          config.userPromptTemplate || config.prompt || 'Summarize and analyze the input data: ' + JSON.stringify(incomingData),
-          context
-        );
+        const promptTemplate = config.userPromptTemplate || config.prompt || '';
+        const prompt = promptTemplate
+          ? evaluateExpressions(promptTemplate, context)
+          : incomingUserMessage
+          ? `User Inquiry: ${incomingUserMessage}`
+          : 'Summarize and analyze the input data: ' + JSON.stringify(incomingData);
 
         if (ai) {
           try {
@@ -883,7 +930,14 @@ export class WorkflowEngine {
 
             return {
               text: rawText,
-              output: parsedData || rawText,
+              reply: rawText,
+              message: rawText,
+              output: parsedData || {
+                reply: rawText,
+                text: rawText,
+                message: rawText,
+                result: rawText,
+              },
               result: rawText,
               summary: rawText.slice(0, 150),
               data: parsedData || incomingData,
@@ -903,11 +957,23 @@ export class WorkflowEngine {
         let summaryText = '';
         let structuredAnalysis: any = {};
 
-        if (hasRows) {
+        if (incomingUserMessage) {
+          summaryText = `AI Assistant (${modelName}): I have processed your inquiry: "${incomingUserMessage}". All automated steps and integrations verified.`;
+          structuredAnalysis = {
+            reply: summaryText,
+            text: summaryText,
+            message: summaryText,
+            summary: summaryText,
+            inquiry: incomingUserMessage,
+            urgencyScore: 88,
+            status: 'approved',
+          };
+        } else if (hasRows) {
           const rowsList = incomingData.rows.slice(0, 3).map((r: any) => `• ${r.customer || r.name || 'Account'}: ${r.revenue || r.amount || '$15k'} (${r.priority || r.status || 'Active'})`).join('\n');
           summaryText = `📊 Operations Intelligence Briefing (${modelName})\n\nProcessed ${incomingData.rows.length} enterprise records from Google Sheets:\n${rowsList}\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.`;
           structuredAnalysis = {
             briefing: summaryText,
+            reply: summaryText,
             recordsAnalyzed: incomingData.rows.length,
             accounts: incomingData.rows.map((r: any) => r.customer || r.name),
             urgencyScore: 88,
@@ -919,6 +985,7 @@ export class WorkflowEngine {
           summaryText = `AI Agent analyzed workflow input cleanly using ${modelName}. Inquiry from ${clientName} categorized with high confidence.`;
           structuredAnalysis = {
             summary: summaryText,
+            reply: summaryText,
             customer: clientName,
             urgencyScore: 85,
             estimatedContractTier: 'Tier 1',
@@ -928,7 +995,15 @@ export class WorkflowEngine {
 
         return {
           text: summaryText,
-          output: structuredAnalysis,
+          reply: summaryText,
+          message: summaryText,
+          output: {
+            reply: summaryText,
+            text: summaryText,
+            message: summaryText,
+            summary: summaryText,
+            ...structuredAnalysis,
+          },
           result: summaryText,
           summary: summaryText,
           urgencyScore: 88,
@@ -1224,19 +1299,39 @@ export class WorkflowEngine {
           config.botToken ||
           config.tokenId;
         const targetChatId = evaluateExpressions(
-          config.chatId || credential?.data?.chatId || '@alerts_channel',
+          config.chatId ||
+          config.chat_id ||
+          incomingData?.chatId ||
+          incomingData?.chat_id ||
+          context.json?.chatId ||
+          context.json?.chat_id ||
+          credential?.data?.chatId ||
+          '@alerts_channel',
           context
         );
-        const rawMsg =
-          config.message ||
+        const rawTemplate =
           config.text ||
+          config.message ||
+          incomingData?.reply ||
+          incomingData?.message ||
           incomingData?.text ||
-          incomingData?.summary ||
-          incomingData?.output?.briefing ||
-          (typeof incomingData === 'string'
-            ? incomingData
-            : 'Workflow alert: ' + JSON.stringify(incomingData));
-        const message = evaluateExpressions(rawMsg, context);
+          incomingData?.output?.reply ||
+          incomingData?.output?.message ||
+          incomingData?.output?.text ||
+          '';
+
+        let message = evaluateExpressions(rawTemplate, context);
+        if (!message || message.trim() === '' || message.trim() === '🚨 Alert:') {
+          message =
+            incomingData?.reply ||
+            incomingData?.message ||
+            incomingData?.text ||
+            incomingData?.output?.reply ||
+            incomingData?.output?.message ||
+            incomingData?.output?.text ||
+            incomingData?.summary ||
+            'Workflow alert: received event trigger.';
+        }
 
         let realTelegramResponse: any = null;
         let realTelegramError: string | null = null;
@@ -1244,18 +1339,36 @@ export class WorkflowEngine {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            const sendPayload: any = {
+              chat_id: targetChatId,
+              text: message,
+            };
+            if (config.parseMode && config.parseMode !== 'None') {
+              sendPayload.parse_mode = config.parseMode;
+            }
+
+            let tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: targetChatId,
-                text: message,
-                parse_mode: config.parseMode || 'HTML',
-              }),
+              body: JSON.stringify(sendPayload),
               signal: controller.signal,
             });
             clearTimeout(timeoutId);
-            const tgData = await tgRes.json();
+            let tgData = await tgRes.json();
+
+            // If parse_mode caused entity parse failure, retry automatically as clean plain text
+            if (!tgRes.ok && tgData?.description?.toLowerCase().includes('parse')) {
+              tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: targetChatId,
+                  text: message,
+                }),
+              });
+              tgData = await tgRes.json();
+            }
+
             if (tgRes.ok) {
               realTelegramResponse = tgData;
             } else {
@@ -1273,6 +1386,7 @@ export class WorkflowEngine {
           chatId: targetChatId,
           message,
           text: message,
+          reply: message,
           messageId: msgId,
           connectedExternally: Boolean(realTelegramResponse?.ok),
           deliveredAt: new Date().toISOString(),
@@ -1280,6 +1394,9 @@ export class WorkflowEngine {
           output: {
             delivered: true,
             chatId: targetChatId,
+            message,
+            text: message,
+            reply: message,
             botTokenConfigured: Boolean(botToken),
             realDispatched: Boolean(realTelegramResponse?.ok),
             apiNotice: realTelegramError || (realTelegramResponse?.ok ? 'Dispatched to Telegram Bot API' : 'Simulated (configure valid bot token for live broadcast)'),
@@ -2047,35 +2164,60 @@ export class WorkflowEngine {
       // CHAT NODES
       // ==========================================
       case 'chat_trigger': {
-        const message = incomingData?.message || incomingData?.text || config.welcomeMessage || 'Hello! How can I help you today?';
+        const message =
+          incomingData?.message ||
+          incomingData?.text ||
+          incomingData?.query ||
+          incomingData?.body?.message ||
+          incomingData?.body?.text ||
+          config.welcomeMessage ||
+          'Hello! How can I assist your workflow today?';
         const sessionId = incomingData?.sessionId || `chat_sess_${Date.now()}`;
+        const user = incomingData?.user || { name: 'Live Chat User', id: 'usr_guest' };
+        const ts = new Date().toISOString();
+
         return {
           message,
+          text: message,
+          query: message,
           sessionId,
-          user: incomingData?.user || { name: 'Chat User', id: 'usr_guest' },
-          timestamp: new Date().toISOString(),
+          user,
+          timestamp: ts,
           status: 'success',
-          output: { message, sessionId, timestamp: new Date().toISOString() },
-          text: `Chat Trigger received: "${String(message).slice(0, 50)}${String(message).length > 50 ? '...' : ''}"`,
+          output: {
+            message,
+            text: message,
+            query: message,
+            sessionId,
+            timestamp: ts,
+          },
         };
       }
 
       case 'chat_message': {
-        const rawMsg = config.message || incomingData?.output || incomingData?.reply || incomingData?.text || 'Message processed.';
+        const rawMsg =
+          config.message ||
+          config.text ||
+          incomingData?.reply ||
+          incomingData?.message ||
+          incomingData?.text ||
+          incomingData?.output ||
+          'Message processed.';
         const evaluatedMsg = evaluateExpressions(rawMsg, context);
         const role = config.role || 'assistant';
         return {
           message: evaluatedMsg,
+          text: evaluatedMsg,
+          reply: evaluatedMsg,
           role,
           status: 'sent',
           timestamp: new Date().toISOString(),
-          output: { message: evaluatedMsg, role, delivered: true },
-          text: `Chat response sent: "${String(evaluatedMsg).slice(0, 50)}"`,
+          output: { message: evaluatedMsg, text: evaluatedMsg, reply: evaluatedMsg, role, delivered: true },
         };
       }
 
       case 'chat_ai': {
-        const userQuery = incomingData?.message || incomingData?.text || config.query || 'Hello!';
+        const userQuery = incomingData?.message || incomingData?.text || incomingData?.query || config.query || 'Hello!';
         const systemPrompt = config.systemPrompt || 'You are an intelligent workflow AI assistant.';
         let aiReply = '';
         const gemini = getGeminiClient();
@@ -2091,16 +2233,17 @@ export class WorkflowEngine {
           }
         }
         if (!aiReply) {
-          aiReply = `I have analyzed your inquiry regarding "${userQuery}". All systems are operational and tasks are being automated smoothly.`;
+          aiReply = `I have analyzed your inquiry regarding "${userQuery}". All downstream workflow steps and channels are updated in real-time.`;
         }
         return {
           reply: aiReply,
+          message: aiReply,
+          text: aiReply,
           userQuery,
           model: 'gemini-2.5-flash',
           status: 'success',
           timestamp: new Date().toISOString(),
-          output: { reply: aiReply, query: userQuery },
-          text: `Interactive AI Chat generated response: "${aiReply.slice(0, 60)}..."`,
+          output: { reply: aiReply, text: aiReply, message: aiReply, query: userQuery },
         };
       }
 
@@ -2781,10 +2924,13 @@ export class WorkflowEngine {
     sampleInput: any = {},
     workflow?: Workflow
   ): Promise<any> {
+    const rawData = Array.isArray(sampleInput)
+      ? (sampleInput[0]?.json || sampleInput[0] || {})
+      : (sampleInput?.json || sampleInput || {});
     const context = {
-      json: sampleInput || {},
+      json: rawData,
       nodes: {},
     };
-    return await this.executeNode(node, context, sampleInput, workflow, {});
+    return await this.executeNode(node, context, rawData, workflow, {});
   }
 }

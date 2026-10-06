@@ -200,31 +200,62 @@ export const WorkflowLiveChatDrawer: React.FC<WorkflowLiveChatDrawerProps> = ({
 
       const result = await onTriggerExecution(payload);
 
-      // Extract bot reply from chat_message, chat_ai, ai_agent, or final output
+      // Extract bot reply from chat_message, chat_ai, ai_agent, telegram, or final output
       let botReply = '';
       if (result && result.nodeResults) {
         const nodeVals: any[] = Object.values(result.nodeResults);
-        const chatMsgNode = nodeVals.find((n) => n.nodeType === 'chat_message');
-        if (chatMsgNode?.output?.message) {
-          botReply = chatMsgNode.output.message;
-        } else {
-          const aiNode = nodeVals.find((n) => n.nodeType === 'chat_ai' || n.nodeType === 'ai_agent');
-          if (aiNode?.output?.reply || aiNode?.output?.text) {
-            botReply = aiNode.output.reply || aiNode.output.text;
-          } else {
-            for (let i = nodeVals.length - 1; i >= 0; i--) {
-              const out = nodeVals[i].output;
-              if (out?.text || out?.message || out?.reply) {
-                botReply = out.text || out.message || out.reply;
-                break;
-              }
+
+        // 1. Look for AI agent or Chat AI node first
+        const aiNode = nodeVals.find(
+          (n) =>
+            n.nodeType === 'chat_ai' ||
+            n.nodeType === 'ai_agent' ||
+            n.nodeType === 'app_openai' ||
+            n.nodeType === 'app_google_gemini'
+        );
+        if (aiNode?.output?.reply || aiNode?.output?.text || aiNode?.output?.message) {
+          botReply = aiNode.output.reply || aiNode.output.text || aiNode.output.message;
+        }
+
+        // 2. Look for Chat Message node
+        if (!botReply) {
+          const chatMsgNode = nodeVals.find((n) => n.nodeType === 'chat_message');
+          if (chatMsgNode?.output?.message || chatMsgNode?.output?.text || chatMsgNode?.output?.reply) {
+            botReply = chatMsgNode.output.message || chatMsgNode.output.text || chatMsgNode.output.reply;
+          }
+        }
+
+        // 3. Look for Telegram node (report delivery)
+        if (!botReply) {
+          const tgNode = nodeVals.find((n) => n.nodeType === 'app_telegram' || n.nodeType === 'comm_telegram');
+          if (tgNode?.output) {
+            const deliveredText = tgNode.output.message || tgNode.output.text || tgNode.output.reply;
+            const targetChat = tgNode.output.chatId || 'Telegram';
+            botReply = `✈️ Telegram message sent to ${targetChat}: "${deliveredText}"`;
+          }
+        }
+
+        // 4. Any other non-trigger downstream node in execution order (from last to first)
+        if (!botReply) {
+          const nonTriggers = nodeVals.filter(
+            (n) => n.nodeType !== 'chat_trigger' && !n.nodeType.startsWith('trigger_')
+          );
+          for (let i = nonTriggers.length - 1; i >= 0; i--) {
+            const out = nonTriggers[i].output;
+            if (out?.reply || out?.message || out?.text || out?.result) {
+              botReply = out.reply || out.message || out.text || out.result;
+              break;
             }
           }
         }
       }
 
       if (!botReply) {
-        botReply = result?.output?.message || result?.output?.text || 'Workflow executed successfully. All steps finished with 200 OK.';
+        botReply =
+          result?.output?.reply ||
+          result?.output?.message ||
+          result?.output?.text ||
+          'Workflow executed successfully. All steps finished with 200 OK.';
       }
 
       setMessages((prev) => [
