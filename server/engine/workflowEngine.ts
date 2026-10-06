@@ -30,6 +30,31 @@ function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
   });
 }
 
+// Helper to recursively extract and normalize clean JSON from arbitrary node output wrappers
+export function extractCleanJson(data: any): any {
+  if (data === null || data === undefined) return {};
+  if (Array.isArray(data)) {
+    if (data.length > 0) {
+      return extractCleanJson(data[0]);
+    }
+    return {};
+  }
+  if (typeof data === 'object') {
+    let result = { ...data };
+    if (data.json && typeof data.json === 'object') {
+      result = { ...result, ...extractCleanJson(data.json) };
+    }
+    if (data.output && typeof data.output === 'object') {
+      result = { ...result, ...extractCleanJson(data.output) };
+    }
+    if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+      result = { ...result, ...extractCleanJson(data.data) };
+    }
+    return result;
+  }
+  return { value: data };
+}
+
 // Expression evaluator: replaces {{$json.foo}} and {{$node["Node Name"].json.bar}}
 export function evaluateExpressions(template: any, context: { json: any; nodes: Record<string, any> }): any {
   if (template === null || template === undefined) return template;
@@ -46,20 +71,42 @@ export function evaluateExpressions(template: any, context: { json: any; nodes: 
   }
   if (typeof template !== 'string') return template;
 
+  const trimmed = template.trim();
+
   // Exact match of single expression like "{{$json.data}}" to preserve object/array types
-  const singleMatch = template.match(/^\{\{\s*(.*?)\s*\}\}$/);
+  const singleMatch = trimmed.match(/^\{\{\s*(.*?)\s*\}\}$/s);
   if (singleMatch) {
     const expr = singleMatch[1];
     return resolveSingleExpression(expr, context);
   }
 
+  // Bare expression without braces (e.g. $json.field or $json)
+  if (
+    (trimmed.startsWith('$json') || trimmed.startsWith('$node[') || trimmed.startsWith('$(')) &&
+    !trimmed.includes('\n') &&
+    !trimmed.includes(' ')
+  ) {
+    const directVal = resolveSingleExpression(trimmed, context);
+    if (directVal !== undefined) return directVal;
+  }
+
   // String interpolation like "Hello {{$json.name}}, urgency: {{$json.score}}"
-  return template.replace(/\{\{\s*(.*?)\s*\}\}/g, (_, expr) => {
-    const val = resolveSingleExpression(expr, context);
-    if (val === undefined || val === null) return '';
-    if (typeof val === 'object') return JSON.stringify(val);
-    return String(val);
-  });
+  if (template.includes('{{')) {
+    return template.replace(/\{\{\s*(.*?)\s*\}\}/gs, (_, expr) => {
+      const val = resolveSingleExpression(expr, context);
+      if (val === undefined || val === null) return '';
+      if (typeof val === 'object') {
+        try {
+          return JSON.stringify(val);
+        } catch {
+          return String(val);
+        }
+      }
+      return String(val);
+    });
+  }
+
+  return template;
 }
 
 function resolveSingleExpression(expr: string, context: { json: any; nodes: Record<string, any> }): any {
@@ -133,23 +180,61 @@ function resolveSingleExpression(expr: string, context: { json: any; nodes: Reco
       return getNestedProperty(context.json, propPath);
     }
 
-    // $json.foo.bar
-    if (trimmed.startsWith('$json')) {
-      const propPath = trimmed.replace(/^\$json/, '').replace(/^\./, '');
-      if (!propPath) return context.json;
-      return getNestedProperty(context.json, propPath);
+    // Exact $json or $input
+    if (trimmed === '$json' || trimmed === '$input') {
+      return context.json;
     }
 
-    // Direct property fallback
-    return getNestedProperty(context.json, trimmed);
+    // $json.foo.bar or $json["foo"] or $json[0]
+    if (trimmed.startsWith('$json.') || trimmed.startsWith('$json[') || trimmed.startsWith('$input.') || trimmed.startsWith('$input[')) {
+      const propPath = trimmed.replace(/^\$json\./, '').replace(/^\$json/, '').replace(/^\$input\./, '').replace(/^\$input/, '');
+      if (!propPath) return context.json;
+      const res = getNestedProperty(context.json, propPath);
+      if (res !== undefined) return res;
+      if (context.json?.json) {
+        const v2 = getNestedProperty(context.json.json, propPath);
+        if (v2 !== undefined) return v2;
+      }
+      if (context.json?.output) {
+        const v3 = getNestedProperty(context.json.output, propPath);
+        if (v3 !== undefined) return v3;
+      }
+      if (context.json?.data) {
+        const v4 = getNestedProperty(context.json.data, propPath);
+        if (v4 !== undefined) return v4;
+      }
+      return undefined;
+    }
+
+    // Direct property fallback on context.json
+    const direct = getNestedProperty(context.json, trimmed);
+    if (direct !== undefined) return direct;
+
+    // JavaScript expression fallback (e.g. JSON.stringify($json) or Math.round(...))
+    try {
+      const fn = new Function('$json', '$input', '$nodes', '$', `return (${trimmed});`);
+      const res = fn(
+        context.json,
+        context.json,
+        context.nodes,
+        (name: string) => context.nodes[name] || {}
+      );
+      if (res !== undefined) return res;
+    } catch {}
+
+    return undefined;
   } catch {
     return undefined;
   }
 }
 
 function getNestedProperty(obj: any, path: string): any {
-  if (!obj || !path) return obj;
-  const parts = path.split('.');
+  if (obj === null || obj === undefined || !path) return obj;
+  // Convert array and bracket notations: foo[0].bar or foo["bar"] -> foo.0.bar
+  const cleanPath = path
+    .replace(/\[['"]?(.*?)['"]?\]/g, '.$1')
+    .replace(/^\./, '');
+  const parts = cleanPath.split('.');
   let curr = obj;
   for (const part of parts) {
     if (curr === null || curr === undefined) return undefined;
@@ -305,18 +390,32 @@ export class WorkflowEngine {
       }
 
       // Merge inputs from all incoming connections
-      let resolvedInput = { ...(currentItem.incomingData || {}) };
+      let resolvedInput: any = currentItem.incomingData;
+      if (!resolvedInput && incomingConns.length > 0) {
+        resolvedInput = nodeOutputs[incomingConns[0].fromNodeId];
+      }
       for (const ic of incomingConns) {
-        if (nodeOutputs[ic.fromNodeId]) {
-          const upOutput = nodeOutputs[ic.fromNodeId];
-          resolvedInput = { ...resolvedInput, ...upOutput };
-          if (upOutput.rows) resolvedInput.rows = upOutput.rows;
-          if (upOutput.data) resolvedInput.data = upOutput.data;
-          if (upOutput.text) resolvedInput.text = upOutput.text;
-          if (upOutput.message) resolvedInput.message = upOutput.message;
-          if (upOutput.reply) resolvedInput.reply = upOutput.reply;
-          if (upOutput.query) resolvedInput.query = upOutput.query;
-          if (upOutput.chatId) resolvedInput.chatId = upOutput.chatId;
+        const upOutput = nodeOutputs[ic.fromNodeId];
+        if (upOutput !== undefined && upOutput !== null) {
+          if (Array.isArray(upOutput)) {
+            if (!resolvedInput || !Array.isArray(resolvedInput)) {
+              resolvedInput = upOutput;
+            }
+          } else if (typeof upOutput === 'object') {
+            if (!resolvedInput || Array.isArray(resolvedInput)) {
+              resolvedInput = { ...upOutput };
+            } else {
+              resolvedInput = { ...resolvedInput, ...upOutput };
+            }
+            if (upOutput.json) resolvedInput.json = upOutput.json;
+            if (upOutput.output) resolvedInput.output = upOutput.output;
+            if (upOutput.data) resolvedInput.data = upOutput.data;
+            if (upOutput.text) resolvedInput.text = upOutput.text;
+            if (upOutput.message) resolvedInput.message = upOutput.message;
+            if (upOutput.reply) resolvedInput.reply = upOutput.reply;
+            if (upOutput.query) resolvedInput.query = upOutput.query;
+            if (upOutput.chatId) resolvedInput.chatId = upOutput.chatId;
+          }
         }
       }
 
@@ -341,14 +440,15 @@ export class WorkflowEngine {
 
       // 1. n8n Feature: Disabled / Muted node bypass
       if (currentNode.disabled) {
+        const cleanBypass = extractCleanJson(resolvedInput);
         nodeResult.status = 'skipped';
         nodeResult.finishedAt = new Date().toISOString();
         nodeResult.durationMs = 0;
         nodeResult.output = resolvedInput;
 
         nodeOutputs[currentNode.id] = resolvedInput;
-        nodeOutputsByName[currentNode.name] = { json: resolvedInput, ...resolvedInput };
-        nodeOutputsByName[currentNode.id] = { json: resolvedInput, ...resolvedInput };
+        nodeOutputsByName[currentNode.name] = { json: cleanBypass, ...cleanBypass, ...resolvedInput };
+        nodeOutputsByName[currentNode.id] = { json: cleanBypass, ...cleanBypass, ...resolvedInput };
         executedNodeIds.add(currentNode.id);
 
         execution.logs.push({
@@ -383,8 +483,9 @@ export class WorkflowEngine {
             nodeId: currentNode.id,
           });
         } else {
+          const cleanJson = extractCleanJson(resolvedInput);
           const context = {
-            json: resolvedInput || {},
+            json: cleanJson,
             nodes: nodeOutputsByName,
           };
 
@@ -421,9 +522,10 @@ export class WorkflowEngine {
         nodeResult.durationMs = nodeDuration;
         nodeResult.output = outputData;
 
+        const cleanOut = extractCleanJson(outputData);
         nodeOutputs[currentNode.id] = outputData;
-        nodeOutputsByName[currentNode.name] = { json: outputData, ...outputData };
-        nodeOutputsByName[currentNode.id] = { json: outputData, ...outputData };
+        nodeOutputsByName[currentNode.name] = { json: cleanOut, ...cleanOut, ...outputData };
+        nodeOutputsByName[currentNode.id] = { json: cleanOut, ...cleanOut, ...outputData };
         executedNodeIds.add(currentNode.id);
 
         execution.logs.push({
@@ -1312,25 +1414,68 @@ export class WorkflowEngine {
         const rawTemplate =
           config.text ||
           config.message ||
-          incomingData?.reply ||
-          incomingData?.message ||
-          incomingData?.text ||
-          incomingData?.output?.reply ||
-          incomingData?.output?.message ||
-          incomingData?.output?.text ||
           '';
 
-        let message = evaluateExpressions(rawTemplate, context);
-        if (!message || message.trim() === '' || message.trim() === '🚨 Alert:') {
-          message =
-            incomingData?.reply ||
-            incomingData?.message ||
-            incomingData?.text ||
-            incomingData?.output?.reply ||
-            incomingData?.output?.message ||
-            incomingData?.output?.text ||
-            incomingData?.summary ||
-            'Workflow alert: received event trigger.';
+        let message: any = rawTemplate ? evaluateExpressions(rawTemplate, context) : '';
+
+        // If message is an object (e.g. user evaluated {{$json}} or expression returned an object), serialize it as formatted JSON string
+        if (typeof message === 'object' && message !== null) {
+          try {
+            message = JSON.stringify(message, null, 2);
+          } catch {
+            message = String(message);
+          }
+        }
+
+        const isGenericOrPlaceholder =
+          !message ||
+          typeof message !== 'string' ||
+          message.trim() === '' ||
+          message.trim() === '🚨 Alert:' ||
+          message.trim() === '🚨 Alert: Trigger fired' ||
+          message.trim() === 'Trigger fired' ||
+          message.trim() === 'Workflow alert: received event trigger.';
+
+        if (isGenericOrPlaceholder) {
+          const payloadData = (context.json && Object.keys(context.json).length > 0)
+            ? context.json
+            : (incomingData && typeof incomingData === 'object' ? incomingData : null);
+
+          if (payloadData && typeof payloadData === 'object' && Object.keys(payloadData).length > 0) {
+            const candidate =
+              payloadData.reply ||
+              payloadData.message ||
+              payloadData.text ||
+              payloadData.summary ||
+              payloadData.output?.reply ||
+              payloadData.output?.message ||
+              payloadData.output?.text;
+
+            if (candidate && typeof candidate === 'string' && candidate.trim() !== '') {
+              message = candidate;
+            } else {
+              // Format all JSON key-value pairs cleanly so the complete data reaches the Telegram mobile app
+              const cleanKeys = Object.keys(payloadData).filter(
+                (k) => !['_codeError', 'status', 'finishedAt', 'durationMs', 'output', 'text'].includes(k)
+              );
+              if (cleanKeys.length > 0) {
+                const formattedRows = cleanKeys.map((k) => {
+                  const val = payloadData[k];
+                  const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                  return `• <b>${k}</b>: ${valStr}`;
+                });
+                message = `📦 <b>Workflow Data:</b>\n${formattedRows.join('\n')}`;
+              } else {
+                message = JSON.stringify(payloadData, null, 2);
+              }
+            }
+          } else {
+            message = 'Workflow alert: received event trigger.';
+          }
+        }
+
+        if (typeof message !== 'string') {
+          message = JSON.stringify(message, null, 2);
         }
 
         let realTelegramResponse: any = null;
@@ -1339,6 +1484,7 @@ export class WorkflowEngine {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const cleanPlainText = message.replace(/<[^>]*>/g, '');
             const sendPayload: any = {
               chat_id: targetChatId,
               text: message,
@@ -1357,13 +1503,19 @@ export class WorkflowEngine {
             let tgData = await tgRes.json();
 
             // If parse_mode caused entity parse failure, retry automatically as clean plain text
-            if (!tgRes.ok && tgData?.description?.toLowerCase().includes('parse')) {
+            if (
+              !tgRes.ok &&
+              (tgData?.description?.toLowerCase().includes('parse') ||
+               tgData?.description?.toLowerCase().includes('entity') ||
+               tgData?.description?.toLowerCase().includes('tag') ||
+               tgData?.description?.toLowerCase().includes('html'))
+            ) {
               tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   chat_id: targetChatId,
-                  text: message,
+                  text: cleanPlainText || message,
                 }),
               });
               tgData = await tgRes.json();
@@ -1846,7 +1998,46 @@ export class WorkflowEngine {
 
       case 'app_whatsapp': {
         const to = config.phoneNumber || config.recipientPhone || '+15550192834';
-        const msg = evaluateExpressions(config.message || 'Hello from automated workflow', context);
+        let msg: any = evaluateExpressions(config.message || 'Hello from automated workflow', context);
+        if (typeof msg === 'object' && msg !== null) {
+          try {
+            msg = JSON.stringify(msg, null, 2);
+          } catch {
+            msg = String(msg);
+          }
+        }
+        if (!msg || typeof msg !== 'string' || msg.trim() === '' || msg.trim() === 'Hello! Your workflow notification: Status OK' || msg.trim() === 'Status OK') {
+          const payloadData = (context.json && Object.keys(context.json).length > 0)
+            ? context.json
+            : (incomingData && typeof incomingData === 'object' ? incomingData : null);
+
+          if (payloadData && typeof payloadData === 'object' && Object.keys(payloadData).length > 0) {
+            const candidate =
+              payloadData.reply ||
+              payloadData.message ||
+              payloadData.text ||
+              payloadData.summary;
+
+            if (candidate && typeof candidate === 'string' && candidate.trim() !== '') {
+              msg = candidate;
+            } else {
+              const cleanKeys = Object.keys(payloadData).filter(
+                (k) => !['_codeError', 'status', 'finishedAt', 'durationMs', 'output', 'text'].includes(k)
+              );
+              if (cleanKeys.length > 0) {
+                const formattedRows = cleanKeys.map((k) => {
+                  const val = payloadData[k];
+                  const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+                  return `• *${k}*: ${valStr}`;
+                });
+                msg = `📦 *Workflow Data:*\n${formattedRows.join('\n')}`;
+              } else {
+                msg = JSON.stringify(payloadData, null, 2);
+              }
+            }
+          }
+        }
+        if (typeof msg !== 'string') msg = String(msg || 'Hello from automated workflow');
         const accessToken = config.tokenId || config.accessToken;
         const phoneNumberId = config.phoneNumberId;
 
@@ -2924,13 +3115,20 @@ export class WorkflowEngine {
     sampleInput: any = {},
     workflow?: Workflow
   ): Promise<any> {
-    const rawData = Array.isArray(sampleInput)
-      ? (sampleInput[0]?.json || sampleInput[0] || {})
-      : (sampleInput?.json || sampleInput || {});
-    const context = {
+    const rawData = extractCleanJson(sampleInput);
+    const context: { json: any; nodes: Record<string, any> } = {
       json: rawData,
       nodes: {},
     };
+    if (workflow) {
+      for (const n of workflow.nodes) {
+        if (n.pinnedData) {
+          const cj = extractCleanJson(n.pinnedData);
+          context.nodes[n.name] = { json: cj, ...cj, ...n.pinnedData };
+          context.nodes[n.id] = context.nodes[n.name];
+        }
+      }
+    }
     return await this.executeNode(node, context, rawData, workflow, {});
   }
 }

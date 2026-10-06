@@ -56,6 +56,7 @@ interface NodeConfigPanelProps {
   onTestNode: (node: WorkflowNodeData) => Promise<any>;
   onOpenLiveChat?: () => void;
   onCreateCredential?: (cred: Partial<Credential>) => void;
+  onDeleteCredential?: (credId: string) => Promise<void> | void;
   onSaveStep?: () => Promise<void>;
 }
 
@@ -71,8 +72,26 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   onTestNode,
   onOpenLiveChat,
   onCreateCredential,
+  onDeleteCredential,
   onSaveStep,
 }) => {
+  const [credDeleteFeedback, setCredDeleteFeedback] = useState<string | null>(null);
+
+  const handleDeleteCred = async (credId: string) => {
+    try {
+      if (onDeleteCredential) {
+        await onDeleteCredential(credId);
+      }
+      if (node && node.credentialId === credId) {
+        onUpdateConfig(node.id, { credentialId: undefined });
+      }
+      setCredDeleteFeedback('Credential removed');
+      setTimeout(() => setCredDeleteFeedback(null), 3000);
+    } catch {
+      setCredDeleteFeedback('Failed to remove credential');
+      setTimeout(() => setCredDeleteFeedback(null), 3000);
+    }
+  };
   // Center tabs: strictly Parameters & Settings (exactly matching n8n)
   const [activeCenterTab, setActiveCenterTab] = useState<'params' | 'settings'>('params');
 
@@ -790,18 +809,48 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5 text-slate-400 shrink-0">
+                            {selectedCredential && (
+                              <button
+                                type="button"
+                                title="Unassign credential from this node"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateConfig(node.id, { credentialId: undefined });
+                                }}
+                                className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {selectedCredential && (
+                              <button
+                                type="button"
+                                title={`Delete credential "${selectedCredential.name}"`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCred(selectedCredential.id);
+                                }}
+                                className="p-1 rounded hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              title="Create or configure credential"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowNewCredModal(true);
+                              }}
+                              className="p-1 rounded hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 transition cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                             {credentialDropdownOpen ? (
                               <ChevronUp className="w-3.5 h-3.5" />
                             ) : (
                               <ChevronDown className="w-3.5 h-3.5" />
                             )}
-                            <Pencil
-                              className="w-3.5 h-3.5 hover:text-white transition ml-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowNewCredModal(true);
-                              }}
-                            />
                           </div>
                         </div>
 
@@ -815,22 +864,35 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                                   onUpdateConfig(node.id, { credentialId: cred.id });
                                   setCredentialDropdownOpen(false);
                                 }}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition ${
+                                className={`group flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition ${
                                   node.credentialId === cred.id
                                     ? 'bg-purple-500/15 text-purple-300 font-semibold'
                                     : 'text-slate-300 hover:bg-slate-900 hover:text-white'
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <KeyRound className="w-3.5 h-3.5 text-purple-400" />
-                                  <span>{cred.name}</span>
-                                  <span className="text-[10px] text-slate-500 capitalize">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <KeyRound className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                  <span className="truncate">{cred.name}</span>
+                                  <span className="text-[10px] text-slate-500 capitalize shrink-0">
                                     {cred.type} API
                                   </span>
                                 </div>
-                                {node.credentialId === cred.id && (
-                                  <Check className="w-3.5 h-3.5 text-purple-400" />
-                                )}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {node.credentialId === cred.id && (
+                                    <Check className="w-3.5 h-3.5 text-purple-400" />
+                                  )}
+                                  <button
+                                    type="button"
+                                    title={`Delete credential "${cred.name}"`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteCred(cred.id);
+                                    }}
+                                    className="p-1 rounded hover:bg-red-500/25 text-slate-500 hover:text-red-400 transition cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
 
@@ -962,6 +1024,14 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           <span>{credSavedToast}</span>
                         </div>
                       )}
+
+                      {/* Toast notification after credential delete */}
+                      {credDeleteFeedback && (
+                        <div className="mt-2 p-2 rounded-lg bg-red-950/80 border border-red-500/50 text-red-300 text-xs flex items-center gap-1.5 animate-in fade-in duration-200">
+                          <Trash2 className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          <span>{credDeleteFeedback}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1022,6 +1092,45 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             placeholder='().map((w, i) => { const c = $("Split Cities").all()[i].json.city; return c; })'
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none resize-y"
                           />
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <button
+                            type="button"
+                            title="Insert incoming JSON payload expression"
+                            onClick={() => {
+                              const curr = config.text || config.message || '';
+                              const updated = curr ? `${curr} {{$json}}` : '{{$json}}';
+                              handleConfigBatch({ text: updated, message: updated });
+                            }}
+                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                          >
+                            + {'{{$json}}'}
+                          </button>
+                          <button
+                            type="button"
+                            title="Insert incoming message property"
+                            onClick={() => {
+                              const curr = config.text || config.message || '';
+                              const updated = curr ? `${curr} {{$json.message}}` : '{{$json.message}}';
+                              handleConfigBatch({ text: updated, message: updated });
+                            }}
+                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                          >
+                            + {'{{$json.message}}'}
+                          </button>
+                          <button
+                            type="button"
+                            title="Insert incoming text property"
+                            onClick={() => {
+                              const curr = config.text || config.message || '';
+                              const updated = curr ? `${curr} {{$json.text}}` : '{{$json.text}}';
+                              handleConfigBatch({ text: updated, message: updated });
+                            }}
+                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                          >
+                            + {'{{$json.text}}'}
+                          </button>
                         </div>
                         {renderExpressionEvaluator(config.text || config.message)}
                       </div>

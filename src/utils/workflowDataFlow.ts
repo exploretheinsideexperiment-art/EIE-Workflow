@@ -251,15 +251,48 @@ export function evaluateExpressionInContext(
   // Replace {{ ... }}
   return exprStr.replace(/\{\{\s*(.*?)\s*\}\}/g, (_, expression) => {
     try {
-      // Simple property path: $json.foo.bar
-      if (expression.startsWith('$json.')) {
-        const path = expression.replace('$json.', '');
+      const trimmed = expression.trim();
+
+      // Logical OR: expr1 || expr2
+      if (trimmed.includes('||')) {
+        const parts = trimmed.split('||');
+        for (const part of parts) {
+          const p = part.trim();
+          if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+            return p.slice(1, -1);
+          }
+          const evaluated = evaluateExpressionInContext(`{{${p}}}`, inputData, workflow, latestExecution);
+          if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+            return evaluated;
+          }
+        }
+        return '';
+      }
+
+      // Exact $json or $input
+      if (trimmed === '$json' || trimmed === '$input') {
+        return typeof firstItem === 'object' ? JSON.stringify(firstItem, null, 2) : String(firstItem);
+      }
+
+      // Simple property path: $json.foo.bar or $json["foo"]
+      if (trimmed.startsWith('$json.') || trimmed.startsWith('$json[')) {
+        const path = trimmed.replace(/^\$json\./, '').replace(/^\$json/, '').replace(/\[['"]?(.*?)['"]?\]/g, '.$1').replace(/^\./, '');
         const val = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem);
-        return val !== undefined ? String(val) : '';
+        if (val !== undefined && val !== null) {
+          return typeof val === 'object' ? JSON.stringify(val) : String(val);
+        }
+        // Fallback if wrapped in .json or .data
+        if (firstItem?.json) {
+          const val2 = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem.json);
+          if (val2 !== undefined && val2 !== null) {
+            return typeof val2 === 'object' ? JSON.stringify(val2) : String(val2);
+          }
+        }
+        return '';
       }
 
       // $('Node Name').all()[i].json.field or $('Node Name').item.json.field
-      const nodeMatch = expression.match(/^\$\(['"](.*?)['"]\)\.(.*)$/);
+      const nodeMatch = trimmed.match(/^\$\(['"](.*?)['"]\)\.(.*)$/);
       if (nodeMatch) {
         const nodeName = nodeMatch[1];
         const rest = nodeMatch[2];
@@ -273,17 +306,23 @@ export function evaluateExpressionInContext(
           firstItem,
           { all: () => (Array.isArray(inputData) ? inputData : [{ json: inputData }]), item: { json: firstItem } }
         );
-        return val !== undefined ? String(val) : '';
+        if (val !== undefined && val !== null) {
+          return typeof val === 'object' ? JSON.stringify(val) : String(val);
+        }
+        return '';
       }
 
       // Generic expression fallback
-      const fn = new Function('$', '$json', '$input', `return (${expression});`);
+      const fn = new Function('$', '$json', '$input', `return (${trimmed});`);
       const val = fn(
         (name: string) => nodesLookup[name] || { all: () => [], first: () => ({ json: {} }), json: {} },
         firstItem,
         { all: () => (Array.isArray(inputData) ? inputData : [{ json: inputData }]), item: { json: firstItem } }
       );
-      return val !== undefined ? String(val) : '';
+      if (val !== undefined && val !== null) {
+        return typeof val === 'object' ? JSON.stringify(val) : String(val);
+      }
+      return '';
     } catch {
       return '';
     }

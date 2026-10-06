@@ -138,7 +138,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       botToken: '',
       tokenId: '',
       chatId: '@devops_channel',
-      text: '🚨 Alert: {{$json.message || "Trigger fired"}}',
+      text: '{{$json.message || $json.text || $json.data || $json}}',
       parseMode: 'HTML',
       enableExternalWebhook: true,
       webhookPath: 'telegram'
@@ -164,7 +164,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       verifyToken: 'eie_whatsapp_verify_token',
       templateName: 'order_status_update',
       phoneNumber: '+10000000000',
-      message: 'Hello! Your workflow notification: {{$json.text || "Status OK"}}',
+      message: '{{$json.message || $json.text || $json.data || $json}}',
       enableExternalWebhook: true,
       webhookPath: 'whatsapp'
     },

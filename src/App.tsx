@@ -719,6 +719,7 @@ export default function App() {
               onToggleActive={() => handleToggleActive(activeWorkflow.id)}
               onCreateNewWorkflow={handleCreateNewWorkflow}
               onCreateCredential={handleAddCredential}
+              onDeleteCredential={handleDeleteCredential}
             />
           )}
 

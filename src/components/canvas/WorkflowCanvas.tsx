@@ -45,6 +45,7 @@ interface WorkflowCanvasProps {
     starterConnections?: WorkflowConnection[]
   ) => Promise<void>;
   onCreateCredential?: (cred: any) => Promise<any> | void;
+  onDeleteCredential?: (id: string) => Promise<void> | void;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
@@ -56,6 +57,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onToggleActive,
   onCreateNewWorkflow,
   onCreateCredential,
+  onDeleteCredential,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(initialWorkflow);
   const [credentialsList, setCredentialsList] = useState<Credential[]>(initialCredentials);
@@ -101,6 +103,35 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       return next;
     });
     return newCred;
+  };
+
+  const handleDeleteCredential = async (credId: string) => {
+    try {
+      if (onDeleteCredential) {
+        await onDeleteCredential(credId);
+      } else {
+        await fetch(`/api/credentials/${credId}`, { method: 'DELETE' });
+      }
+    } catch {
+      // offline fallback
+    }
+
+    setCredentialsList((prev) => {
+      const next = prev.filter((c) => c.id !== credId);
+      try {
+        localStorage.setItem('eie_credentials', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setWorkflow((prev) => {
+      const updatedNodes = prev.nodes.map((n) =>
+        n.credentialId === credId ? { ...n, credentialId: undefined } : n
+      );
+      const nextWf = { ...prev, nodes: updatedNodes };
+      workflowRef.current = nextWf;
+      return nextWf;
+    });
   };
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
@@ -2357,6 +2388,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           onTestNode={handleTestSingleNode}
           onOpenLiveChat={() => setChatDrawerOpen(true)}
           onCreateCredential={handleCreateCredential}
+          onDeleteCredential={handleDeleteCredential}
         />
       )}
 
