@@ -283,7 +283,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 onTestSingleNode(node);
               }}
               className="p-1 rounded-lg hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition cursor-pointer"
-              title="Execute / Test Step (n8n)"
+              title="Execute Step (n8n)"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
             </button>

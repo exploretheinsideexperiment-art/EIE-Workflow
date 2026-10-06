@@ -124,9 +124,9 @@ ${
             issueCount > 0
               ? [
                   { label: '⚡ Auto-Fix All Problems', actionType: 'auto_fix' },
-                  { label: '🧪 Test Run Workflow', actionType: 'test_run' },
+                  { label: '⚡ Execute Workflow', actionType: 'test_run' },
                 ]
-              : [{ label: '🧪 Test Run Workflow', actionType: 'test_run' }],
+              : [{ label: '⚡ Execute Workflow', actionType: 'test_run' }],
         },
       ]);
     }
@@ -194,7 +194,7 @@ ${
         text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         language: lang,
-        actions: [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+        actions: [{ label: '⚡ Execute Workflow Now', actionType: 'test_run' }],
       },
     ]);
   };
@@ -291,7 +291,7 @@ ${
             text: data.reply,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
-            actions: data.actions || [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+            actions: data.actions || [{ label: '⚡ Execute Workflow Now', actionType: 'test_run' }],
           },
         ]);
         return;
@@ -317,8 +317,8 @@ ${
             language: detected,
             builtWorkflow: built,
             actions: data.actions || [
-              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
-              { label: '🧪 Test Run Built Workflow', actionType: 'test_run' },
+              { label: '⚡ Fill Demo Data & Execute', actionType: 'fill_demo_data' },
+              { label: '⚡ Execute Built Workflow', actionType: 'test_run' },
               { label: '✨ Create as Separate Workflow', actionType: 'create_new_workflow' },
             ],
           },
@@ -334,8 +334,8 @@ ${
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
             actions: data.actions || [
-              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
-              { label: '🧪 Test Run Workflow', actionType: 'test_run' },
+              { label: '⚡ Fill Demo Data & Execute', actionType: 'fill_demo_data' },
+              { label: '⚡ Execute Workflow', actionType: 'test_run' },
             ],
           },
         ]);
@@ -358,7 +358,7 @@ ${
 
         if (audit.isComplete) {
           replyMsg += detected === 'en'
-            ? `🎉 **Workflow is 100% complete and ready to run!** Click "Test Run" below to test.`
+            ? `🎉 **Workflow is 100% complete and ready to run!** Click "Execute Workflow" below to run.`
             : `🎉 **Sabhi required details set ho chuki hain!** Workflow real me execute hone ke liye taiyar hai.`;
         } else {
           replyMsg += audit.promptText;
@@ -372,7 +372,7 @@ ${
             text: replyMsg,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
-            actions: [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+            actions: [{ label: '⚡ Execute Workflow Now', actionType: 'test_run' }],
           },
         ]);
         return;
@@ -407,8 +407,8 @@ ${
               connections: synth.connections,
             },
             actions: [
-              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
-              { label: '🧪 Test Run Built Workflow', actionType: 'test_run' },
+              { label: '⚡ Fill Demo Data & Execute', actionType: 'fill_demo_data' },
+              { label: '⚡ Execute Built Workflow', actionType: 'test_run' },
             ],
           },
         ]);
@@ -427,8 +427,8 @@ ${
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: detected,
             actions: [
-              { label: '⚡ Fill Demo Data & Test', actionType: 'fill_demo_data' },
-              { label: '🧪 Test Run Workflow', actionType: 'test_run' },
+              { label: '⚡ Fill Demo Data & Execute', actionType: 'fill_demo_data' },
+              { label: '⚡ Execute Workflow', actionType: 'test_run' },
             ],
           },
         ]);
@@ -451,11 +451,11 @@ ${
           sender: 'fixer',
           text:
             userLang === 'en'
-              ? `✓ **Demo & Test Data Successfully Configured!**\n\nI populated working test credentials across ${filledCount} field(s):\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ready to run! Click **"🧪 Test Run Workflow Now"** below!`
-              : `✓ **Demo Data Set Ho Gaya!**\n\nMaine ${filledCount} fields me working test parameters configure kar diye hain:\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ab aap **"🧪 Test Run Workflow Now"** par click karein aur live test dekhein!`,
+              ? `✓ **Demo & Parameters Successfully Configured!**\n\nI populated working parameters across ${filledCount} field(s):\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ready to run! Click **"⚡ Execute Workflow Now"** below!`
+              : `✓ **Demo Data Set Ho Gaya!**\n\nMaine ${filledCount} fields me working parameters configure kar diye hain:\n${summary.map((s) => `• ${s}`).join('\n')}\n\n🎉 Ab aap **"⚡ Execute Workflow Now"** par click karein aur execution dekhein!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           language: userLang,
-          actions: [{ label: '🧪 Test Run Workflow Now', actionType: 'test_run' }],
+          actions: [{ label: '⚡ Execute Workflow Now', actionType: 'test_run' }],
         },
       ]);
     } else if (actionType === 'test_run') {
@@ -468,8 +468,8 @@ ${
             sender: 'fixer',
             text:
               userLang === 'en'
-                ? `🚀 Test execution initiated! Watch execution status chips directly on each canvas node.`
-                : `🚀 Test run shuru ho gaya hai! Canvas par steps ke status chips update ho rahe hain.`,
+                ? `🚀 Execution initiated! Watch execution status chips directly on each canvas node.`
+                : `🚀 Execution shuru ho gaya hai! Canvas par steps ke status chips update ho rahe hain.`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             language: userLang,
           },

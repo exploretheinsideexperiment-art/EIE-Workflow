@@ -15,47 +15,63 @@ export function initServiceWorkerAutoUpdate() {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
-      console.log('[EIE PWA] New update activated, refreshing to display changes...');
+      console.log('[EIE PWA] New version activated, refreshing to display changes...');
       window.location.reload();
     }
   });
 
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.getRegistration().then((registration) => {
-      if (!registration) return;
+  const setupRegistrationListeners = (registration: ServiceWorkerRegistration) => {
+    if (!registration) return;
 
-      // Check for updates on initial load
-      registration.update().catch(() => {});
+    // Check for updates on initial load
+    registration.update().catch(() => {});
 
-      // Check for updates whenever user tabs back into the web app
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          registration.update().catch(() => {});
-        }
-      });
-
-      // Periodically check for updates every 5 minutes
-      setInterval(() => {
+    // Check for updates whenever user tabs back into the web app
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
         registration.update().catch(() => {});
-      }, 5 * 60 * 1000);
-
-      // If there is already a waiting worker, tell it to skip waiting immediately
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
+    });
 
-      // If a new worker is discovered installing
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+    // Periodically check for updates every 60 seconds
+    setInterval(() => {
+      registration.update().catch(() => {});
+    }, 60 * 1000);
+
+    // If there is already a waiting worker, tell it to skip waiting immediately
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // If a new worker is discovered installing
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
               // New update available! Activate immediately
               newWorker.postMessage({ type: 'SKIP_WAITING' });
             }
-          });
-        }
-      });
+          }
+        });
+      }
     });
-  });
+  };
+
+  // Attach when service worker is ready (guaranteed not null)
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      setupRegistrationListeners(registration);
+    })
+    .catch(() => {});
+
+  // Also query existing registration immediately if available
+  navigator.serviceWorker.getRegistration()
+    .then((registration) => {
+      if (registration) {
+        setupRegistrationListeners(registration);
+      }
+    })
+    .catch(() => {});
 }
