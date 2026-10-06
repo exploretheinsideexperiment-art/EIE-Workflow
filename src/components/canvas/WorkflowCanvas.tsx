@@ -843,22 +843,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     // 3. High-precision fallback
     const isExpanded = Boolean(node.isExpanded);
     const isAiAgent = node.type === 'ai_agent';
-    const nodeWidth = isExpanded ? (isAiAgent ? 380 : 390) : (isAiAgent ? 320 : 264);
+    const nodeWidth = isExpanded ? (isAiAgent ? 290 : 290) : (isAiAgent ? 230 : 200);
 
     const nodeEl = document.getElementById(`node-${nodeId}`);
-    let actualHeight = 120;
+    let actualHeight = 70;
     if (nodeEl && container) {
       const r = nodeEl.getBoundingClientRect();
       actualHeight = r.height / viewport.zoom;
     } else {
-      actualHeight = isExpanded ? (isAiAgent ? 260 : 180) : (isAiAgent ? 200 : 120);
+      actualHeight = isExpanded ? (isAiAgent ? 220 : 160) : (isAiAgent ? 150 : 70);
     }
 
     // AI Agent specific port positioning fallback (Left input, Right output, Bottom sub-nodes)
     if (isAiAgent) {
       if (isOutput) {
         return {
-          x: node.position.x + nodeWidth + 24, // Protruding + terminal
+          x: node.position.x + nodeWidth + 20, // Protruding + terminal
           y: node.position.y + actualHeight / 2,
         };
       }
@@ -879,14 +879,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const totalPorts = Math.max(ports.length, 1);
     const idx = portIndex >= 0 ? portIndex : 0;
 
-    // CSS: top-1/2 -translate-y-1/2 flex flex-col gap-2.5 (24px port + 10px gap = 34px pitch)
-    const portPitch = 34;
-    const totalPortStackHeight = totalPorts * 24 + (totalPorts - 1) * 10;
+    // Compact port stack calculation
+    const portPitch = 24;
+    const totalPortStackHeight = totalPorts * 20 + (totalPorts - 1) * 8;
     const stackTop = (actualHeight - totalPortStackHeight) / 2;
-    const portCenterY = node.position.y + stackTop + idx * portPitch + 12;
+    const portCenterY = node.position.y + stackTop + idx * portPitch + 10;
 
     return {
-      x: isOutput ? node.position.x + nodeWidth + 24 : node.position.x,
+      x: isOutput ? node.position.x + nodeWidth + 20 : node.position.x,
       y: portCenterY,
     };
   };

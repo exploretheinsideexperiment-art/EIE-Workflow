@@ -43,6 +43,7 @@ import * as Icons from 'lucide-react';
 import { Workflow, WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
 import { NodeDataInspector } from '../common/NodeDataInspector';
 import { evaluateExpressionInContext, getDefaultSampleOutputForNodeType } from '../../utils/workflowDataFlow';
+import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 
 interface NodeConfigPanelProps {
   node: WorkflowNodeData | null;
@@ -214,11 +215,73 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     return null;
   }, [testResult, executionResult]);
 
+  // Check if node genuinely requires/supports credentials (API key or service account)
+  const supportsCredentials = useMemo(() => {
+    const t = node.type.toLowerCase();
+
+    // 1. Explicit exclusion: Core logic, flow control, conditions, triggers, code, json parse never need API keys
+    if (
+      t.startsWith('core_') ||
+      t.startsWith('flow_') ||
+      t.startsWith('condition_') ||
+      t.startsWith('chain_') ||
+      t === 'trigger_manual' ||
+      t === 'trigger_schedule' ||
+      t === 'trigger_webhook' ||
+      t === 'trigger_chat' ||
+      t.startsWith('chat_memory') ||
+      t.startsWith('chat_sentiment') ||
+      t.startsWith('chat_webhook') ||
+      t === 'http_request' ||
+      t === 'code' ||
+      t === 'set' ||
+      t === 'if' ||
+      t === 'switch' ||
+      t === 'merge'
+    ) {
+      return false;
+    }
+
+    // 2. Check definition from NODE_LIBRARY
+    const def = NODE_LIBRARY.find((n) => n.type === node.type);
+    if (def && typeof def.requiresCredentials === 'boolean') {
+      return def.requiresCredentials;
+    }
+
+    // 3. Service / External App nodes that require API keys or tokens
+    return (
+      t.startsWith('app_') ||
+      t.includes('telegram') ||
+      t.includes('whatsapp') ||
+      t.includes('slack') ||
+      t.includes('discord') ||
+      t.includes('sheets') ||
+      t.includes('gmail') ||
+      t.includes('google') ||
+      t.includes('openai') ||
+      t.includes('gemini') ||
+      t.includes('claude') ||
+      t.includes('anthropic') ||
+      t.includes('notion') ||
+      t.includes('airtable') ||
+      t.includes('github') ||
+      t.includes('mailchimp') ||
+      t.includes('stripe') ||
+      t.includes('twilio') ||
+      t.includes('sendgrid') ||
+      t.includes('supabase') ||
+      t.includes('postgres') ||
+      t.includes('mysql') ||
+      t.includes('mongodb')
+    );
+  }, [node.type]);
+
   // Current selected credential
   const selectedCredential = credentials.find((c) => c.id === node.credentialId);
 
   // Filter relevant credentials strictly for this node type
   const relevantCredentials = useMemo(() => {
+    if (!supportsCredentials) return [];
     const typeLower = node.type.toLowerCase();
     let filtered: Credential[] = [];
     if (typeLower.includes('telegram')) filtered = credentials.filter((c) => c.type === 'telegram');
@@ -235,7 +298,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       filtered = credentials.filter((c) => c.type === 'generic');
     }
     return filtered.length > 0 ? filtered : credentials;
-  }, [credentials, node.type]);
+  }, [credentials, node.type, supportsCredentials]);
 
   // Clean state resets when active node changes
   useEffect(() => {
@@ -247,9 +310,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     setNewCredTertiary('');
   }, [node.id]);
 
-  // Ensure current node does not hold an unrelated credential (e.g. Telegram token on an OpenAI node)
+  // Ensure non-credential node never holds a credential, and credential node matches type
   useEffect(() => {
-    if (node.credentialId && credentials.length > 0) {
+    if (!supportsCredentials && node.credentialId) {
+      onUpdateConfig(node.id, { credentialId: undefined });
+      return;
+    }
+    if (supportsCredentials && node.credentialId && credentials.length > 0) {
       const currentCred = credentials.find((c) => c.id === node.credentialId);
       if (currentCred) {
         const typeLower = node.type.toLowerCase();
@@ -267,7 +334,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         }
       }
     }
-  }, [node.id, node.type, node.credentialId, credentials, relevantCredentials]);
+  }, [node.id, node.type, node.credentialId, credentials, relevantCredentials, supportsCredentials]);
 
   // Dynamic Credential Meta by Node Type (no hardcoded Telegram leaks)
   const getCredDefaults = () => {
@@ -504,29 +571,6 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       setIsSavingCred(false);
     }
   };
-
-  // Check if node requires/supports credentials
-  const supportsCredentials = useMemo(() => {
-    const t = node.type.toLowerCase();
-    return (
-      t.includes('telegram') ||
-      t.includes('slack') ||
-      t.includes('sheets') ||
-      t.includes('gmail') ||
-      t.includes('whatsapp') ||
-      t.includes('gemini') ||
-      t.includes('openai') ||
-      t.includes('claude') ||
-      t.includes('anthropic') ||
-      t.includes('discord') ||
-      t.includes('mailchimp') ||
-      t.includes('notion') ||
-      t.includes('supabase') ||
-      t.includes('postgres') ||
-      t.includes('mysql') ||
-      t === 'http_request'
-    );
-  }, [node.type]);
 
   // Evaluate dynamic expression live against incoming input data
   const renderExpressionEvaluator = (rawText: string) => {

@@ -19,7 +19,9 @@ import {
   ExternalLink,
   Laptop,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { User, Workspace } from '../../types/workflow';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -31,6 +33,8 @@ interface NavigationProps {
   user: User | null;
   workspace: Workspace | null;
   isSidebarOpen?: boolean;
+  theme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
   onToggleSidebar?: () => void;
   onNavigate: (view: string) => void;
   onRenameWorkflow?: (newName: string) => void;
@@ -45,6 +49,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   user,
   workspace,
   isSidebarOpen = true,
+  theme = 'dark',
+  onToggleTheme,
   onToggleSidebar,
   onNavigate,
   onRenameWorkflow,
@@ -180,6 +186,34 @@ export const Navigation: React.FC<NavigationProps> = ({
               <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 font-mono border border-cyan-800 font-bold">
                 PRO
               </span>
+
+              {/* Night Mode & Day Mode Switcher Button (Sun & Moon) */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleTheme?.();
+                }}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95 ${
+                  theme === 'dark'
+                    ? 'bg-slate-900/90 border-slate-700/80 text-cyan-300 hover:border-cyan-500/50'
+                    : 'bg-amber-100/80 border-amber-300 text-amber-900 hover:border-amber-400'
+                }`}
+                title={theme === 'dark' ? 'Night Mode Active • Click for Day Mode (Day)' : 'Day Mode Active • Click for Night Mode (Night)'}
+                aria-label="Toggle Night Mode and Day Mode"
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Moon className="w-3 h-3 text-cyan-400 fill-cyan-400/20" />
+                    <span className="text-[9px] font-sans font-bold">Night</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun className="w-3 h-3 text-amber-500 fill-amber-500/20" />
+                    <span className="text-[9px] font-sans font-bold text-amber-900">Day</span>
+                  </>
+                )}
+              </button>
             </div>
             <p className="text-[10px] text-slate-500 font-mono tracking-tight leading-none hidden sm:block">
               Connect. Automate. Simplify.

@@ -173,6 +173,27 @@ export default function App() {
     }
   });
 
+  // Theme State: Night Mode ('dark') or Day Mode ('light')
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = localStorage.getItem('eie_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {}
+    return 'dark';
+  });
+
+  useEffect(() => {
+    try {
+      document.documentElement.classList.remove('dark', 'light');
+      document.documentElement.classList.add(theme);
+      localStorage.setItem('eie_theme', theme);
+    } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   const toggleSidebar = () => {
     setIsSidebarOpen((prev) => {
       const next = !prev;
@@ -663,6 +684,8 @@ export default function App() {
         user={user}
         workspace={workspace}
         isSidebarOpen={isSidebarOpen}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onToggleSidebar={toggleSidebar}
         onNavigate={(view) => setCurrentView(view)}
         onRenameWorkflow={handleRenameActiveWorkflow}

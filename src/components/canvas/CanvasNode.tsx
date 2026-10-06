@@ -208,19 +208,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         width: isExpanded
           ? isAiAgent
             ? toolCount > 1
-              ? '420px'
-              : '380px'
-            : '390px'
+              ? '320px'
+              : '290px'
+            : '290px'
           : isAiAgent
           ? toolCount > 1
-            ? '360px'
+            ? '280px'
             : toolCount === 1
-            ? '320px'
-            : '290px'
-          : '264px',
+            ? '250px'
+            : '230px'
+          : '200px',
         touchAction: 'none',
       }}
-      className={`absolute select-none rounded-2xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move ${
+      className={`absolute select-none rounded-xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move shadow-md shadow-black/30 ${
         isConnectTargetCandidate
           ? 'border-cyan-400/80 ring-2 ring-cyan-500/40 shadow-xl shadow-cyan-950/50'
           : borderGlowClass
@@ -260,19 +260,19 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       }}
     >
 
-      {/* n8n Floating Hover Action Bar */}
-      <div className="absolute -top-9 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-between pointer-events-none z-30">
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/95 border border-slate-700/90 shadow-xl pointer-events-auto">
+      {/* Standard Floating Hover Action Bar */}
+      <div className="absolute -top-7.5 left-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-between pointer-events-none z-30">
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-950/95 border border-slate-700/90 shadow-lg pointer-events-auto">
           {onStartConnectFromNode && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onStartConnectFromNode(node.id);
               }}
-              className="p-1 rounded-lg hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition cursor-pointer"
+              className="p-1 rounded-md hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 transition cursor-pointer"
               title="Click to Connect this node to another step"
             >
-              <Link2 className="w-3.5 h-3.5 text-cyan-400" />
+              <Link2 className="w-3 h-3 text-cyan-400" />
             </button>
           )}
 
@@ -282,10 +282,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 e.stopPropagation();
                 onTestSingleNode(node);
               }}
-              className="p-1 rounded-lg hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition cursor-pointer"
+              className="p-1 rounded-md hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition cursor-pointer"
               title="Execute Step (n8n)"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
+              <Play className="w-3 h-3 fill-current" />
             </button>
           )}
 
@@ -295,12 +295,12 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 e.stopPropagation();
                 onToggleDisableNode(node.id);
               }}
-              className={`p-1 rounded-lg transition cursor-pointer ${
+              className={`p-1 rounded-md transition cursor-pointer ${
                 node.disabled ? 'text-amber-400 hover:bg-amber-500/20' : 'text-slate-300 hover:text-amber-300 hover:bg-slate-800'
               }`}
               title={node.disabled ? 'Enable Node' : 'Disable / Mute Node (Bypass)'}
             >
-              <Power className="w-3.5 h-3.5" />
+              <Power className="w-3 h-3" />
             </button>
           )}
 
@@ -310,12 +310,12 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 e.stopPropagation();
                 onPinDataNode(node.id);
               }}
-              className={`p-1 rounded-lg transition cursor-pointer ${
+              className={`p-1 rounded-md transition cursor-pointer ${
                 node.pinnedData ? 'text-purple-400 bg-purple-500/20' : 'text-slate-300 hover:text-purple-300 hover:bg-slate-800'
               }`}
               title={node.pinnedData ? 'Unpin Data' : 'Pin Test Data (n8n)'}
             >
-              <Pin className="w-3.5 h-3.5" />
+              <Pin className="w-3 h-3" />
             </button>
           )}
 
@@ -325,69 +325,69 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 e.stopPropagation();
                 onToggleExpandNode(node.id);
               }}
-              className={`p-1 rounded-lg transition cursor-pointer ${
+              className={`p-1 rounded-md transition cursor-pointer ${
                 isExpanded ? 'text-cyan-400 bg-cyan-500/20' : 'text-slate-300 hover:text-cyan-300 hover:bg-slate-800'
               }`}
               title={isExpanded ? 'Collapse Node Card' : 'Expand Node Card Details'}
             >
-              {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {isExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/95 border border-slate-700/90 shadow-xl pointer-events-auto">
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-950/95 border border-slate-700/90 shadow-lg pointer-events-auto">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDuplicateNode(node.id);
             }}
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            className="p-1 rounded-md hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
             title="Duplicate Node"
           >
-            <Copy className="w-3.5 h-3.5" />
+            <Copy className="w-3 h-3" />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDeleteNode(node.id);
             }}
-            className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition cursor-pointer"
+            className="p-1 rounded-md hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition cursor-pointer"
             title="Delete Node"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Node Header */}
-      <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-slate-800/80">
+      {/* Node Header - Compact Standard Layout */}
+      <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-800/80">
         <div
-          className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+          className="flex items-center gap-2 min-w-0 cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onOpenConfig(node.id);
           }}
-          title="Click to open full settings"
+          title="Click to open settings"
         >
-          <div className={`p-1.5 rounded-xl ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0`}>
-            <IconComponent className="w-4 h-4" />
+          <div className={`w-6 h-6 p-1 rounded-lg ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0 flex items-center justify-center shadow-xs`}>
+            <IconComponent className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
-            <h4 className="text-xs font-bold text-slate-100 truncate tracking-tight flex items-center gap-1.5">
-              <span>{node.name}</span>
+            <h4 className="text-xs font-semibold text-slate-100 truncate tracking-tight flex items-center gap-1">
+              <span className="truncate">{node.name}</span>
             </h4>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={`text-[9px] font-mono uppercase tracking-wider ${catStyle.text}`}>
-                {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Agent Tool' : node.category}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className={`text-[8.5px] font-mono uppercase tracking-wider ${catStyle.text}`}>
+                {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Tool' : node.category}
               </span>
               {node.disabled && (
-                <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-600/40">
-                  Disabled
+                <span className="text-[8px] font-bold text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-600/40">
+                  Off
                 </span>
               )}
               {node.pinnedData && (
-                <span className="text-[9px] font-bold text-purple-300 bg-purple-950/80 px-1.5 py-0.2 rounded border border-purple-600/40">
-                  📌 Pinned
+                <span className="text-[8px] font-bold text-purple-300 bg-purple-950/80 px-1 py-0.2 rounded border border-purple-600/40">
+                  📌
                 </span>
               )}
             </div>
@@ -395,30 +395,30 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0">
           {executionResult && (
             <div className="flex items-center">
               {executionResult.status === 'running' && (
-                <span className="flex items-center gap-1 text-[9px] text-cyan-400 font-mono bg-cyan-950/80 px-2 py-0.5 rounded-full border border-cyan-800 animate-pulse">
-                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                  <span>Running</span>
+                <span className="flex items-center gap-1 text-[8px] text-cyan-400 font-mono bg-cyan-950/80 px-1.5 py-0.2 rounded-full border border-cyan-800 animate-pulse">
+                  <Loader2 className="w-2 h-2 animate-spin" />
+                  <span>Run</span>
                 </span>
               )}
               {executionResult.status === 'success' && (
-                <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
-                  <Check className="w-2.5 h-2.5" />
-                  <span>{executionResult.durationMs !== undefined ? `${executionResult.durationMs}ms` : 'Done'}</span>
+                <span className="flex items-center gap-0.5 text-[8px] text-emerald-400 font-mono bg-emerald-950/80 px-1.5 py-0.2 rounded-full border border-emerald-800">
+                  <Check className="w-2 h-2" />
+                  <span>{executionResult.durationMs !== undefined ? `${executionResult.durationMs}ms` : 'OK'}</span>
                 </span>
               )}
               {executionResult.status === 'failed' && (
-                <span className="flex items-center gap-1 text-[9px] text-rose-400 font-mono bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-800">
-                  <X className="w-2.5 h-2.5" />
-                  <span>Error</span>
+                <span className="flex items-center gap-0.5 text-[8px] text-rose-400 font-mono bg-rose-950/80 px-1.5 py-0.2 rounded-full border border-rose-800">
+                  <X className="w-2 h-2" />
+                  <span>Err</span>
                 </span>
               )}
               {executionResult.status === 'skipped' && (
-                <span className="text-[9px] text-slate-400 font-mono bg-slate-950 px-2 py-0.5 rounded-full border border-slate-800">
-                  Skipped
+                <span className="text-[8px] text-slate-400 font-mono bg-slate-950 px-1.5 py-0.2 rounded-full border border-slate-800">
+                  Skip
                 </span>
               )}
             </div>
@@ -432,10 +432,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 e.stopPropagation();
                 onToggleExpandNode(node.id);
               }}
-              className="p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer"
+              className="p-0.5 rounded text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition cursor-pointer"
               title={isExpanded ? 'Collapse' : 'Expand Node Details'}
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-cyan-400" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {isExpanded ? <ChevronUp className="w-3 h-3 text-cyan-400" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
 
@@ -448,7 +448,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                   e.stopPropagation();
                   setShowConnectPopover((prev) => !prev);
                 }}
-                className={`p-1 rounded-lg transition cursor-pointer flex items-center gap-0.5 ${
+                className={`p-0.5 rounded transition cursor-pointer flex items-center gap-0.5 ${
                   showConnectPopover
                     ? 'bg-cyan-500/30 text-cyan-300 ring-1 ring-cyan-400'
                     : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
@@ -456,14 +456,14 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 title="Connect this node to another step"
                 aria-label="Connect"
               >
-                <Link2 className="w-3.5 h-3.5 text-cyan-400" />
+                <Link2 className="w-3 h-3 text-cyan-400" />
               </button>
 
               {/* Connect Popover Menu */}
               {showConnectPopover && (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-full mt-2 w-56 p-2 rounded-xl bg-slate-950/98 border border-slate-700 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 text-left"
+                  className="absolute right-0 top-full mt-2 w-52 p-2 rounded-xl bg-slate-950/98 border border-slate-700 shadow-2xl z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 text-left"
                 >
                   <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex items-center justify-between">
                     <span>Connect to...</span>
@@ -483,7 +483,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                     }}
                     className="w-full mt-1.5 px-2 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
                   >
-                    <MousePointer className="w-3.5 h-3.5 text-cyan-400" />
+                    <MousePointer className="w-3 h-3 text-cyan-400" />
                     <span>Click node on canvas</span>
                   </button>
 
@@ -500,7 +500,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                           }}
                           className="w-full px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white text-xs flex items-center gap-2 transition cursor-pointer text-left truncate"
                         >
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
                           <span className="truncate">{target.name}</span>
                         </button>
                       ))}
@@ -518,29 +518,29 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               e.stopPropagation();
               onOpenConfig(node.id);
             }}
-            className="p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
+            className="p-0.5 rounded text-slate-400 hover:text-cyan-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
             title="Configure parameters & settings"
             aria-label="Settings"
           >
-            <Settings className="w-3.5 h-3.5" />
+            <Settings className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Node Body & Subtitle */}
-      <div className="px-3.5 py-2 text-[11px] text-slate-400 font-mono truncate flex items-center justify-between">
+      {/* Node Body & Subtitle - Compact */}
+      <div className="px-2.5 py-1 text-[10px] text-slate-400 font-mono truncate flex items-center justify-between">
         <span className="truncate" title={subtitle}>{subtitle}</span>
         {node.credentialId && (
           <span title="Credential Connected">
-            <KeyRound className="w-3 h-3 text-cyan-400 shrink-0 ml-1.5" />
+            <KeyRound className="w-2.5 h-2.5 text-cyan-400 shrink-0 ml-1" />
           </span>
         )}
       </div>
 
       {/* Note Pill (n8n feature) */}
       {node.notes && (
-        <div className="mx-3 mb-2 p-1.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[10px] text-amber-300 flex items-start gap-1.5">
-          <FileText className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+        <div className="mx-2 mb-1.5 p-1 rounded bg-amber-950/40 border border-amber-500/30 text-[9px] text-amber-300 flex items-start gap-1">
+          <FileText className="w-2.5 h-2.5 text-amber-400 shrink-0 mt-0.5" />
           <span className="line-clamp-2 leading-tight">{node.notes}</span>
         </div>
       )}
@@ -823,8 +823,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* Input Ports (Left) - For AI Agent, ONLY in_main is on the left side (n8n Style) */}
-      <div className="absolute top-1/2 -left-3 -translate-y-1/2 flex flex-col gap-3.5 z-30">
+      {/* Input Ports (Left) - Compact Standard Layout */}
+      <div className="absolute top-1/2 -left-2.5 -translate-y-1/2 flex flex-col gap-2.5 z-30">
         {(isAiAgent ? node.inputs.filter((p) => p.id === 'in_main') : node.inputs).map((port) => {
           const colors = getPortColorDef(port.type);
           const isConnectingActive = Boolean(activeConnectingPortType);
@@ -861,14 +861,14 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                     ? `✓ Connect to ${port.label || port.name} (${colors.name})`
                     : `Input: ${port.label || port.name} (${colors.name}) - ${isConnected ? 'Connected' : 'Available'}`
                 }
-                className={`w-6 h-6 rounded-full bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-lg shadow-black group/port cursor-pointer ${
+                className={`w-5 h-5 rounded-full bg-slate-900 border-2 transition-all flex items-center justify-center relative shadow-md shadow-black group/port cursor-pointer ${
                   isCompatible
-                    ? `${colors.border} ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                    ? `${colors.border} ring-3 ring-offset-1 ring-offset-slate-950 ${colors.ring} scale-110 z-40 animate-pulse`
                     : isIncompatible
                     ? 'opacity-30 border-slate-700 cursor-not-allowed scale-90'
                     : isConnected
-                    ? `${colors.border} ring-1 ${colors.ring} hover:scale-125`
-                    : `${colors.border} ${colors.hover} hover:scale-125`
+                    ? `${colors.border} ring-1 ${colors.ring} hover:scale-110`
+                    : `${colors.border} ${colors.hover} hover:scale-110`
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -887,9 +887,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               >
                 {/* Center dot in exact port point color */}
                 <div
-                  className={`w-2.5 h-2.5 rounded-full ${colors.bg} ${
-                    isCompatible ? 'scale-125 bg-white' : ''
-                  } group-hover/port:bg-white transition-colors shadow-sm`}
+                  className={`w-2 h-2 rounded-full ${colors.bg} ${
+                    isCompatible ? 'scale-110 bg-white' : ''
+                  } group-hover/port:bg-white transition-colors shadow-xs`}
                 />
 
                 {/* Permanent or hover badge */}
@@ -1358,8 +1358,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* Output Ports (Right) with Protruding Outward '+' Terminal (n8n Style) */}
-      <div className="absolute top-1/2 -right-7 -translate-y-1/2 flex flex-col gap-4 z-20 pointer-events-auto">
+      {/* Output Ports (Right) with Protruding Outward '+' Terminal (Compact Standard) */}
+      <div className="absolute top-1/2 -right-5 -translate-y-1/2 flex flex-col gap-2.5 z-20 pointer-events-auto">
         {node.outputs.map((port) => {
           const colors = getPortColorDef(port.type);
           const isDraggingThis = isConnecting && activeConnectingNodeId === node.id;
@@ -1384,7 +1384,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           return (
             <div key={port.id} className="relative flex items-center group/outport">
               {/* Horizontal Stem / Arm bridging from node body to protruding terminal */}
-              <div className="w-4 h-[2px] bg-slate-600/90 group-hover/outport:bg-cyan-400/80 transition-colors shadow-sm" />
+              <div className="w-2 h-[1.5px] bg-slate-600/90 group-hover/outport:bg-cyan-400/80 transition-colors shadow-xs" />
 
               {/* Protruding '+' Terminal Button (Extended outward from node) */}
               <button
@@ -1395,14 +1395,14 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 data-port-id={port.id}
                 data-is-output="true"
                 title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect wire to another node (IN)`}
-                className={`w-6.5 h-6.5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-lg shadow-black relative cursor-pointer z-10 group/btn ${
+                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-md shadow-black relative cursor-pointer z-10 group/btn ${
                   isDraggingThis
-                    ? `ring-4 ring-offset-2 ring-offset-slate-950 ${colors.ring} scale-125 z-40 animate-pulse`
+                    ? `ring-3 ring-offset-1 ring-offset-slate-950 ${colors.ring} scale-110 z-40 animate-pulse`
                     : isConnectingActive
                     ? 'opacity-40 cursor-default'
                     : isConnected
-                    ? `ring-2 ${colors.ring} hover:scale-125 hover:border-white shadow-cyan-500/40`
-                    : `${colors.hover} hover:scale-125 hover:border-white hover:shadow-cyan-500/50`
+                    ? `ring-1 ${colors.ring} hover:scale-110 hover:border-white shadow-cyan-500/40`
+                    : `${colors.hover} hover:scale-110 hover:border-white hover:shadow-cyan-500/50`
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1419,7 +1419,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               >
                 {/* Bold Plus Icon inside protruding terminal */}
                 <Plus
-                  className={`w-3.5 h-3.5 stroke-[2.8] text-slate-300 group-hover/btn:text-white group-hover/btn:scale-110 transition-transform ${
+                  className={`w-3 h-3 stroke-[2.5] text-slate-300 group-hover/btn:text-white group-hover/btn:scale-105 transition-transform ${
                     isConnected ? 'text-cyan-300' : ''
                   }`}
                   style={{ color: isConnected ? colors.hex : undefined }}
