@@ -101,11 +101,11 @@ export const AiFixerDrawer: React.FC<AiFixerDrawerProps> = ({
       const diag = diagnoseWorkflow(workflow, latestExecution, 'en');
       const issueCount = diag.issues.length;
 
-      const welcomeText = `Hello & Namaste! I am **AI Fixer** 🤖 ⚡, your autonomous Humanoid Robot Troubleshooter & Workflow Architect.
+      const welcomeText = `Hello & Namaste! I am **Build-Ai** ⚡, your autonomous Workflow Architect & Builder.
 
 💬 **Ask me in English or Hindi / Mujhse English ya Hindi me poochein:**
-• **Diagnose & Auto-Fix**: Fix broken connections, missing triggers, or node errors.
 • **Build Workflows Automatically**: Give me any instruction (e.g. *"Telegram notification workflow banao"* or *"Build Google Sheets lead outreach with Gmail"*), and I will place and connect the full workflow directly on your canvas!
+• **Diagnose & Auto-Fix**: Fix broken connections, missing triggers, or node errors.
 
 ${
   issueCount === 0
@@ -165,7 +165,7 @@ ${
 
     let replyText = '';
     if (lang === 'en') {
-      replyText = `🤖 **AI Fixer Auto-Repair Completed! All Issues Resolved!**\n\n`;
+      replyText = `⚡ **Build-Ai Auto-Repair Completed! All Issues Resolved!**\n\n`;
       if (fixesApplied.length > 0) {
         replyText += `Here are the adjustments I made to your workflow:\n${fixesApplied
           .map((f) => `• ${f}`)
@@ -175,7 +175,7 @@ ${
       }
       replyText += `✨ All issues have been cleared! Your workflow is 100% healthy and ready for testing.`;
     } else {
-      replyText = `🤖 **AI Fixer Auto-Repair Complete! Sabhi Issues Remove Ho Gaye Hain!**\n\n`;
+      replyText = `⚡ **Build-Ai Auto-Repair Complete! Sabhi Issues Remove Ho Gaye Hain!**\n\n`;
       if (fixesApplied.length > 0) {
         replyText += `Maine workflow me yeh adjustments kiye hain:\n${fixesApplied
           .map((f) => `• ${f}`)
@@ -507,24 +507,24 @@ ${
         <div className="p-4 border-b border-slate-800/80 bg-slate-950/90 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
-              {/* Cute Humanoid Robot Avatar in Header */}
+              {/* Build-Ai Avatar in Header */}
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-blue-600 flex items-center justify-center text-slate-950 shadow-md shadow-cyan-500/30">
-                <Bot className="w-5 h-5 stroke-[2.4]" />
+                <Sparkles className="w-5 h-5 stroke-[2.4]" />
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white tracking-wide">AI Fixer</h3>
+                <h3 className="text-sm font-bold text-white tracking-wide">Build-Ai</h3>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
                   <Activity className="w-2.5 h-2.5 text-cyan-400 animate-pulse" />
-                  Autonomous Robot Assistant
+                  AI Architect & Builder
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
                 {userLang === 'en'
-                  ? 'Screen Robot • Auto-Repair & Workflow Architect'
-                  : 'Screen Robot • Workflow Fixer & Natural Language Builder'}
+                  ? 'Natural Language Builder • Auto-Repair & Architect'
+                  : 'Natural Language Builder • Workflow Fixer & Architect'}
               </p>
             </div>
           </div>
@@ -547,7 +547,7 @@ ${
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-              title="Close AI Fixer"
+              title="Close Build-Ai"
             >
               <X className="w-4 h-4" />
             </button>
@@ -595,7 +595,7 @@ ${
               >
                 {!isUser ? (
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 shadow-md">
-                    <Bot className="w-4 h-4 stroke-[2.2]" />
+                    <Sparkles className="w-4 h-4 stroke-[2.2]" />
                   </div>
                 ) : (
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
@@ -606,7 +606,7 @@ ${
                 <div className={`space-y-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 px-1">
                     <span>
-                      {isUser ? (userLang === 'en' ? 'You' : 'Aap (User)') : 'AI Fixer'} • {msg.timestamp}
+                      {isUser ? (userLang === 'en' ? 'You' : 'Aap (User)') : 'Build-Ai'} • {msg.timestamp}
                     </span>
                   </div>
 
@@ -704,14 +704,14 @@ ${
           {isLoading && (
             <div className="flex gap-3 items-center text-slate-400 text-xs py-2">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-blue-600 flex items-center justify-center text-slate-950 shrink-0 animate-pulse">
-                <Bot className="w-4 h-4 stroke-[2.2]" />
+                <Sparkles className="w-4 h-4 stroke-[2.2]" />
               </div>
               <div className="flex items-center gap-1.5 text-cyan-300">
                 <RotateCw className="w-3.5 h-3.5 animate-spin" />
                 <span>
                   {userLang === 'en'
-                    ? 'AI Fixer is inspecting & architecting...'
-                    : 'AI Fixer workflow build aur check kar raha hai...'}
+                    ? 'Build-Ai is inspecting & architecting...'
+                    : 'Build-Ai workflow build aur check kar raha hai...'}
                 </span>
               </div>
             </div>
@@ -766,8 +766,8 @@ ${
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
                 userLang === 'en'
-                  ? 'Ask AI Fixer or give workflow instructions (English or Hindi)...'
-                  : 'AI Fixer se poochhein ya workflow banane ka instruction dein...'
+                  ? 'Ask Build-Ai or give workflow instructions (English or Hindi)...'
+                  : 'Build-Ai se poochhein ya workflow banane ka instruction dein...'
               }
               className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-xs text-white placeholder-slate-500 outline-none transition"
               disabled={isLoading}
@@ -777,7 +777,7 @@ ${
               type="submit"
               disabled={!inputText.trim() || isLoading}
               className="p-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 disabled:hover:from-cyan-600 disabled:hover:to-blue-600 text-white shadow-md transition active:scale-95 cursor-pointer shrink-0"
-              title="Send to AI Fixer"
+              title="Send to Build-Ai"
             >
               <Send className="w-4 h-4 stroke-[2.2]" />
             </button>

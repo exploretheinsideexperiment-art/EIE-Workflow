@@ -13,7 +13,6 @@ import { CanvasNode } from './CanvasNode';
 import { ConnectionWire } from './ConnectionWire';
 import { CanvasToolbar } from './CanvasToolbar';
 import { MiniMap } from './MiniMap';
-import { MiniAiFixerRobot } from './MiniAiFixerRobot';
 import { AddNodeModal } from '../panels/AddNodeModal';
 import { NodeConfigPanel } from '../panels/NodeConfigPanel';
 import { ExecutionDrawer } from '../panels/ExecutionDrawer';
@@ -2427,52 +2426,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         </button>
       )}
 
-      {/* Floating AI Fixer Launcher Button (Bottom Right) */}
+      {/* Floating Build-Ai Chat Launcher Button (Bottom Right) */}
       <button
         onClick={() => setEiDoctorOpen(true)}
         className="fixed bottom-6 right-6 z-40 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-cyan-500/50 text-cyan-300 shadow-2xl shadow-cyan-950/90 hover:border-cyan-400 hover:shadow-cyan-500/30 active:scale-95 transition-all cursor-pointer group"
-        title="Open AI Fixer - Autonomous Humanoid Robot Troubleshooter & Workflow Architect"
+        title="Open Build-Ai Chat"
       >
         <div className="relative">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-blue-600 flex items-center justify-center text-slate-950 shadow-md shadow-cyan-500/30 group-hover:scale-105 transition">
-            <Bot className="w-5 h-5 stroke-[2.4]" />
+            <Sparkles className="w-5 h-5 stroke-[2.4]" />
           </div>
           <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
         </div>
 
         <div className="text-left hidden sm:block">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-white tracking-wide">AI Fixer</span>
+            <span className="text-xs font-bold text-white tracking-wide">Build-Ai</span>
             <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">
-              Robot
+              Chat
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 block -mt-0.5">Solve & Auto-Repair</span>
+          <span className="text-[10px] text-slate-400 block -mt-0.5">Solve & Auto-Build</span>
         </div>
       </button>
 
-      {/* Miniature Humanoid Robot Wandering and Working on Screen */}
-      <MiniAiFixerRobot
-        workflow={workflow}
-        canvasTransform={viewport}
-        latestExecution={latestExecution}
-        issues={workflowIssues}
-        onOpenFixerDrawer={() => setEiDoctorOpen(true)}
-        onAutoRepair={() => {
-          const { fixedWorkflow } = autoRepairWorkflow(workflow, latestExecution, 'en');
-          pushHistory(fixedWorkflow);
-          setHasUnsavedChanges(true);
-          setLatestExecution(null); // Clean error state so issues never stay stuck
-        }}
-        onApplyWorkflow={(updatedWf, reason) => {
-          pushHistory(updatedWf);
-          setHasUnsavedChanges(true);
-          setLatestExecution(null);
-        }}
-        onTestWorkflow={handleTestWorkflow}
-      />
-
-      {/* AI Fixer Autonomous Troubleshooting & Repair Drawer */}
+      {/* Build-Ai Chat Drawer */}
       <AiFixerDrawer
         isOpen={eiDoctorOpen}
         workflow={workflow}

@@ -643,7 +643,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
               >
                 <Play className="w-2.5 h-2.5 fill-current" />
-                <span>Test Step</span>
+                <span>Execute Step</span>
               </button>
             )}
 
@@ -678,10 +678,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                       onOpenDoctorForNode(node.id);
                     }}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold cursor-pointer transition"
-                    title="Fix this error with AI Fixer"
+                    title="Fix this error with Build-Ai"
                   >
-                    <Bot className="w-2.5 h-2.5 text-cyan-400" />
-                    <span>AI Fixer</span>
+                    <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
+                    <span>Build-Ai</span>
                   </button>
                 )}
               </div>

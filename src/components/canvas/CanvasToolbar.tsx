@@ -199,7 +199,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             </button>
           </div>
 
-          {/* Run / Test Workflow */}
+          {/* Run / Execute Workflow */}
           <button
             onClick={onRunWorkflow}
             disabled={isExecuting}
@@ -211,7 +211,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             title="Execute workflow with live stream results"
           >
             <Play className={`w-3.5 h-3.5 fill-current ${isExecuting ? 'animate-spin' : ''}`} />
-            <span>{isExecuting ? 'Running...' : 'Test'}</span>
+            <span>{isExecuting ? 'Executing...' : 'Execute'}</span>
           </button>
 
           {/* Execution Drawer / Logs */}
@@ -240,14 +240,14 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             </button>
           )}
 
-          {/* AI Fixer Quick Launch Button */}
+          {/* Build-Ai Quick Launch Button */}
           <button
             onClick={onOpenEiDoctor}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 text-xs font-semibold shadow-sm hover:border-cyan-400 transition cursor-pointer whitespace-nowrap shrink-0 group"
-            title="Open AI Fixer (Autonomous AI Robot Troubleshooter & Auto-Repair)"
+            title="Open Build-Ai Chat (Autonomous AI Troubleshooter & Workflow Architect)"
           >
-            <Bot className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
-            <span className="font-bold">AI Fixer</span>
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition" />
+            <span className="font-bold">Build-Ai</span>
           </button>
         </div>
 
