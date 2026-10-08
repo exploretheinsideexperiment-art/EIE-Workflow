@@ -829,6 +829,121 @@ router.post('/integrations/telegram/send-test', async (req: Request, res: Respon
   }
 });
 
+// Fetch incoming messages received by Telegram Bot from user's mobile device
+router.post('/integrations/telegram/updates', async (req: Request, res: Response) => {
+  const { botToken, limit = 10, offset = 0 } = req.body;
+  const token = (botToken || '').trim();
+  if (!token) {
+    return res.status(400).json({ ok: false, error: 'Telegram Bot Token is required to fetch incoming updates.' });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=${limit}&offset=${offset}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    const data = await updatesRes.json();
+
+    if (!data.ok) {
+      return res.status(400).json({ ok: false, error: data.description || 'Failed to fetch Telegram updates.' });
+    }
+
+    const updates = Array.isArray(data.result) ? data.result : [];
+    // Extract recent messages
+    const formattedMessages = updates.map((u: any) => {
+      const msg = u.message || u.channel_post || u.edited_message;
+      if (!msg) return null;
+      return {
+        updateId: u.update_id,
+        messageId: msg.message_id,
+        chatId: msg.chat?.id,
+        chatType: msg.chat?.type,
+        senderName: [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || msg.from?.username || msg.chat?.title || 'Unknown',
+        username: msg.from?.username,
+        text: msg.text || msg.caption || '',
+        date: msg.date ? new Date(msg.date * 1000).toISOString() : new Date().toISOString(),
+        raw: u,
+      };
+    }).filter(Boolean);
+
+    const latest = formattedMessages.length > 0 ? formattedMessages[formattedMessages.length - 1] : null;
+
+    return res.json({
+      ok: true,
+      count: formattedMessages.length,
+      updates: formattedMessages,
+      latestMessage: latest,
+      status: latest ? 'Message Received from Mobile App' : 'Listening (Send a message to your Telegram bot on your phone to see it here)'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message || 'Network error fetching Telegram updates.' });
+  }
+});
+
+// Receive message from mobile phone and execute workflow
+router.post('/integrations/telegram/receive-and-trigger', async (req: Request, res: Response) => {
+  const { botToken, workflowId } = req.body;
+  const token = (botToken || '').trim();
+  if (!token) {
+    return res.status(400).json({ ok: false, error: 'Telegram Bot Token is required.' });
+  }
+
+  try {
+    const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=5`);
+    const data = await updatesRes.json();
+    if (!data.ok) {
+      return res.status(400).json({ ok: false, error: data.description || 'Failed to fetch Telegram updates.' });
+    }
+
+    const updates = Array.isArray(data.result) ? data.result : [];
+    const validMsgs = updates.map((u: any) => u.message || u.channel_post).filter(Boolean);
+
+    if (validMsgs.length === 0) {
+      return res.json({
+        ok: true,
+        received: false,
+        message: 'No new messages found from mobile app. Open Telegram on your phone, send any message to your bot, then click "Receive Latest Mobile Message" again!'
+      });
+    }
+
+    const latestMsg = validMsgs[validMsgs.length - 1];
+    const workflows = db.get('workflows');
+    let targetWorkflow = workflowId ? workflows.find((w) => w.id === workflowId) : null;
+    if (!targetWorkflow) {
+      targetWorkflow = workflows.find((w) => w.active && w.nodes.some((n) => n.type === 'app_telegram' || n.type === 'chat_trigger' || n.type === 'comm_telegram')) || workflows[0];
+    }
+
+    const payload = {
+      platform: 'telegram',
+      message: latestMsg.text || '',
+      text: latestMsg.text || '',
+      chatId: latestMsg.chat?.id,
+      from: latestMsg.from,
+      senderName: [latestMsg.from?.first_name, latestMsg.from?.last_name].filter(Boolean).join(' ') || latestMsg.from?.username,
+      timestamp: new Date().toISOString()
+    };
+
+    if (targetWorkflow) {
+      const execution = await WorkflowEngine.executeWorkflow(targetWorkflow, 'webhook', payload);
+      return res.json({
+        ok: true,
+        received: true,
+        payload,
+        executionId: execution.id,
+        workflow: targetWorkflow.name,
+        status: execution.status,
+        result: execution.nodeResults
+      });
+    }
+
+    return res.json({ ok: true, received: true, payload });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Generic HTTP Proxy & News Parser for Aaj Tak and external URLs (bypasses browser CORS)
 router.all('/proxy/fetch', async (req: Request, res: Response) => {
   const targetUrl = (req.query.url || req.body?.url || 'https://www.aajtak.in/').toString();

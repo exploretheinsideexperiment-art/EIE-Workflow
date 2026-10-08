@@ -22,7 +22,7 @@ export const CATEGORIES: NodeCategory[] = [
 
 export const NODE_LIBRARY: NodeDefinition[] = [
   // ==========================================
-  // 1. ALL APPLICATIONS (n8n Style)
+  // 1. ALL APPLICATIONS (Cloud Ecosystem)
   // ==========================================
   {
     type: 'app_google_sheets',
@@ -968,7 +968,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     }
   },
 
-  // 3. ADVANCED AI & AGENTS (n8n LangChain Style)
+  // 3. ADVANCED AI & AGENTS (LangChain Core)
   {
     type: 'ai_agent',
     name: 'AI Agent',
@@ -1284,7 +1284,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
   {
     type: 'data_sort_limit',
     name: 'Sort & Limit',
-    description: 'Sorts items ascending/descending by a field and keeps top N items (n8n Limit node).',
+    description: 'Sorts items ascending/descending by a field and keeps top N items (Limit node).',
     category: 'Data',
     icon: 'ArrowUpDown',
     accentColor: '#f59e0b',
@@ -1596,12 +1596,12 @@ export const NODE_LIBRARY: NodeDefinition[] = [
   },
 
   // ==========================================
-  // 11. CORE NODES (n8n Standard Core Suite)
+  // 11. CORE NODES (Standard Core Suite)
   // ==========================================
   {
     type: 'core_edit_fields',
     name: 'Edit Fields (Set)',
-    description: 'Set, update, rename, or compute field values on items (the n8n Edit Fields node).',
+    description: 'Set, update, rename, or compute field values on items (Edit Fields node).',
     category: 'Core',
     icon: 'Edit3',
     accentColor: '#f59e0b',
@@ -2048,7 +2048,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
   }
 ];
 
-export interface N8nNodeMeta {
+export interface WorkflowNodeMeta {
   package: string;
   version: string;
   docsUrl: string;
@@ -2057,22 +2057,25 @@ export interface N8nNodeMeta {
   operationDefault?: string;
 }
 
-export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
+// Backward-compatible alias
+export type N8nNodeMeta = WorkflowNodeMeta;
+
+export function getNodePackageMeta(type: string, name?: string): WorkflowNodeMeta {
   const t = (type || '').toLowerCase();
 
   if (t === 'http_request' || t === 'http') {
     return {
-      package: 'n8n-nodes-base.httpRequest',
+      package: 'eie-nodes-base.httpRequest',
       version: 'v4.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/httpRequest',
       category: 'Core',
     };
   }
   if (t.includes('telegram')) {
     return {
-      package: 'n8n-nodes-base.telegram',
+      package: 'eie-nodes-base.telegram',
       version: 'v1.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.telegram/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/telegram',
       category: 'Communication',
       resourceDefault: 'message',
       operationDefault: 'sendMessage',
@@ -2080,17 +2083,17 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t === 'trigger_webhook' || t === 'webhook') {
     return {
-      package: 'n8n-nodes-base.webhook',
+      package: 'eie-nodes-base.webhook',
       version: 'v2.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/webhook',
       category: 'Triggers',
     };
   }
   if (t === 'chat_trigger' || t === 'trigger_chat') {
     return {
-      package: 'n8n-nodes-base.chatTrigger',
+      package: 'eie-nodes-base.chatTrigger',
       version: 'v1.1',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.chattrigger/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/chatTrigger',
       category: 'Chat',
       resourceDefault: 'chat',
       operationDefault: 'receiveMessage',
@@ -2098,9 +2101,9 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t === 'chat_message') {
     return {
-      package: 'n8n-nodes-base.chatMessage',
+      package: 'eie-nodes-base.chatMessage',
       version: 'v1.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.chat/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/chat',
       category: 'Chat',
       resourceDefault: 'message',
       operationDefault: 'sendMessage',
@@ -2108,73 +2111,73 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t === 'chat_ai') {
     return {
-      package: 'n8n-nodes-langchain.chainLlm',
+      package: 'eie-nodes-langchain.chainLlm',
       version: 'v1.4',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.chainllm/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/chainllm',
       category: 'Chat',
     };
   }
   if (t === 'trigger_schedule' || t === 'schedule') {
     return {
-      package: 'n8n-nodes-base.scheduleTrigger',
+      package: 'eie-nodes-base.scheduleTrigger',
       version: 'v1.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.scheduletrigger/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/scheduleTrigger',
       category: 'Triggers',
     };
   }
   if (t === 'core_code' || t === 'code') {
     return {
-      package: 'n8n-nodes-base.code',
+      package: 'eie-nodes-base.code',
       version: 'v2.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/code',
       category: 'Core',
     };
   }
   if (t === 'condition_if' || t === 'core_if' || t === 'if') {
     return {
-      package: 'n8n-nodes-base.if',
+      package: 'eie-nodes-base.if',
       version: 'v2.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.if/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/if',
       category: 'Flow',
     };
   }
   if (t === 'core_edit_fields' || t === 'core_set' || t === 'set') {
     return {
-      package: 'n8n-nodes-base.set',
+      package: 'eie-nodes-base.set',
       version: 'v3.4',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.set/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/set',
       category: 'Core',
     };
   }
   if (t === 'core_switch' || t === 'condition_switch' || t === 'switch') {
     return {
-      package: 'n8n-nodes-base.switch',
+      package: 'eie-nodes-base.switch',
       version: 'v3.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.switch/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/switch',
       category: 'Flow',
     };
   }
   if (t === 'core_wait' || t === 'wait') {
     return {
-      package: 'n8n-nodes-base.wait',
+      package: 'eie-nodes-base.wait',
       version: 'v1.1',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.wait/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/wait',
       category: 'Flow',
     };
   }
   if (t === 'core_respond_to_webhook' || t === 'respond_to_webhook') {
     return {
-      package: 'n8n-nodes-base.respondToWebhook',
+      package: 'eie-nodes-base.respondToWebhook',
       version: 'v1.1',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/respondToWebhook',
       category: 'Core',
     };
   }
   if (t.includes('google_sheets') || t.includes('sheets')) {
     return {
-      package: 'n8n-nodes-base.googleSheets',
+      package: 'eie-nodes-base.googleSheets',
       version: 'v4.5',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.googlesheets/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/googleSheets',
       category: 'Applications',
       resourceDefault: 'sheet',
       operationDefault: 'readRows',
@@ -2182,9 +2185,9 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t.includes('gmail')) {
     return {
-      package: 'n8n-nodes-base.gmail',
+      package: 'eie-nodes-base.gmail',
       version: 'v2.1',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.gmail/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/gmail',
       category: 'Applications',
       resourceDefault: 'message',
       operationDefault: 'send',
@@ -2192,9 +2195,9 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t.includes('slack')) {
     return {
-      package: 'n8n-nodes-base.slack',
+      package: 'eie-nodes-base.slack',
       version: 'v2.2',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.slack/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/slack',
       category: 'Applications',
       resourceDefault: 'message',
       operationDefault: 'postMessage',
@@ -2202,17 +2205,17 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t.includes('discord')) {
     return {
-      package: 'n8n-nodes-base.discord',
+      package: 'eie-nodes-base.discord',
       version: 'v2.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.discord/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/discord',
       category: 'Applications',
     };
   }
   if (t.includes('whatsapp')) {
     return {
-      package: 'n8n-nodes-base.whatsApp',
+      package: 'eie-nodes-base.whatsApp',
       version: 'v1.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.whatsapp/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/whatsapp',
       category: 'Applications',
       resourceDefault: 'message',
       operationDefault: 'sendTemplate',
@@ -2220,9 +2223,9 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t.includes('openai')) {
     return {
-      package: 'n8n-nodes-base.openAi',
+      package: 'eie-nodes-base.openAi',
       version: 'v1.4',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.openai/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/openai',
       category: 'AI',
       resourceDefault: 'chat',
       operationDefault: 'complete',
@@ -2230,33 +2233,33 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
   }
   if (t.includes('gemini')) {
     return {
-      package: 'n8n-nodes-langchain.lmChatGoogleGemini',
+      package: 'eie-nodes-langchain.lmChatGoogleGemini',
       version: 'v1.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.lmchatgooglegemini/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/lmchatgooglegemini',
       category: 'AI',
     };
   }
   if (t.includes('claude') || t.includes('anthropic')) {
     return {
-      package: 'n8n-nodes-langchain.lmChatAnthropic',
+      package: 'eie-nodes-langchain.lmChatAnthropic',
       version: 'v1.0',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.lmchatanthropic/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/lmchatanthropic',
       category: 'AI',
     };
   }
   if (t === 'ai_agent') {
     return {
-      package: 'n8n-nodes-langchain.agent',
+      package: 'eie-nodes-langchain.agent',
       version: 'v1.7',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.agent/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/agent',
       category: 'AI',
     };
   }
   if (t.includes('postgres') || t.includes('mysql') || t.includes('supabase')) {
     return {
-      package: 'n8n-nodes-base.postgres',
+      package: 'eie-nodes-base.postgres',
       version: 'v2.5',
-      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.postgres/',
+      docsUrl: 'https://docs.eie-workflow.io/nodes/postgres',
       category: 'Database',
       resourceDefault: 'database',
       operationDefault: 'executeQuery',
@@ -2268,9 +2271,11 @@ export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
     .replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 
   return {
-    package: `n8n-nodes-base.${sanitized || 'node'}`,
+    package: `eie-nodes-base.${sanitized || 'node'}`,
     version: 'v1.0',
-    docsUrl: 'https://docs.n8n.io/integrations/',
+    docsUrl: 'https://docs.eie-workflow.io/nodes/',
     category: 'Applications',
   };
 }
+
+export const getN8nNodeMeta = getNodePackageMeta;

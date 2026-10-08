@@ -38,13 +38,14 @@ import {
   FileSpreadsheet,
   Mail,
   Loader2,
-  Save
+  Save,
+  Download
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { Workflow, WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
 import { NodeDataInspector } from '../common/NodeDataInspector';
 import { evaluateExpressionInContext, getDefaultSampleOutputForNodeType } from '../../utils/workflowDataFlow';
-import { NODE_LIBRARY, getN8nNodeMeta } from '../../constants/nodeLibrary';
+import { NODE_LIBRARY, getNodePackageMeta } from '../../constants/nodeLibrary';
 
 interface NodeConfigPanelProps {
   node: WorkflowNodeData | null;
@@ -94,7 +95,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       setTimeout(() => setCredDeleteFeedback(null), 3000);
     }
   };
-  // Center tabs: strictly Parameters & Settings (exactly matching n8n)
+  // Center tabs: strictly Parameters & Settings
   const [activeCenterTab, setActiveCenterTab] = useState<'params' | 'settings'>('params');
 
   // Mobile pane view: 'input' | 'center' | 'output' (default 'center')
@@ -177,14 +178,92 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const [tgTestSending, setTgTestSending] = useState(false);
   const [tgTestSuccessToast, setTgTestSuccessToast] = useState<string | null>(null);
 
+  // Live Mobile App Connectivity State
+  const [isReceivingMobile, setIsReceivingMobile] = useState(false);
+  const [receivedMobileMsg, setReceivedMobileMsg] = useState<{
+    text: string;
+    senderName: string;
+    chatId: string | number;
+    date: string;
+  } | null>(null);
+
+  const handleFetchMobileMessages = async () => {
+    const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+    if (!token) {
+      setTgTestSuccessToast('Please configure your Bot Token in the credential first');
+      setShowNewCredModal(true);
+      setTimeout(() => setTgTestSuccessToast(null), 3500);
+      return;
+    }
+    setIsReceivingMobile(true);
+    try {
+      const res = await fetch('/api/integrations/telegram/updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: token }),
+      });
+      const data = await res.json();
+      if (data.ok && data.latestMessage) {
+        setReceivedMobileMsg(data.latestMessage);
+        if (!config.chatId && data.latestMessage.chatId) {
+          handleConfigBatch({ chatId: String(data.latestMessage.chatId), chat_id: String(data.latestMessage.chatId) });
+        }
+        setTgTestSuccessToast(`✓ Received from ${data.latestMessage.senderName}: "${data.latestMessage.text}"`);
+      } else if (data.ok) {
+        setTgTestSuccessToast('Listening: Send any message to your bot on your phone, then click again!');
+      } else {
+        setTgTestSuccessToast(`Update error: ${data.error || 'Failed to fetch'}`);
+      }
+    } catch (e: any) {
+      setTgTestSuccessToast(`Error: ${e.message}`);
+    } finally {
+      setIsReceivingMobile(false);
+      setTimeout(() => setTgTestSuccessToast(null), 5000);
+    }
+  };
+
+  const handleReceiveAndTriggerWorkflow = async () => {
+    const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+    if (!token) {
+      setTgTestSuccessToast('Please configure your Bot Token in the credential first');
+      setShowNewCredModal(true);
+      setTimeout(() => setTgTestSuccessToast(null), 3500);
+      return;
+    }
+    setIsReceivingMobile(true);
+    try {
+      const res = await fetch('/api/integrations/telegram/receive-and-trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: token, workflowId: workflow?.id }),
+      });
+      const data = await res.json();
+      if (data.ok && data.received) {
+        setTgTestSuccessToast(`✓ Workflow executed from mobile message: "${data.payload?.text}"`);
+        if (data.payload?.chatId && !config.chatId) {
+          handleConfigBatch({ chatId: String(data.payload.chatId), chat_id: String(data.payload.chatId) });
+        }
+      } else if (data.ok) {
+        setTgTestSuccessToast(data.message || 'No new messages found from mobile app.');
+      } else {
+        setTgTestSuccessToast(`Trigger error: ${data.error || 'Failed'}`);
+      }
+    } catch (e: any) {
+      setTgTestSuccessToast(`Error: ${e.message}`);
+    } finally {
+      setIsReceivingMobile(false);
+      setTimeout(() => setTgTestSuccessToast(null), 5000);
+    }
+  };
+
   if (!node) return null;
 
   const IconComponent = (((Icons as any)[node.icon || ''] || Icons.Box)) as React.ComponentType<{ className?: string }>;
   const config = node.config || {};
   const executionSettings = node.executionSettings || {};
 
-  // n8n Node metadata & package lookup
-  const n8nMeta = useMemo(() => getN8nNodeMeta(node.type, node.name), [node.type, node.name]);
+  // Workflow Node metadata & package lookup
+  const nodeMeta = useMemo(() => getNodePackageMeta(node.type, node.name), [node.type, node.name]);
 
   // Extract keys and variables from incoming inputData for the expression builder
   const inputKeys = useMemo(() => {
@@ -650,12 +729,12 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         onClick={onClose}
       />
 
-      {/* Main n8n Node Configuration Modal (3-Pane: Input, Parameters/Settings, Output) */}
+      {/* Main Node Configuration Modal (3-Pane: Input, Parameters/Settings, Output) */}
       <div
         className="fixed inset-0 sm:inset-3 md:inset-6 lg:inset-8 z-55 bg-slate-900 border border-slate-800 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* TOP MODAL HEADER: Node Icon, Title, n8n Package, Version, Active Toggle, Docs Link, Close Button */}
+        {/* TOP MODAL HEADER: Node Icon, Title, Package, Version, Active Toggle, Docs Link, Close Button */}
         <div className="h-13 px-4 border-b border-slate-800 bg-slate-950/90 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* App / Node Icon */}
@@ -674,20 +753,20 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               />
             </div>
 
-            {/* n8n Package Identifier Badge */}
+            {/* Package Identifier Badge */}
             <span
               className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-slate-900 text-cyan-300 border border-slate-800"
-              title="Official n8n Node Identifier"
+              title="Workflow Node Identifier"
             >
-              {n8nMeta.package}
+              {nodeMeta.package}
             </span>
 
             {/* Version Badge */}
             <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800">
-              {n8nMeta.version}
+              {nodeMeta.version}
             </span>
 
-            {/* n8n Node Active / Disabled Switch */}
+            {/* Node Active / Disabled Switch */}
             <button
               type="button"
               onClick={() => onUpdateConfig(node.id, { disabled: !node.disabled })}
@@ -702,13 +781,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
               <span>{node.disabled ? 'Disabled' : 'Active'}</span>
             </button>
 
-            {/* Official n8n Docs link */}
+            {/* Docs link */}
             <a
-              href={n8nMeta.docsUrl}
+              href={nodeMeta.docsUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition ml-1"
-              title="Open official n8n documentation"
+              title="Open documentation"
             >
               <span>Docs</span>
               <ExternalLink className="w-3 h-3 text-slate-500" />
@@ -904,7 +983,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                 </button>
               </div>
 
-              {/* [ ☡ Execute step ] Button (Solid vibrant orange like n8n) */}
+              {/* [ Execute step ] Button */}
               <button
                 type="button"
                 onClick={handleRunSingleTest}
@@ -1164,6 +1243,51 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               </div>
                             )}
 
+                            {/* Verify Connection Button inside the Credential itself */}
+                            {defs.type === 'telegram' && (
+                              <div className="pt-1">
+                                <button
+                                  type="button"
+                                  disabled={tgVerifying || !newCredKey.trim()}
+                                  onClick={async () => {
+                                    if (!newCredKey.trim()) return;
+                                    setTgVerifying(true);
+                                    setCredSaveError(null);
+                                    try {
+                                      const res = await fetch('/api/integrations/telegram/verify', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ botToken: newCredKey.trim(), chatId: newCredSecondary.trim() }),
+                                      });
+                                      const data = await res.json();
+                                      if (data.ok) {
+                                        setTgVerifiedInfo({
+                                          status: 'Connected (Success)',
+                                          botName: data.bot?.first_name || 'Telegram Bot',
+                                          botUsername: data.bot?.username,
+                                          chatName: data.chat ? [data.chat.first_name, data.chat.last_name].filter(Boolean).join(' ') || data.chat.title : undefined,
+                                          chatUsername: data.chat?.username,
+                                          chatId: newCredSecondary.trim() || data.chat?.id,
+                                        });
+                                        setCredSavedToast(`✓ Bot Verified: ${data.bot?.first_name} (@${data.bot?.username})`);
+                                        setTimeout(() => setCredSavedToast(null), 3500);
+                                      } else {
+                                        setCredSaveError(data.error || 'Connection failed: Check Bot Token');
+                                      }
+                                    } catch (e: any) {
+                                      setCredSaveError(e.message || 'Verification error');
+                                    } finally {
+                                      setTgVerifying(false);
+                                    }
+                                  }}
+                                  className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-purple-500/40 text-purple-200 text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer"
+                                >
+                                  {tgVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />}
+                                  <span>{tgVerifying ? 'Testing Connection...' : 'Test Connection (Verify Bot API)'}</span>
+                                </button>
+                              </div>
+                            )}
+
                             {credSaveError && (
                               <div className="p-2 rounded-lg bg-rose-950/80 border border-rose-500/60 text-rose-300 text-[11px] flex items-center gap-1.5">
                                 <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
@@ -1218,10 +1342,10 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {/* NODE PARAMETER FIELDS                                  */}
                   {/* ------------------------------------------------------ */}
 
-                  {/* 1. TELEGRAM NODE (Authentic n8n Specification, Clean & Direct) */}
+                  {/* 1. TELEGRAM NODE */}
                   {(node.type === 'app_telegram' || node.type === 'comm_telegram') && (
                     <div className="space-y-3.5">
-                      {/* n8n Resource & Operation */}
+                      {/* Resource & Operation */}
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[10px] font-semibold text-slate-400 block mb-1">Resource</label>
@@ -1259,156 +1383,30 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </div>
                       )}
 
-                      {/* Dynamic External Connection Status Card (Only shown when live verified) */}
-                      {tgVerifiedInfo && (
-                        <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/70 to-slate-950 border border-emerald-500/40 space-y-1.5 shadow-sm animate-in fade-in">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                              Status: {tgVerifiedInfo.status || 'Connected (Success)'}
-                            </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Cloud Active
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-300 space-y-0.5">
-                            {tgVerifiedInfo.botName && (
-                              <p className="flex items-center gap-1">
-                                <strong className="text-slate-400">Bot:</strong>
-                                <span className="text-white font-medium">{tgVerifiedInfo.botName}</span>
-                                {tgVerifiedInfo.botUsername && (
-                                  <span className="text-blue-400 font-mono text-[10px]">(@{tgVerifiedInfo.botUsername})</span>
-                                )}
-                              </p>
-                            )}
-                            {tgVerifiedInfo.chatId && (
-                              <p className="flex items-center gap-1">
-                                <strong className="text-slate-400">Target Chat:</strong>
-                                <span className="text-emerald-400 font-mono text-[10px]">{tgVerifiedInfo.chatId}</span>
-                                {tgVerifiedInfo.chatName && (
-                                  <span className="text-white font-medium">({tgVerifiedInfo.chatName})</span>
-                                )}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Target Recipient Chat & Delivery Configuration */}
-                      <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                      {/* Chat ID (Recipient) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
                             <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-                            Target Chat ID
+                            Chat ID
                           </label>
-                          <span className="text-[10px] text-slate-400">Recipient Chat ID or @channel</span>
+                          <span className="text-[10px] text-slate-500 font-mono">Recipient ID, channel, or {'{{$json.chatId}}'}</span>
                         </div>
-
-                        <div>
+                        <div className="relative flex items-stretch">
+                          <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
+                            fx
+                          </span>
                           <input
                             type="text"
                             value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
                             onChange={(e) => {
                               handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
                             }}
-                            placeholder="e.g. 1234567890 or @mychannel"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
+                            placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
                           />
-                          {renderExpressionEvaluator(config.chatId || config.chat_id)}
                         </div>
-
-                        {/* Action Buttons: Verify & Send Test via Real Cloud */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
-                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
-                              if (!token) {
-                                setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
-                                setShowNewCredModal(true);
-                                setTimeout(() => setTgTestSuccessToast(null), 3500);
-                                return;
-                              }
-                              setTgVerifying(true);
-                              try {
-                                const res = await fetch('/api/integrations/telegram/verify', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ botToken: token, chatId: cid }),
-                                });
-                                const data = await res.json();
-                                if (data.ok) {
-                                  setTgVerifiedInfo({
-                                    status: 'Connected (Success)',
-                                    botName: data.bot?.first_name || 'Telegram Bot',
-                                    botUsername: data.bot?.username,
-                                    chatName: data.chat ? [data.chat.first_name, data.chat.last_name].filter(Boolean).join(' ') || data.chat.title : undefined,
-                                    chatUsername: data.chat?.username,
-                                    chatId: cid || data.chat?.id,
-                                  });
-                                  setTgTestSuccessToast(`✓ Connected: ${data.bot?.first_name || 'Telegram Bot'} (@${data.bot?.username || 'bot'})`);
-                                } else {
-                                  setTgTestSuccessToast(data.error || 'Connection check failed');
-                                }
-                              } catch (err: any) {
-                                setTgTestSuccessToast(`Connection error: ${err.message || 'Network error'}`);
-                              } finally {
-                                setTgVerifying(false);
-                                setTimeout(() => setTgTestSuccessToast(null), 3500);
-                              }
-                            }}
-                            disabled={tgVerifying}
-                            className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                          >
-                            {tgVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />}
-                            <span>Verify Connection</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
-                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
-                              if (!token) {
-                                setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
-                                setShowNewCredModal(true);
-                                setTimeout(() => setTgTestSuccessToast(null), 3500);
-                                return;
-                              }
-                              if (!cid) {
-                                setTgTestSuccessToast('Please enter a Target Chat ID');
-                                setTimeout(() => setTgTestSuccessToast(null), 3000);
-                                return;
-                              }
-                              setTgTestSending(true);
-                              try {
-                                const testText = (config.text || config.message || '🚀 <b>Workflow Connection Verified!</b>\n\n✅ <b>Status:</b> Success\n🌐 <i>Dispatched via Telegram Bot API</i>').trim();
-                                const res = await fetch('/api/integrations/telegram/send-test', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ botToken: token, chatId: cid, text: testText }),
-                                });
-                                const data = await res.json();
-                                if (data.ok) {
-                                  setTgTestSuccessToast(`✓ Delivered to Chat ID ${cid}! (Msg #${data.messageId || '1'})`);
-                                } else {
-                                  setTgTestSuccessToast(`Failed: ${data.error || 'Check token & chat ID'}`);
-                                }
-                              } catch (err: any) {
-                                setTgTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
-                              } finally {
-                                setTgTestSending(false);
-                                setTimeout(() => setTgTestSuccessToast(null), 4000);
-                              }
-                            }}
-                            disabled={tgTestSending}
-                            className="py-2 px-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
-                          >
-                            {tgTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                            <span>Send Test to Mobile</span>
-                          </button>
-                        </div>
+                        {renderExpressionEvaluator(config.chatId || config.chat_id)}
                       </div>
 
                       {/* Text Message Field */}
@@ -1524,10 +1522,112 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </select>
                         </div>
                       </div>
+
+                      {/* Execute Step / Send Test Message */}
+                      <div className="pt-2 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                            const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                            if (!token) {
+                              setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
+                              setShowNewCredModal(true);
+                              setTimeout(() => setTgTestSuccessToast(null), 3500);
+                              return;
+                            }
+                            if (!cid) {
+                              setTgTestSuccessToast('Please enter a Target Chat ID');
+                              setTimeout(() => setTgTestSuccessToast(null), 3000);
+                              return;
+                            }
+                            setTgTestSending(true);
+                            try {
+                              const testText = (config.text || config.message || '🚀 <b>Workflow Connection Verified!</b>\n\n✅ <b>Status:</b> Success\n🌐 <i>Dispatched via Telegram Bot API</i>').trim();
+                              const res = await fetch('/api/integrations/telegram/send-test', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ botToken: token, chatId: cid, text: testText }),
+                              });
+                              const data = await res.json();
+                              if (data.ok) {
+                                setTgTestSuccessToast(`✓ Delivered to Chat ID ${cid}! (Msg #${data.messageId || '1'})`);
+                              } else {
+                                setTgTestSuccessToast(`Failed: ${data.error || 'Check token & chat ID'}`);
+                              }
+                            } catch (err: any) {
+                              setTgTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
+                            } finally {
+                              setTgTestSending(false);
+                              setTimeout(() => setTgTestSuccessToast(null), 4000);
+                            }
+                          }}
+                          disabled={tgTestSending}
+                          className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md shadow-blue-600/30 cursor-pointer"
+                        >
+                          {tgTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          <span>Execute Step (Test Send Message)</span>
+                        </button>
+                      </div>
+
+                      {/* Live Internet & Mobile App Connectivity Box */}
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+                            <span className="text-[11px] font-bold text-white tracking-tight">Internet Connected (Cloud API)</span>
+                          </div>
+                          <span className="text-[9.5px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                            Mobile Live Link
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Connected to external mobile apps. Send messages to user mobile phones and receive incoming replies sent from mobile phones in real-time.
+                        </p>
+
+                        {receivedMobileMsg && (
+                          <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-[11px] space-y-1.5 animate-in fade-in">
+                            <div className="flex items-center justify-between text-emerald-300 font-bold">
+                              <span>✓ Received from Mobile App:</span>
+                              <span className="text-[10px] font-mono">{receivedMobileMsg.senderName}</span>
+                            </div>
+                            <div className="text-white font-mono bg-slate-900/90 p-2 rounded border border-slate-800 text-xs">
+                              "{receivedMobileMsg.text || '(media/action message)'}"
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                              <span>Chat ID: <span className="text-cyan-300 font-mono font-bold">{String(receivedMobileMsg.chatId)}</span></span>
+                              <span>{new Date(receivedMobileMsg.date).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleFetchMobileMessages}
+                            disabled={isReceivingMobile}
+                            className="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                            title="Fetch incoming messages sent from phone to this bot"
+                          >
+                            {isReceivingMobile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-cyan-400" />}
+                            <span>Receive from Phone</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleReceiveAndTriggerWorkflow}
+                            disabled={isReceivingMobile}
+                            className="py-2 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm disabled:opacity-50"
+                            title="Trigger workflow using incoming mobile message"
+                          >
+                            {isReceivingMobile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                            <span>Run with Mobile Msg</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {/* 2. HTTP REQUEST (Full n8n Specification) */}
+                  {/* 2. HTTP REQUEST */}
                   {node.type === 'http_request' && (
                     <div className="space-y-3.5">
                       {/* Aaj Tak Preset Quick Selector */}
@@ -1728,7 +1828,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </div>
                       )}
 
-                      {/* n8n Additional Options Accordion */}
+                      {/* Additional Options Accordion */}
                       <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
                         <div
                           onClick={() => setShowAdditionalFields(!showAdditionalFields)}
@@ -1795,7 +1895,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     </div>
                   )}
 
-                  {/* 3. WEBHOOK TRIGGER (Full n8n Specification) */}
+                  {/* 3. WEBHOOK TRIGGER */}
                   {node.type === 'trigger_webhook' && (
                     <div className="space-y-3.5">
                       <div className="grid grid-cols-2 gap-2">
@@ -1865,7 +1965,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </div>
                       </div>
 
-                      {/* Inbound Webhook URLs (Production & Test like n8n) */}
+                      {/* Inbound Webhook URLs */}
                       <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] uppercase font-mono text-cyan-400 font-bold">
@@ -1912,7 +2012,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     </div>
                   )}
 
-                  {/* 4. SCHEDULE TRIGGER (Full n8n Specification) */}
+                  {/* 4. SCHEDULE TRIGGER */}
                   {node.type === 'trigger_schedule' && (
                     <div className="space-y-3.5">
                       <div>
@@ -1986,205 +2086,30 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {/* 5. CHAT NODES (Chat Trigger, Chat Response, AI Chat, Webchat) */}
                   {(node.type === 'chat_trigger' || node.type === 'chat_message' || node.type === 'chat_ai' || node.type === 'chat_webhook') && (
                     <div className="space-y-3.5">
-                      {/* Dynamic External App Connection Status Card (Verified via Cloud/Internet) */}
-                      {chatVerifiedInfo && (
-                        <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/70 to-slate-950 border border-emerald-500/40 space-y-1.5 shadow-sm animate-in fade-in">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                              Status: Connected to External App (Success)
-                            </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Cloud Active
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-300 space-y-0.5">
-                            {chatVerifiedInfo.botName && (
-                              <p className="flex items-center gap-1">
-                                <strong className="text-slate-400">Bot:</strong>
-                                <span className="text-white font-medium">{chatVerifiedInfo.botName}</span>
-                                {chatVerifiedInfo.botUsername && (
-                                  <span className="text-blue-400 font-mono text-[10px]">(@{chatVerifiedInfo.botUsername})</span>
-                                )}
-                              </p>
-                            )}
-                            {chatVerifiedInfo.chatId && (
-                              <p className="flex items-center gap-1">
-                                <strong className="text-slate-400">Target Chat:</strong>
-                                <span className="text-emerald-400 font-mono text-[10px]">{chatVerifiedInfo.chatId}</span>
-                                {chatVerifiedInfo.chatName && (
-                                  <span className="text-white font-medium">({chatVerifiedInfo.chatName})</span>
-                                )}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Toast notification */}
-                      {chatTestSuccessToast && (
-                        <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>{chatTestSuccessToast}</span>
-                        </div>
-                      )}
-
-                      {/* External App Credentials & Cloud Connection Card */}
-                      <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                            <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                            External App & Cloud Connection
+                      {/* Target Chat ID (Recipient) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                            Target Chat ID
                           </label>
-                          <span className="text-[10px] text-cyan-400 font-mono">
-                            Telegram / External Bot
+                          <span className="text-[10px] text-slate-500 font-mono">Recipient ID, channel, or {'{{$json.chatId}}'}</span>
+                        </div>
+                        <div className="relative flex items-stretch">
+                          <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
+                            fx
                           </span>
-                        </div>
-
-                        {/* Credential Status & Quick Connect */}
-                        {selectedCredential ? (
-                          <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-purple-500/30 text-xs">
-                            <div className="flex items-center gap-2 truncate">
-                              <KeyRound className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                              <span className="text-slate-200 truncate">
-                                Credential: <strong className="text-purple-300">{selectedCredential.name}</strong>
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNewCredName(selectedCredential.name);
-                                setNewCredKey(selectedCredential.data?.botToken || selectedCredential.data?.token || '');
-                                setNewCredSecondary(selectedCredential.data?.chatId || config.chatId || '');
-                                setShowNewCredModal(true);
-                              }}
-                              className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold underline shrink-0 cursor-pointer"
-                            >
-                              Edit Token
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="p-2.5 rounded-lg bg-slate-900/90 border border-dashed border-slate-700 flex items-center justify-between text-xs">
-                            <span className="text-slate-400 text-[11px]">No credential selected. Set Bot Token to connect:</span>
-                            <button
-                              type="button"
-                              onClick={() => setShowNewCredModal(true)}
-                              className="px-2 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 font-semibold text-[10px] border border-purple-500/40 cursor-pointer"
-                            >
-                              + Set Credential
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Target Chat ID */}
-                        <div>
-                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                            Target Chat ID (Mobile Device / Outside App Recipient)
-                          </label>
                           <input
                             type="text"
                             value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
                             onChange={(e) => {
                               handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
                             }}
-                            placeholder="e.g. 1234567890 or @mychannel"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                            placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
                           />
-                          {renderExpressionEvaluator(config.chatId || config.chat_id)}
                         </div>
-
-                        {/* Action Buttons: Verify Cloud Connection & Send Test to Outside App */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
-                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
-                              if (!token) {
-                                setChatTestSuccessToast('Please configure your Bot Token in the credential first');
-                                setShowNewCredModal(true);
-                                setTimeout(() => setChatTestSuccessToast(null), 3500);
-                                return;
-                              }
-                              setChatVerifying(true);
-                              try {
-                                const res = await fetch('/api/integrations/telegram/verify', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ botToken: token, chatId: cid }),
-                                });
-                                const data = await res.json();
-                                if (data.ok) {
-                                  setChatVerifiedInfo({
-                                    status: 'Connected to External App (Success)',
-                                    botName: data.bot?.first_name || 'External Bot',
-                                    botUsername: data.bot?.username,
-                                    chatName: data.chat ? [data.chat.first_name, data.chat.last_name].filter(Boolean).join(' ') || data.chat.title : undefined,
-                                    chatUsername: data.chat?.username,
-                                    chatId: cid || data.chat?.id,
-                                  });
-                                  setChatTestSuccessToast(`✓ Connected: ${data.bot?.first_name || 'External Bot'} (@${data.bot?.username || 'bot'})`);
-                                } else {
-                                  setChatTestSuccessToast(data.error || 'Connection check failed');
-                                }
-                              } catch (err: any) {
-                                setChatTestSuccessToast(`Connection error: ${err.message || 'Network error'}`);
-                              } finally {
-                                setChatVerifying(false);
-                                setTimeout(() => setChatTestSuccessToast(null), 3500);
-                              }
-                            }}
-                            disabled={chatVerifying}
-                            className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                          >
-                            {chatVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />}
-                            <span>Verify Cloud Connection</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
-                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
-                              if (!token) {
-                                setChatTestSuccessToast('Please configure your Bot Token in the credential first');
-                                setShowNewCredModal(true);
-                                setTimeout(() => setChatTestSuccessToast(null), 3500);
-                                return;
-                              }
-                              if (!cid) {
-                                setChatTestSuccessToast('Please enter a Target Chat ID');
-                                setTimeout(() => setChatTestSuccessToast(null), 3000);
-                                return;
-                              }
-                              setChatTestSending(true);
-                              try {
-                                const testMsg = (config.message || config.text || config.welcomeMessage || '🚀 <b>Chat Node Connected!</b>\n\nReal cloud message delivered from Workflow to outside app.').trim();
-                                const res = await fetch('/api/integrations/telegram/send-test', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ botToken: token, chatId: cid, message: testMsg }),
-                                });
-                                const data = await res.json();
-                                if (data.ok) {
-                                  setChatTestSuccessToast(`✓ Delivered to outside app! (Msg #${data.messageId || '1'})`);
-                                } else {
-                                  setChatTestSuccessToast(`Delivery failed: ${data.error || 'Check token & chat ID'}`);
-                                }
-                              } catch (err: any) {
-                                setChatTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
-                              } finally {
-                                setChatTestSending(false);
-                                setTimeout(() => setChatTestSuccessToast(null), 4000);
-                              }
-                            }}
-                            disabled={chatTestSending}
-                            className="py-2 px-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
-                          >
-                            {chatTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                            <span>Send Test to External App</span>
-                          </button>
-                        </div>
+                        {renderExpressionEvaluator(config.chatId || config.chat_id)}
                       </div>
 
                       {/* Node Type Specific Fields */}
@@ -2311,6 +2236,61 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           />
                         </div>
                       )}
+
+                      {/* Live Internet & Mobile App Connectivity Box for Chat */}
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+                            <span className="text-[11px] font-bold text-white tracking-tight">Internet Connected (Live Cloud API)</span>
+                          </div>
+                          <span className="text-[9.5px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                            Mobile App Sync
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Connected to internet so messages can be sent to and received from user mobile devices (Telegram, Webhook, Chat App) seamlessly.
+                        </p>
+
+                        {receivedMobileMsg && (
+                          <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-[11px] space-y-1.5 animate-in fade-in">
+                            <div className="flex items-center justify-between text-emerald-300 font-bold">
+                              <span>✓ Inbound Mobile Message Received:</span>
+                              <span className="text-[10px] font-mono">{receivedMobileMsg.senderName}</span>
+                            </div>
+                            <div className="text-white font-mono bg-slate-900/90 p-2 rounded border border-slate-800 text-xs">
+                              "{receivedMobileMsg.text || '(empty message)'}"
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                              <span>Chat ID: <span className="text-cyan-300 font-mono font-bold">{String(receivedMobileMsg.chatId)}</span></span>
+                              <span>{new Date(receivedMobileMsg.date).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleFetchMobileMessages}
+                            disabled={isReceivingMobile}
+                            className="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                            title="Fetch incoming mobile messages"
+                          >
+                            {isReceivingMobile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-cyan-400" />}
+                            <span>Receive Mobile Msg</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleReceiveAndTriggerWorkflow}
+                            disabled={isReceivingMobile}
+                            className="py-2 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm disabled:opacity-50"
+                            title="Execute workflow with mobile message"
+                          >
+                            {isReceivingMobile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                            <span>Run with Mobile Msg</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -3235,7 +3215,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* EXPANDED EXPRESSION MODAL (2-Column n8n Expression Builder) */}
+      {/* EXPANDED EXPRESSION MODAL */}
       {expandedField && (
         <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
           <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-xs">

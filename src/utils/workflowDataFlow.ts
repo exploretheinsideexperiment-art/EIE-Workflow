@@ -214,7 +214,7 @@ export function resolveNodeInputData(
 }
 
 /**
- * Resolves expressions in n8n format:
+ * Resolves expressions in standard workflow format:
  * - {{ $json.myKey }}
  * - {{ $('Predecessor Node').all()[0].json.key }}
  * - {{ $input.all() }}

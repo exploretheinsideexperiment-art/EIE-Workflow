@@ -251,7 +251,7 @@ export const ExecutionDrawer: React.FC<ExecutionDrawerProps> = ({
               })}
             </div>
 
-            {/* Right: n8n-Style Node Data Inspector (Table / JSON / Schema) */}
+            {/* Right: Node Data Inspector (Table / JSON / Schema) */}
             <div
               className={`flex-1 min-w-0 flex flex-col overflow-hidden bg-slate-900/40 p-2 sm:p-3 ${
                 mobileTab === 'inspector' ? 'block' : 'hidden sm:block'

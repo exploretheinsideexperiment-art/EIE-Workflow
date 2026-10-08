@@ -64,13 +64,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     }
   },
   {
-    id: 'tpl_n8n_ai_agent',
-    name: 'n8n Autonomous AI Agent (Tools, Memory & LLM Model)',
+    id: 'tpl_eie_ai_agent',
+    name: 'Autonomous AI Agent (Tools, Memory & LLM Model)',
     description: 'Autonomous LangChain AI Agent connected with Google Gemini Model, Window Buffer Memory, Calculator Tool, and Web Search Tool to solve complex multi-step automations.',
     category: 'AI & Ingestion',
-    tags: ['AI Agent', 'Gemini', 'Memory', 'Tools', 'n8n Style'],
+    tags: ['AI Agent', 'Gemini', 'Memory', 'Tools', 'Autonomous'],
     workflow: {
-      name: 'n8n Autonomous AI Agent (Tools, Memory & LLM Model)',
+      name: 'Autonomous AI Agent (Tools, Memory & LLM Model)',
       description: 'Autonomous LangChain AI Agent connected with Google Gemini Model, Window Buffer Memory, Calculator Tool, and Web Search Tool.',
       active: true,
       viewport: { x: 40, y: 80, zoom: 0.85 },

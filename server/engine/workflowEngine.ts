@@ -135,7 +135,7 @@ function resolveSingleExpression(expr: string, context: { json: any; nodes: Reco
     if (trimmed === '$today') return new Date().toISOString().split('T')[0];
     if (trimmed === '$executionId') return `exec_${Date.now()}`;
 
-    // Standard n8n syntax: $('Node Name').item.json.field or $('Node Name').all()[0].json.field or $('Node Name').json.field
+    // Standard expression syntax: $('Node Name').item.json.field or $('Node Name').all()[0].json.field or $('Node Name').json.field
     const n8nDollarMatch = trimmed.match(/^\$\(['"](.*?)['"]\)(.*)$/);
     if (n8nDollarMatch) {
       const nodeName = n8nDollarMatch[1];
@@ -438,7 +438,7 @@ export class WorkflowEngine {
         nodeResult
       });
 
-      // 1. n8n Feature: Disabled / Muted node bypass
+      // 1. Feature: Disabled / Muted node bypass
       if (currentNode.disabled) {
         const cleanBypass = extractCleanJson(resolvedInput);
         nodeResult.status = 'skipped';
@@ -473,7 +473,7 @@ export class WorkflowEngine {
       try {
         let outputData: any = null;
 
-        // 2. n8n Feature: Pinned Data override
+        // 2. Feature: Pinned Data override
         if (currentNode.pinnedData) {
           outputData = currentNode.pinnedData;
           execution.logs.push({
@@ -1238,7 +1238,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4b. Logic: Switch Node (n8n Style multi-route)
+      // 4b. Logic: Switch Node (multi-route)
       case 'logic_switch': {
         const switchField = config.switchField || 'type';
         const rawVal = evaluateExpressions(`{{$json.${switchField}}}`, context) ?? incomingData?.[switchField] ?? incomingData?.type ?? '';
@@ -1290,7 +1290,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4d. Logic: Merge Node (n8n Style)
+      // 4d. Logic: Merge Node
       case 'data_merge': {
         const mode = config.mode || 'append';
         let mergedOutput: any = {};
@@ -1313,7 +1313,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4e. Logic: Loop / Split In Batches Node (n8n Style)
+      // 4e. Logic: Loop / Split In Batches Node
       case 'data_loop': {
         const batchSize = Math.max(Number(config.batchSize) || 10, 1);
         const items = Array.isArray(incomingData?.rows || incomingData) ? (incomingData.rows || incomingData) : [incomingData];
@@ -1334,7 +1334,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4f. Respond to Webhook Node (n8n Style)
+      // 4f. Respond to Webhook Node
       case 'respond_to_webhook': {
         const code = Number(config.responseCode) || 200;
         const evaluatedBody = evaluateExpressions(config.responseBody || '{"success": true}', context);
@@ -1354,7 +1354,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4g. Data: Aggregate Items (n8n Style)
+      // 4g. Data: Aggregate Items
       case 'data_aggregate': {
         const type = config.aggregateType || 'to_array';
         const items = Array.isArray(incomingData?.rows || incomingData) ? (incomingData.rows || incomingData) : [incomingData];
@@ -1382,7 +1382,7 @@ export class WorkflowEngine {
         };
       }
 
-      // 4h. Data: Sort & Limit Node (n8n Style)
+      // 4h. Data: Sort & Limit Node
       case 'data_sort_limit': {
         const field = config.sortField || 'id';
         const order = config.sortOrder || 'desc';

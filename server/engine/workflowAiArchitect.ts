@@ -215,7 +215,7 @@ export async function handleEiDoctorChat(
         const connections = workflow?.connections || [];
         const audit = auditWorkflowDataCompleteness(workflow, lang);
 
-        const systemInstruction = `You are "AI Fixer", the expert Autonomous Humanoid Robot Workflow Architect & Troubleshooter inside EIE-Workflow (an advanced n8n-style automation platform).
+        const systemInstruction = `You are "AI Fixer", the expert Autonomous Humanoid Robot Workflow Architect & Troubleshooter inside EIE-Workflow (an advanced cloud automation platform).
 
 YOUR MISSION:
 1. Provide accurate, intelligent, direct answers to the user's questions without canned repetition. Never repeat generic welcome boilerplate greetings.

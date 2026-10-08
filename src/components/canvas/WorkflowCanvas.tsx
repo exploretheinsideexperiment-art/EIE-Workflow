@@ -29,6 +29,7 @@ import {
   isPortCompatible,
   findBestCompatiblePorts
 } from '../../utils/portValidation';
+import { normalizeImportedWorkflow } from '../../utils/workflowImport';
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -45,6 +46,7 @@ interface WorkflowCanvasProps {
   ) => Promise<void>;
   onCreateCredential?: (cred: any) => Promise<any> | void;
   onDeleteCredential?: (id: string) => Promise<void> | void;
+  onImportWorkflow?: (importedData: any) => void;
 }
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
@@ -57,6 +59,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   onCreateNewWorkflow,
   onCreateCredential,
   onDeleteCredential,
+  onImportWorkflow,
 }) => {
   const [workflow, setWorkflow] = useState<Workflow>(initialWorkflow);
   const [credentialsList, setCredentialsList] = useState<Credential[]>(initialCredentials);
@@ -664,7 +667,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     }
   };
 
-  // --- TOGGLE EXPAND / COLLAPSE NODE (n8n Style) ---
+  // --- TOGGLE EXPAND / COLLAPSE NODE ---
   const handleToggleExpandNode = (nodeId: string) => {
     setWorkflow((prev) => {
       const updated = {
@@ -677,7 +680,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  // --- TOGGLE DISABLE / MUTE NODE (n8n Style) ---
+  // --- TOGGLE DISABLE / MUTE NODE ---
   const handleToggleDisableNode = (nodeId: string) => {
     setWorkflow((prev) => {
       const updated = {
@@ -690,7 +693,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setHasUnsavedChanges(true);
   };
 
-  // --- PIN / UNPIN TEST DATA (n8n Style) ---
+  // --- PIN / UNPIN TEST DATA ---
   const handlePinDataNode = (nodeId: string) => {
     const result = latestExecution?.nodeResults[nodeId]?.output;
     setWorkflow((prev) => {
@@ -1105,7 +1108,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setPendingSourcePort(null);
   }, [workflow]);
 
-  // Quick Connect '+' Button on Output Port (n8n Style)
+  // Quick Connect '+' Button on Output Port
   const handleQuickConnect = (nodeId: string, portId: string) => {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     if (!node) return;
@@ -2082,6 +2085,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const editingNode = workflow.nodes.find((n) => n.id === editingNodeId) || null;
   const isPanActive = canvasMode === 'pan' || isSpacePressed;
 
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (onImportWorkflow) {
+          onImportWorkflow(parsed);
+        } else {
+          const normalized = normalizeImportedWorkflow(parsed);
+          setWorkflow(normalized);
+          setHasUnsavedChanges(true);
+        }
+      } catch (err) {
+        console.error('Invalid workflow file:', err);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="relative w-full h-full flex flex-col bg-[#070b14] overflow-hidden select-none">
       {/* Top Dedicated Action Subheader Strip - Completely Non-Overlapping */}
@@ -2127,6 +2150,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onRunWorkflow={handleTestWorkflow}
         onSaveWorkflow={handleSave}
         onExportWorkflow={handleExportWorkflow}
+        onImportWorkflow={handleImportFile}
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
         canConnectSelected={selectedNodeIds.length === 2}
         onConnectSelectedNodes={handleConnectSelectedNodes}
@@ -2143,6 +2167,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onMouseDown={handleMouseDownCanvas}
         onTouchStart={handleTouchStartCanvas}
         onWheel={handleWheel}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0];
+          if (file && file.name.endsWith('.json')) {
+            handleImportFile(file);
+          }
+        }}
         className={`relative flex-1 w-full h-full overflow-hidden bg-[#070b14] select-none touch-none ${
           isPanActive
             ? isPanning
@@ -2214,7 +2249,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
         {/* SVG Canvas Layer for Wires */}
         <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
+          className="absolute inset-0 w-full h-full pointer-events-none z-10"
           style={{ overflow: 'visible' }}
         >
           <defs>
@@ -2315,7 +2350,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             transformOrigin: '0 0',
           }}
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none z-20"
         >
           <div className="relative w-full h-full pointer-events-none">
             {workflow.nodes.map((node) => (
@@ -2477,34 +2512,42 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         </div>
       )}
 
-      {selectedConnectionId && (
-        <div
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-slate-900/98 border border-rose-500/40 shadow-2xl shadow-rose-950/50 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150"
-        >
-          <span className="text-[11px] font-mono text-cyan-300 font-bold px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-800">
-            Wire Selected
-          </span>
-          <button
-            type="button"
-            onClick={handleDeleteSelected}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-950/50 transition cursor-pointer"
-            title="Delete Connection Wire (or press Delete / Backspace)"
+      {selectedConnectionId && (() => {
+        const selConn = workflow.connections.find((c) => c.id === selectedConnectionId);
+        const fromNode = selConn ? workflow.nodes.find((n) => n.id === selConn.fromNodeId) : null;
+        const toNode = selConn ? workflow.nodes.find((n) => n.id === selConn.toNodeId) : null;
+        return (
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-950/98 border border-red-500/60 shadow-2xl shadow-red-950/80 backdrop-blur-xl animate-in slide-in-from-bottom-2 duration-150"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete Wire (Del)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedConnectionId(null)}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-            title="Deselect"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              <span className="text-xs font-semibold text-slate-200">
+                Wire: <strong className="text-white">{fromNode?.name || 'Node'}</strong> → <strong className="text-white">{toNode?.name || 'Node'}</strong>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDeleteConnection(selectedConnectionId)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-950/80 transition cursor-pointer"
+              title="Delete this Connection Wire"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Wire</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedConnectionId(null)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              title="Deselect"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Add Node Search Modal (with Auto-Connect Context support) */}
       <AddNodeModal
@@ -2521,7 +2564,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }
       />
 
-      {/* n8n Node Configuration Modal (3-Pane: Input, Parameters/Settings, Output) */}
+      {/* Node Configuration Modal (3-Pane: Input, Parameters/Settings, Output) */}
       {editingNode && (
         <NodeConfigPanel
           key={editingNode.id}

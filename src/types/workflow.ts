@@ -37,11 +37,11 @@ export interface WorkflowNodeData {
   outputs: NodePort[];
   config: Record<string, any>;
   credentialId?: string;
-  disabled?: boolean; // n8n: disabled / muted node
-  pinnedData?: any; // n8n: pinned test data
-  notes?: string; // n8n: custom documentation note
+  disabled?: boolean; // disabled / muted node
+  pinnedData?: any; // pinned test data
+  notes?: string; // custom documentation note
   isExpanded?: boolean; // expandable card view on canvas
-  n8nPackage?: string; // official n8n package e.g. n8n-nodes-base.httpRequest
+  packageIdentifier?: string; // package e.g. eie-nodes-base.httpRequest
   docsUrl?: string;
   version?: string;
   executionSettings?: {
@@ -91,7 +91,7 @@ export interface NodeDefinition {
   defaultConfig: Record<string, any>;
   requiresCredentials?: boolean;
   credentialType?: string;
-  n8nPackage?: string;
+  packageIdentifier?: string;
   docsUrl?: string;
   version?: string;
 }

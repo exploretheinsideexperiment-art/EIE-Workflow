@@ -151,7 +151,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               <p className="text-xs text-slate-400">
                 {autoConnectContext
                   ? 'Select any application, tool, or AI model to automatically place & connect it'
-                  : 'Choose triggers, applications, autonomous AI agents, or data operations (n8n compatible)'}
+                  : 'Choose triggers, applications, autonomous AI agents, or data operations'}
               </p>
             </div>
           </div>

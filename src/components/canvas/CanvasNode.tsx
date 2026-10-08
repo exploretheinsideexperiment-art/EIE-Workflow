@@ -199,6 +199,68 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   const toolCount = toolConns.length;
   const mainOutputTargets = getPortConnections('out_main', true);
 
+  const handleOutputPortPointerDown = (
+    e: React.MouseEvent | React.TouchEvent,
+    portId: string
+  ) => {
+    e.stopPropagation();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const targetElement = e.currentTarget as HTMLElement;
+    const rect = targetElement.getBoundingClientRect();
+    const portPos = {
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2,
+    };
+
+    let wireStarted = false;
+
+    // Timer for hold/long-press: ~240ms triggers interactive wire connection
+    const timer = setTimeout(() => {
+      wireStarted = true;
+      onStartPortDrag(node.id, portId, true, portPos);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(25); } catch {}
+      }
+    }, 240);
+
+    const onMove = (moveEv: MouseEvent | TouchEvent) => {
+      const curX = 'touches' in moveEv ? moveEv.touches[0].clientX : moveEv.clientX;
+      const curY = 'touches' in moveEv ? moveEv.touches[0].clientY : moveEv.clientY;
+      if (Math.hypot(curX - clientX, curY - clientY) > 5 && !wireStarted) {
+        clearTimeout(timer);
+        wireStarted = true;
+        onStartPortDrag(node.id, portId, true, portPos);
+        cleanup();
+      }
+    };
+
+    const onUp = () => {
+      clearTimeout(timer);
+      cleanup();
+      if (!wireStarted) {
+        // Quick click without hold: open "Add Node" option
+        if (onQuickConnect) {
+          onQuickConnect(node.id, portId);
+        } else if (onPortClick) {
+          onPortClick(node.id, portId, true);
+        }
+      }
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
+  };
+
   return (
     <div
       ref={nodeRef}
@@ -208,16 +270,16 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         width: isExpanded
           ? isAiAgent
             ? toolCount > 1
-              ? '320px'
-              : '290px'
-            : '290px'
+              ? '330px'
+              : '300px'
+            : '300px'
           : isAiAgent
           ? toolCount > 1
-            ? '280px'
+            ? '290px'
             : toolCount === 1
-            ? '250px'
-            : '230px'
-          : '200px',
+            ? '265px'
+            : '245px'
+          : '235px',
         touchAction: 'none',
       }}
       className={`absolute select-none pointer-events-auto rounded-xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move shadow-md shadow-black/30 ${
@@ -283,7 +345,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 onTestSingleNode(node);
               }}
               className="p-1 rounded-md hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 transition cursor-pointer"
-              title="Execute Step (n8n)"
+              title="Execute Step"
             >
               <Play className="w-3 h-3 fill-current" />
             </button>
@@ -313,7 +375,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               className={`p-1 rounded-md transition cursor-pointer ${
                 node.pinnedData ? 'text-purple-400 bg-purple-500/20' : 'text-slate-300 hover:text-purple-300 hover:bg-slate-800'
               }`}
-              title={node.pinnedData ? 'Unpin Data' : 'Pin Test Data (n8n)'}
+              title={node.pinnedData ? 'Unpin Data' : 'Pin Test Data'}
             >
               <Pin className="w-3 h-3" />
             </button>
@@ -359,35 +421,38 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       </div>
 
-      {/* Node Header - Compact Standard Layout */}
-      <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-800/80">
+      {/* Node Header - High Contrast & Clearly Visible Layout */}
+      <div className="px-3 py-2 flex items-start justify-between border-b border-slate-800/90 gap-2 bg-slate-900/40 rounded-t-xl">
         <div
-          className="flex items-center gap-2 min-w-0 cursor-pointer"
+          className="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onOpenConfig(node.id);
           }}
           title="Click to open settings"
         >
-          <div className={`w-6 h-6 p-1 rounded-lg ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0 flex items-center justify-center shadow-xs`}>
-            <IconComponent className="w-3.5 h-3.5" />
+          <div className={`w-7 h-7 p-1.5 rounded-lg ${catStyle.bg} ${catStyle.text} border ${catStyle.border} shrink-0 flex items-center justify-center shadow-sm mt-0.5`}>
+            <IconComponent className="w-4 h-4" />
           </div>
-          <div className="min-w-0">
-            <h4 className="text-xs font-semibold text-slate-100 truncate tracking-tight flex items-center gap-1">
-              <span className="truncate">{node.name}</span>
+          <div className="min-w-0 flex-1">
+            <h4
+              className="text-[13px] font-bold text-white tracking-normal leading-tight line-clamp-2 drop-shadow-xs"
+              title={node.name}
+            >
+              {node.name}
             </h4>
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className={`text-[8.5px] font-mono uppercase tracking-wider ${catStyle.text}`}>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              <span className={`text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800/80 ${catStyle.text}`}>
                 {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Tool' : node.category}
               </span>
               {node.disabled && (
-                <span className="text-[8px] font-bold text-amber-400 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-600/40">
+                <span className="text-[8.5px] font-bold text-amber-400 bg-amber-950/90 px-1.5 py-0.5 rounded border border-amber-600/40">
                   Off
                 </span>
               )}
               {node.pinnedData && (
-                <span className="text-[8px] font-bold text-purple-300 bg-purple-950/80 px-1 py-0.2 rounded border border-purple-600/40">
-                  📌
+                <span className="text-[8.5px] font-bold text-purple-300 bg-purple-950/90 px-1.5 py-0.5 rounded border border-purple-600/40">
+                  📌 Pinned
                 </span>
               )}
             </div>
@@ -537,7 +602,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         )}
       </div>
 
-      {/* Note Pill (n8n feature) */}
+      {/* Note Pill */}
       {node.notes && (
         <div className="mx-2 mb-1.5 p-1 rounded bg-amber-950/40 border border-amber-500/30 text-[9px] text-amber-300 flex items-start gap-1">
           <FileText className="w-2.5 h-2.5 text-amber-400 shrink-0 mt-0.5" />
@@ -545,7 +610,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* EXPANDED IN-CANVAS VIEW (n8n Style) */}
+      {/* EXPANDED IN-CANVAS VIEW */}
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 space-y-2 bg-slate-950/60 rounded-b-2xl">
           {/* Quick Parameters & Operations Summary */}
@@ -709,7 +774,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         </div>
       )}
 
-      {/* SPECIAL AI AGENT INTERIOR (n8n Style: Model, Memory, Tools Overview) */}
+      {/* SPECIAL AI AGENT INTERIOR */}
       {isAiAgent && (
         <div className="px-3 pb-5 pt-2 border-t border-purple-500/20 flex flex-col gap-2 bg-slate-950/50 rounded-b-2xl">
           {/* Agent Header Banner */}
@@ -910,7 +975,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         })}
       </div>
 
-      {/* SPECIAL AI AGENT BOTTOM PORTS (n8n Style: Model, Memory, and Multi-Tool Sockets with Persistent '+' Terminal) */}
+      {/* SPECIAL AI AGENT BOTTOM PORTS */}
       {isAiAgent && (
         <div className="absolute -bottom-3 left-0 right-0 flex items-start justify-around px-2 z-30 pointer-events-auto">
           {/* 1. CHAT MODEL SUB-NODE (Single slot: Only 1 connection allowed) */}
@@ -1394,8 +1459,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 data-node-id={node.id}
                 data-port-id={port.id}
                 data-is-output="true"
-                title={`Output: ${port.label || port.name} (${colors.name}) - Click or drag to connect wire to another node (IN)`}
-                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-md shadow-black relative cursor-pointer z-10 group/btn ${
+                title={`Output: ${port.label || port.name} (${colors.name}) - Click: Add Node (+) | Hold/Drag: Connect Wire`}
+                className={`w-5 h-5 rounded-full bg-slate-900 border-2 ${colors.border} transition-all flex items-center justify-center shadow-md shadow-black relative cursor-pointer z-10 group/btn active:scale-95 ${
                   isDraggingThis
                     ? `ring-3 ring-offset-1 ring-offset-slate-950 ${colors.ring} scale-110 z-40 animate-pulse`
                     : isConnectingActive
@@ -1406,16 +1471,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPortClick?.(node.id, port.id, true);
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  onStartPortDrag(node.id, port.id, true, {
-                    x: rect.x + rect.width / 2,
-                    y: rect.y + rect.height / 2,
-                  });
-                }}
+                onMouseDown={(e) => handleOutputPortPointerDown(e, port.id)}
+                onTouchStart={(e) => handleOutputPortPointerDown(e, port.id)}
               >
                 {/* Bold Plus Icon inside protruding terminal */}
                 <Plus

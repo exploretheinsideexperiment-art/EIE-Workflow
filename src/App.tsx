@@ -32,6 +32,7 @@ import { LandingView } from './components/views/LandingView';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { CreateWorkflowModal } from './components/modals/CreateWorkflowModal';
+import { normalizeImportedWorkflow } from './utils/workflowImport';
 
 const DEFAULT_USER: User = {
   id: 'usr_explore',
@@ -512,36 +513,28 @@ export default function App() {
   };
 
   const handleImportWorkflow = async (importedWf: any) => {
-    const newWf: Workflow = {
-      id: `wf_${Date.now()}`,
-      name: importedWf.name ? `${importedWf.name} (Imported)` : 'Imported Workflow',
-      description: importedWf.description || '',
-      active: false,
-      nodes: importedWf.nodes || [],
-      connections: importedWf.connections || [],
-      viewport: importedWf.viewport || { x: 120, y: 120, zoom: 1 },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      executionCount: 0,
-      workspaceId: workspace?.id || 'ws_explore',
-    };
-
-    setWorkflows((prev) => {
-      const updated = [newWf, ...prev];
-      try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
-      return updated;
-    });
-    setActiveWorkflowId(newWf.id);
-    setCurrentView('editor');
-
     try {
-      await fetch('/api/workflows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newWf),
+      const newWf: Workflow = normalizeImportedWorkflow(importedWf, workspace?.id || 'ws_explore');
+
+      setWorkflows((prev) => {
+        const updated = [newWf, ...prev.filter((w) => w.id !== newWf.id)];
+        try { localStorage.setItem('eie_workflows', JSON.stringify(updated)); } catch {}
+        return updated;
       });
-    } catch {
-      // Handled locally
+      setActiveWorkflowId(newWf.id);
+      setCurrentView('editor');
+
+      try {
+        await fetch('/api/workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newWf),
+        });
+      } catch {
+        // Handled locally
+      }
+    } catch (err) {
+      console.error('Failed to parse and import workflow:', err);
     }
   };
 
@@ -757,6 +750,7 @@ export default function App() {
               onCreateNewWorkflow={handleCreateNewWorkflow}
               onCreateCredential={handleAddCredential}
               onDeleteCredential={handleDeleteCredential}
+              onImportWorkflow={handleImportWorkflow}
             />
           )}
 

@@ -27,10 +27,61 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   onDelete,
   onSelect,
 }) => {
+  const [isLongPressing, setIsLongPressing] = React.useState(false);
+  const pressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleWirePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    setIsLongPressing(true);
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    let didHold = false;
+
+    // Holding for ~250ms activates delete option mode
+    pressTimerRef.current = setTimeout(() => {
+      didHold = true;
+      setIsLongPressing(false);
+      onSelect?.(connection.id);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(40); } catch {}
+      }
+    }, 240);
+
+    const onMove = (moveEv: MouseEvent | TouchEvent) => {
+      const curX = 'touches' in moveEv ? moveEv.touches[0].clientX : moveEv.clientX;
+      const curY = 'touches' in moveEv ? moveEv.touches[0].clientY : moveEv.clientY;
+      if (Math.hypot(curX - clientX, curY - clientY) > 8) {
+        if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+        setIsLongPressing(false);
+        cleanup();
+      }
+    };
+
+    const onUp = () => {
+      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+      setIsLongPressing(false);
+      cleanup();
+      // If clicked without holding, immediately select the wire to activate delete option
+      onSelect?.(connection.id);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
+  };
   const dx = endPos.x - startPos.x;
   const dy = endPos.y - startPos.y;
 
-  // Check if target is a bottom-entering port (n8n subnode ports: Chat Model, Memory, Tool)
+  // Check if target is a bottom-entering port (subnode ports: Chat Model, Memory, Tool)
   const isBottomTarget =
     ['in_model', 'in_memory', 'in_tools'].includes(connection.toPortId) ||
     connection.toPortId.startsWith('in_tools');
@@ -85,24 +136,23 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
 
   return (
     <g
-      className="group cursor-pointer select-none pointer-events-auto"
+      className="group cursor-pointer select-none"
       style={{ pointerEvents: 'all' }}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-      }}
+      onMouseDown={handleWirePointerDown}
+      onTouchStart={handleWirePointerDown}
       onClick={(e) => {
         e.stopPropagation();
         onSelect?.(connection.id);
       }}
     >
-      {/* Invisible wider hit area for easy hover/clicking */}
+      {/* Invisible wider hit area for easy hover/clicking (46px width) */}
       <path
         d={pathData}
         fill="none"
         stroke="rgba(0, 0, 0, 0.001)"
-        strokeWidth="32"
+        strokeWidth="46"
         strokeLinecap="round"
-        style={{ pointerEvents: 'stroke' }}
+        style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
       />
 
       {/* Background shadow path */}
@@ -138,7 +188,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
 
       {/* Port type indicator pill along wire when hovered or selected */}
       {isSelected && (
-        <g transform={`translate(${midX}, ${midY - 16})`}>
+        <g transform={`translate(${midX}, ${midY - 18})`}>
           <rect
             x="-32"
             y="-10"
@@ -171,7 +221,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         </circle>
       )}
 
-      {/* Hover and Selected delete handle */}
+      {/* Hover, Click, and Long-press Delete Handle */}
       <g
         className={`${
           isSelected ? 'opacity-100 scale-105' : 'opacity-0 group-hover:opacity-100'
@@ -179,6 +229,9 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         transform={`translate(${midX}, ${midY})`}
         style={{ pointerEvents: 'all' }}
         onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
+        onTouchStart={(e) => {
           e.stopPropagation();
         }}
         onClick={(e) => {
@@ -189,34 +242,34 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
       >
         <title>Delete Wire (Click or press Delete / Backspace)</title>
         {/* Invisible wider hit area for easy clicking */}
-        <rect x="-48" y="-18" width="96" height="36" fill="rgba(0,0,0,0.001)" />
+        <rect x="-56" y="-22" width="112" height="44" fill="rgba(0,0,0,0.001)" />
         {/* Visual Pill Badge */}
         <rect
-          x="-44"
-          y="-14"
-          width="88"
-          height="28"
-          rx="14"
-          fill="#1c0a0e"
+          x="-50"
+          y="-16"
+          width="100"
+          height="32"
+          rx="16"
+          fill="#20070b"
           stroke="#ef4444"
-          strokeWidth="2"
-          filter="drop-shadow(0 0 10px rgba(239, 68, 68, 0.8))"
+          strokeWidth="2.5"
+          filter="drop-shadow(0 0 12px rgba(239, 68, 68, 0.9))"
         />
         {/* Trash/X Icon */}
-        <g transform="translate(-26, 0)">
-          <circle r="8" fill="#ef4444" />
-          <line x1="-3.5" y1="-3.5" x2="3.5" y2="3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-          <line x1="3.5" y1="-3.5" x2="-3.5" y2="3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+        <g transform="translate(-30, 0)">
+          <circle r="9" fill="#ef4444" />
+          <line x1="-4" y1="-4" x2="4" y2="4" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="4" y1="-4" x2="-4" y2="4" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
         </g>
         <text
-          x="6"
-          y="4"
+          x="10"
+          y="4.5"
           textAnchor="middle"
-          fill="#fca5a5"
-          fontSize="11"
+          fill="#fecaca"
+          fontSize="11.5"
           fontWeight="bold"
-          fontFamily="sans-serif"
-          letterSpacing="0.3"
+          fontFamily="system-ui, sans-serif"
+          letterSpacing="0.4"
         >
           Delete
         </text>

@@ -24,7 +24,8 @@ import {
   Edit3,
   Check,
   CloudLightning,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -63,6 +64,7 @@ interface CanvasToolbarProps {
   onRunWorkflow: () => void;
   onSaveWorkflow: () => void;
   onExportWorkflow?: () => void;
+  onImportWorkflow?: (file: File) => void;
   onToggleActive: () => void;
   onOpenCloudModal?: () => void;
   onOpenEiDoctor?: () => void;
@@ -106,6 +108,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onRunWorkflow,
   onSaveWorkflow,
   onExportWorkflow,
+  onImportWorkflow,
   onToggleActive,
   onOpenCloudModal,
   onOpenEiDoctor,
@@ -136,7 +139,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             </button>
           )}
 
-          {/* Primary "+ Add Node" Button - n8n style */}
+          {/* Primary "+ Add Node" Button */}
           <button
             onClick={onOpenAddNode}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/25 active:scale-95 transition cursor-pointer whitespace-nowrap shrink-0"
@@ -251,7 +254,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           </button>
         </div>
 
-        {/* Center: Editable Workflow Title & Rename Input (n8n Style) */}
+        {/* Center: Editable Workflow Title & Rename Input */}
         <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/80 border border-slate-700/80 hover:border-cyan-500/50 transition min-w-0 max-w-[200px] xs:max-w-[260px] sm:max-w-xs md:max-w-md shrink">
           {isEditingName ? (
             <form
@@ -394,16 +397,39 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             <span>{isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}</span>
           </button>
 
-          {/* Export / Download Workflow (n8n JSON) */}
+          {/* Export / Download Workflow JSON */}
           {onExportWorkflow && (
             <button
               onClick={onExportWorkflow}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/50 transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-              title="Download workflow as n8n JSON file"
+              title="Download workflow as JSON file"
             >
               <Download className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden sm:inline">Export JSON</span>
             </button>
+          )}
+
+          {/* Import Workflow JSON */}
+          {onImportWorkflow && (
+            <label
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-cyan-500/50 transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              title="Import workflow from JSON file"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Import JSON</span>
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onImportWorkflow(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
           )}
         </div>
       </div>
