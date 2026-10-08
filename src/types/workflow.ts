@@ -41,6 +41,9 @@ export interface WorkflowNodeData {
   pinnedData?: any; // n8n: pinned test data
   notes?: string; // n8n: custom documentation note
   isExpanded?: boolean; // expandable card view on canvas
+  n8nPackage?: string; // official n8n package e.g. n8n-nodes-base.httpRequest
+  docsUrl?: string;
+  version?: string;
   executionSettings?: {
     continueOnError?: boolean;
     retryCount?: number;
@@ -88,6 +91,9 @@ export interface NodeDefinition {
   defaultConfig: Record<string, any>;
   requiresCredentials?: boolean;
   credentialType?: string;
+  n8nPackage?: string;
+  docsUrl?: string;
+  version?: string;
 }
 
 export interface ExecutionNodeResult {

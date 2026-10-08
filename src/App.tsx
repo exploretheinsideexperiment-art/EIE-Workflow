@@ -65,6 +65,20 @@ const getDefaultWorkflows = (): Workflow[] => {
 };
 
 const DEFAULT_CREDENTIALS: Credential[] = [
+  {
+    id: 'cred_telegram_bot',
+    workspaceId: 'ws_explore',
+    name: 'Telegram Bot API',
+    type: 'telegram',
+    data: {
+      botToken: '',
+      accessToken: '',
+      token: '',
+      chatId: '',
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
   { id: 'c1', workspaceId: 'ws_explore', name: 'OpenAI Production Key', type: 'openai', data: { apiKey: 'sk-demo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: 'c2', workspaceId: 'ws_explore', name: 'Gemini Pro 1.5 API Key', type: 'gemini', data: { apiKey: 'AIzaDemo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: 'c3', workspaceId: 'ws_explore', name: 'Slack Bot Workspace Token', type: 'slack', data: { botToken: 'xoxb-demo...' }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },

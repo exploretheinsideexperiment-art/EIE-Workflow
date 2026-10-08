@@ -405,9 +405,14 @@ function createDefaultData(): DatabaseSchema {
     {
       id: 'cred_telegram_bot',
       workspaceId: workspaceId,
-      name: 'DevOps Alert Bot',
+      name: 'Telegram Bot API',
       type: 'telegram',
-      data: { botToken: '689241****:AAH*****************' },
+      data: {
+        botToken: '',
+        accessToken: '',
+        token: '',
+        chatId: '',
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },

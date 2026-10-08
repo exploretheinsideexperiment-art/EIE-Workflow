@@ -37,13 +37,14 @@ import {
   Pencil,
   FileSpreadsheet,
   Mail,
-  Loader2
+  Loader2,
+  Save
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { Workflow, WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
 import { NodeDataInspector } from '../common/NodeDataInspector';
 import { evaluateExpressionInContext, getDefaultSampleOutputForNodeType } from '../../utils/workflowDataFlow';
-import { NODE_LIBRARY } from '../../constants/nodeLibrary';
+import { NODE_LIBRARY, getN8nNodeMeta } from '../../constants/nodeLibrary';
 
 interface NodeConfigPanelProps {
   node: WorkflowNodeData | null;
@@ -56,7 +57,7 @@ interface NodeConfigPanelProps {
   onDeleteNode: (nodeId: string) => void;
   onTestNode: (node: WorkflowNodeData) => Promise<any>;
   onOpenLiveChat?: () => void;
-  onCreateCredential?: (cred: Partial<Credential>) => void;
+  onCreateCredential?: (cred: Partial<Credential>) => Promise<any> | any;
   onDeleteCredential?: (credId: string) => Promise<void> | void;
   onSaveStep?: () => Promise<void>;
 }
@@ -150,12 +151,70 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   const [chatTestMsg, setChatTestMsg] = useState('');
   const [chatTestResponse, setChatTestResponse] = useState<string | null>(null);
   const [isChatTesting, setIsChatTesting] = useState(false);
+  const [chatVerifying, setChatVerifying] = useState(false);
+  const [chatVerifiedInfo, setChatVerifiedInfo] = useState<{
+    status: string;
+    botName?: string;
+    botUsername?: string;
+    chatName?: string;
+    chatUsername?: string;
+    chatId?: string;
+  } | null>(null);
+  const [chatTestSending, setChatTestSending] = useState(false);
+  const [chatTestSuccessToast, setChatTestSuccessToast] = useState<string | null>(null);
+
+  // Telegram 3 Options: 'connection' | 'sharing' | 'details'
+  const [tgOptionTab, setTgOptionTab] = useState<'connection' | 'sharing' | 'details'>('connection');
+  const [tgVerifying, setTgVerifying] = useState(false);
+  const [tgVerifiedInfo, setTgVerifiedInfo] = useState<{
+    status: string;
+    botName?: string;
+    botUsername?: string;
+    chatName?: string;
+    chatUsername?: string;
+    chatId?: string;
+  } | null>(null);
+  const [tgTestSending, setTgTestSending] = useState(false);
+  const [tgTestSuccessToast, setTgTestSuccessToast] = useState<string | null>(null);
 
   if (!node) return null;
 
   const IconComponent = (((Icons as any)[node.icon || ''] || Icons.Box)) as React.ComponentType<{ className?: string }>;
   const config = node.config || {};
   const executionSettings = node.executionSettings || {};
+
+  // n8n Node metadata & package lookup
+  const n8nMeta = useMemo(() => getN8nNodeMeta(node.type, node.name), [node.type, node.name]);
+
+  // Extract keys and variables from incoming inputData for the expression builder
+  const inputKeys = useMemo(() => {
+    if (!inputData) return [];
+    const first = Array.isArray(inputData)
+      ? (inputData[0]?.json || inputData[0] || {})
+      : (inputData?.json || inputData || {});
+    if (typeof first !== 'object' || first === null) return [];
+    return Object.keys(first).map((k) => ({
+      key: k,
+      value: (first as any)[k],
+      expr: `{{$json.${k}}}`,
+    }));
+  }, [inputData]);
+
+  // Keyboard shortcut listener: Ctrl+Enter / Cmd+Enter executes step, Esc closes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleRunSingleTest();
+      }
+      if (e.key === 'Escape' && !expandedField && !showNewCredModal) {
+        e.preventDefault();
+        handleSaveAndClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [expandedField, showNewCredModal, node]);
 
   const handleConfigChange = (key: string, value: any) => {
     onUpdateConfig(node.id, {
@@ -228,10 +287,6 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       t === 'trigger_manual' ||
       t === 'trigger_schedule' ||
       t === 'trigger_webhook' ||
-      t === 'trigger_chat' ||
-      t.startsWith('chat_memory') ||
-      t.startsWith('chat_sentiment') ||
-      t.startsWith('chat_webhook') ||
       t === 'http_request' ||
       t === 'code' ||
       t === 'set' ||
@@ -248,9 +303,11 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
       return def.requiresCredentials;
     }
 
-    // 3. Service / External App nodes that require API keys or tokens
+    // 3. Service / External App / Chat nodes that require API keys or tokens
     return (
       t.startsWith('app_') ||
+      t.startsWith('chat_') ||
+      t.includes('chat') ||
       t.includes('telegram') ||
       t.includes('whatsapp') ||
       t.includes('slack') ||
@@ -284,8 +341,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     if (!supportsCredentials) return [];
     const typeLower = node.type.toLowerCase();
     let filtered: Credential[] = [];
-    if (typeLower.includes('telegram')) filtered = credentials.filter((c) => c.type === 'telegram');
-    else if (typeLower.includes('slack')) filtered = credentials.filter((c) => c.type === 'slack');
+    if (typeLower.includes('telegram') || typeLower.includes('chat')) {
+      filtered = credentials.filter((c) => c.type === 'telegram' || c.type === 'chat' || c.type === 'generic');
+    } else if (typeLower.includes('slack')) filtered = credentials.filter((c) => c.type === 'slack');
     else if (typeLower.includes('discord')) filtered = credentials.filter((c) => c.type === 'discord');
     else if (typeLower.includes('sheets') || typeLower.includes('gmail') || typeLower.includes('google')) {
       filtered = credentials.filter((c) => c.type === 'google' || c.type === 'google_sheets' || c.type === 'gmail');
@@ -339,15 +397,15 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   // Dynamic Credential Meta by Node Type (no hardcoded Telegram leaks)
   const getCredDefaults = () => {
     const t = node.type.toLowerCase();
-    if (t.includes('telegram')) {
+    if (t.includes('telegram') || t.includes('chat')) {
       return {
-        title: 'Telegram Bot Token',
-        nameDefault: 'Telegram Bot Account',
+        title: 'Telegram / Chat Bot Credential',
+        nameDefault: 'Telegram / Chat Account',
         namePlaceholder: 'e.g. My Alerts Bot',
-        keyLabel: 'Telegram Bot Token (from @BotFather)',
-        keyPlaceholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...',
+        keyLabel: 'Bot Token / Access Token',
+        keyPlaceholder: '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz...',
         secondaryLabel: 'Default Chat ID / Channel ID',
-        secondaryPlaceholder: 'e.g. -100123456789 or @channel',
+        secondaryPlaceholder: 'e.g. 1234567890 or @channel',
         type: 'telegram',
       };
     }
@@ -597,7 +655,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         className="fixed inset-0 sm:inset-3 md:inset-6 lg:inset-8 z-55 bg-slate-900 border border-slate-800 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* TOP MODAL HEADER: Node Icon, Title, Docs Link, Close Button */}
+        {/* TOP MODAL HEADER: Node Icon, Title, n8n Package, Version, Active Toggle, Docs Link, Close Button */}
         <div className="h-13 px-4 border-b border-slate-800 bg-slate-950/90 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* App / Node Icon */}
@@ -606,24 +664,63 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             </div>
 
             {/* Editable Title */}
-            <input
-              type="text"
-              value={node.name}
-              onChange={(e) => onUpdateConfig(node.id, { name: e.target.value })}
-              className="text-sm sm:text-base font-bold text-white bg-transparent border-b border-transparent hover:border-slate-750 focus:border-orange-500 focus:outline-none w-48 sm:w-72 truncate"
-              title="Click to rename step"
-            />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <input
+                type="text"
+                value={node.name}
+                onChange={(e) => onUpdateConfig(node.id, { name: e.target.value })}
+                className="text-sm sm:text-base font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-[#FF6D5A] focus:outline-none w-36 sm:w-56 truncate"
+                title="Click to rename step"
+              />
+            </div>
 
-            {/* Docs link */}
+            {/* n8n Package Identifier Badge */}
+            <span
+              className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-slate-900 text-cyan-300 border border-slate-800"
+              title="Official n8n Node Identifier"
+            >
+              {n8nMeta.package}
+            </span>
+
+            {/* Version Badge */}
+            <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800">
+              {n8nMeta.version}
+            </span>
+
+            {/* n8n Node Active / Disabled Switch */}
+            <button
+              type="button"
+              onClick={() => onUpdateConfig(node.id, { disabled: !node.disabled })}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition cursor-pointer ${
+                node.disabled
+                  ? 'bg-amber-950/60 text-amber-400 border-amber-600/40 hover:bg-amber-900/40'
+                  : 'bg-emerald-950/60 text-emerald-400 border-emerald-600/40 hover:bg-emerald-900/40'
+              }`}
+              title={node.disabled ? "Node is currently disabled/muted (click to activate)" : "Node is active (click to mute/disable)"}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${node.disabled ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+              <span>{node.disabled ? 'Disabled' : 'Active'}</span>
+            </button>
+
+            {/* Official n8n Docs link */}
             <a
-              href="https://docs.n8n.io"
+              href={n8nMeta.docsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition ml-2"
+              className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition ml-1"
+              title="Open official n8n documentation"
             >
               <span>Docs</span>
               <ExternalLink className="w-3 h-3 text-slate-500" />
             </a>
+
+            {/* Hotkey hint */}
+            <span
+              className="hidden xl:inline-flex items-center text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800"
+              title="Shortcut: Press Ctrl+Enter or Cmd+Enter to execute step"
+            >
+              Ctrl + ↵
+            </span>
           </div>
 
           {/* Right Action Icons: Save Step, Delete Step & Close */}
@@ -833,7 +930,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {/* CREDENTIAL SELECTOR (Top of Parameters, Matching Screenshot 1) */}
                   {supportsCredentials && (
                     <div className="space-y-1.5 relative">
-                      <label className="text-[11px] font-semibold text-slate-300 block">Credential</label>
+                      <label className="text-[11px] font-semibold text-slate-300 block">Credential to connect with</label>
 
                       {/* Dropdown Input with Key Icon, Name, Caret, Pencil */}
                       <div className="relative">
@@ -954,6 +1051,44 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </div>
                         )}
                       </div>
+
+                      {/* Active Credential Info & Quick Edit */}
+                      {selectedCredential ? (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span className="truncate">Active Account: <strong>{selectedCredential.name}</strong></span>
+                            {selectedCredential.data?.botToken && (
+                              <span className="text-[10px] font-mono text-purple-300">
+                                (Token: ••••{selectedCredential.data.botToken.slice(-4)})
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewCredName(selectedCredential.name);
+                              setNewCredKey(selectedCredential.data?.botToken || selectedCredential.data?.apiKey || selectedCredential.data?.token || '');
+                              setNewCredSecondary(selectedCredential.data?.chatId || selectedCredential.data?.host || '');
+                              setShowNewCredModal(true);
+                            }}
+                            className="text-[10px] text-purple-300 hover:text-white font-semibold underline shrink-0 cursor-pointer"
+                          >
+                            Edit Token
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded-lg bg-slate-900/80 border border-dashed border-slate-700/80 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Configure your API Key / Bot Token in Credential:</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowNewCredModal(true)}
+                            className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 font-semibold text-[10px] border border-purple-500/40 cursor-pointer"
+                          >
+                            + Set Credential
+                          </button>
+                        </div>
+                      )}
 
                       {/* Modal for Quick Credential Creation */}
                       {showNewCredModal && (() => {
@@ -1083,40 +1218,213 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {/* NODE PARAMETER FIELDS                                  */}
                   {/* ------------------------------------------------------ */}
 
-                  {/* 1. TELEGRAM UPDATE NODE (MATCHING SCREENSHOT 1 EXACTLY) */}
+                  {/* 1. TELEGRAM NODE (Authentic n8n Specification, Clean & Direct) */}
                   {(node.type === 'app_telegram' || node.type === 'comm_telegram') && (
                     <div className="space-y-3.5">
-                      {/* Chat ID ("C..") */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Chat ID</label>
-                        <div className="relative">
+                      {/* n8n Resource & Operation */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Resource</label>
+                          <select
+                            value={config.resource || 'message'}
+                            onChange={(e) => handleConfigChange('resource', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="message">Message</option>
+                            <option value="chat">Chat</option>
+                            <option value="callback">Callback</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Operation</label>
+                          <select
+                            value={config.operation || 'sendMessage'}
+                            onChange={(e) => handleConfigChange('operation', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="sendMessage">Send Text Message</option>
+                            <option value="sendPhoto">Send Photo</option>
+                            <option value="sendDocument">Send Document</option>
+                            <option value="sendLocation">Send Location</option>
+                            <option value="getChat">Get Chat</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Toast Feedback */}
+                      {tgTestSuccessToast && (
+                        <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>{tgTestSuccessToast}</span>
+                        </div>
+                      )}
+
+                      {/* Dynamic External Connection Status Card (Only shown when live verified) */}
+                      {tgVerifiedInfo && (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/70 to-slate-950 border border-emerald-500/40 space-y-1.5 shadow-sm animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              Status: {tgVerifiedInfo.status || 'Connected (Success)'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Cloud Active
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-300 space-y-0.5">
+                            {tgVerifiedInfo.botName && (
+                              <p className="flex items-center gap-1">
+                                <strong className="text-slate-400">Bot:</strong>
+                                <span className="text-white font-medium">{tgVerifiedInfo.botName}</span>
+                                {tgVerifiedInfo.botUsername && (
+                                  <span className="text-blue-400 font-mono text-[10px]">(@{tgVerifiedInfo.botUsername})</span>
+                                )}
+                              </p>
+                            )}
+                            {tgVerifiedInfo.chatId && (
+                              <p className="flex items-center gap-1">
+                                <strong className="text-slate-400">Target Chat:</strong>
+                                <span className="text-emerald-400 font-mono text-[10px]">{tgVerifiedInfo.chatId}</span>
+                                {tgVerifiedInfo.chatName && (
+                                  <span className="text-white font-medium">({tgVerifiedInfo.chatName})</span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Target Recipient Chat & Delivery Configuration */}
+                      <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                            Target Chat ID
+                          </label>
+                          <span className="text-[10px] text-slate-400">Recipient Chat ID or @channel</span>
+                        </div>
+
+                        <div>
                           <input
                             type="text"
-                            value={config.chatId || config.chat_id || ''}
+                            value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
                             onChange={(e) => {
                               handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
                             }}
-                            placeholder="5102553052"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                            placeholder="e.g. 1234567890 or @mychannel"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
                           />
+                          {renderExpressionEvaluator(config.chatId || config.chat_id)}
                         </div>
-                        {renderExpressionEvaluator(config.chatId || config.chat_id)}
+
+                        {/* Action Buttons: Verify & Send Test via Real Cloud */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                              if (!token) {
+                                setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
+                                setShowNewCredModal(true);
+                                setTimeout(() => setTgTestSuccessToast(null), 3500);
+                                return;
+                              }
+                              setTgVerifying(true);
+                              try {
+                                const res = await fetch('/api/integrations/telegram/verify', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ botToken: token, chatId: cid }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setTgVerifiedInfo({
+                                    status: 'Connected (Success)',
+                                    botName: data.bot?.first_name || 'Telegram Bot',
+                                    botUsername: data.bot?.username,
+                                    chatName: data.chat ? [data.chat.first_name, data.chat.last_name].filter(Boolean).join(' ') || data.chat.title : undefined,
+                                    chatUsername: data.chat?.username,
+                                    chatId: cid || data.chat?.id,
+                                  });
+                                  setTgTestSuccessToast(`✓ Connected: ${data.bot?.first_name || 'Telegram Bot'} (@${data.bot?.username || 'bot'})`);
+                                } else {
+                                  setTgTestSuccessToast(data.error || 'Connection check failed');
+                                }
+                              } catch (err: any) {
+                                setTgTestSuccessToast(`Connection error: ${err.message || 'Network error'}`);
+                              } finally {
+                                setTgVerifying(false);
+                                setTimeout(() => setTgTestSuccessToast(null), 3500);
+                              }
+                            }}
+                            disabled={tgVerifying}
+                            className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          >
+                            {tgVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />}
+                            <span>Verify Connection</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                              if (!token) {
+                                setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
+                                setShowNewCredModal(true);
+                                setTimeout(() => setTgTestSuccessToast(null), 3500);
+                                return;
+                              }
+                              if (!cid) {
+                                setTgTestSuccessToast('Please enter a Target Chat ID');
+                                setTimeout(() => setTgTestSuccessToast(null), 3000);
+                                return;
+                              }
+                              setTgTestSending(true);
+                              try {
+                                const testText = (config.text || config.message || '🚀 <b>Workflow Connection Verified!</b>\n\n✅ <b>Status:</b> Success\n🌐 <i>Dispatched via Telegram Bot API</i>').trim();
+                                const res = await fetch('/api/integrations/telegram/send-test', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ botToken: token, chatId: cid, text: testText }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setTgTestSuccessToast(`✓ Delivered to Chat ID ${cid}! (Msg #${data.messageId || '1'})`);
+                                } else {
+                                  setTgTestSuccessToast(`Failed: ${data.error || 'Check token & chat ID'}`);
+                                }
+                              } catch (err: any) {
+                                setTgTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
+                              } finally {
+                                setTgTestSending(false);
+                                setTimeout(() => setTgTestSuccessToast(null), 4000);
+                              }
+                            }}
+                            disabled={tgTestSending}
+                            className="py-2 px-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                          >
+                            {tgTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            <span>Send Test to Mobile</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* Text ("T...") with fx and expand button */}
+                      {/* Text Message Field */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="text-[11px] font-semibold text-slate-300">Text</label>
+                          <label className="text-[11px] font-semibold text-slate-300">Message Text</label>
                           <button
                             type="button"
                             onClick={() =>
                               setExpandedField({
                                 key: 'text',
                                 label: 'Telegram Text Message',
-                                value: config.text || config.message || '',
+                                value: config.text || config.message || '{{$json.message}}',
                               })
                             }
-                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1"
+                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
                           >
                             <Maximize2 className="w-3 h-3" />
                             <span>Expand</span>
@@ -1129,132 +1437,187 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </span>
                           <textarea
                             rows={4}
-                            value={config.text || config.message || ''}
+                            value={config.text || config.message || '{{$json.message}}'}
                             onChange={(e) => {
                               handleConfigBatch({ text: e.target.value, message: e.target.value });
                             }}
-                            placeholder='().map((w, i) => { const c = $("Split Cities").all()[i].json.city; return c; })'
-                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none resize-y"
+                            placeholder="{{$json.message}}"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none resize-y"
                           />
                         </div>
 
-                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        {/* Quick Insert Chips */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                           <button
                             type="button"
-                            title="Insert incoming JSON payload expression"
+                            title="Insert full parsed news message"
                             onClick={() => {
-                              const curr = config.text || config.message || '';
-                              const updated = curr ? `${curr} {{$json}}` : '{{$json}}';
-                              handleConfigBatch({ text: updated, message: updated });
+                              handleConfigBatch({ text: '{{$json.message}}', message: '{{$json.message}}' });
                             }}
-                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
-                          >
-                            + {'{{$json}}'}
-                          </button>
-                          <button
-                            type="button"
-                            title="Insert incoming message property"
-                            onClick={() => {
-                              const curr = config.text || config.message || '';
-                              const updated = curr ? `${curr} {{$json.message}}` : '{{$json.message}}';
-                              handleConfigBatch({ text: updated, message: updated });
-                            }}
-                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                            className="px-2 py-0.5 rounded bg-blue-950/80 border border-blue-500/40 hover:bg-blue-900 text-blue-300 font-mono text-[10px] cursor-pointer transition"
                           >
                             + {'{{$json.message}}'}
                           </button>
                           <button
                             type="button"
-                            title="Insert incoming text property"
+                            title="Insert news headline"
                             onClick={() => {
                               const curr = config.text || config.message || '';
-                              const updated = curr ? `${curr} {{$json.text}}` : '{{$json.text}}';
+                              const updated = curr ? `${curr} {{$json.headline}}` : '{{$json.headline}}';
                               handleConfigBatch({ text: updated, message: updated });
                             }}
-                            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
                           >
-                            + {'{{$json.text}}'}
+                            + {'{{$json.headline}}'}
+                          </button>
+                          <button
+                            type="button"
+                            title="Insert source URL"
+                            onClick={() => {
+                              const curr = config.text || config.message || '';
+                              const updated = curr ? `${curr} {{$json.url}}` : '{{$json.url}}';
+                              handleConfigBatch({ text: updated, message: updated });
+                            }}
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] cursor-pointer transition"
+                          >
+                            + {'{{$json.url}}'}
+                          </button>
+                          <button
+                            type="button"
+                            title="Insert raw payload"
+                            onClick={() => {
+                              handleConfigBatch({ text: '{{$json}}', message: '{{$json}}' });
+                            }}
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] cursor-pointer transition"
+                          >
+                            + {'{{$json}}'}
                           </button>
                         </div>
                         {renderExpressionEvaluator(config.text || config.message)}
                       </div>
 
-                      {/* Reply Markup ("Repl...") */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Reply Markup</label>
-                        <select
-                          value={config.replyMarkup || 'None'}
-                          onChange={(e) => handleConfigChange('replyMarkup', e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-orange-500 focus:outline-none"
-                        >
-                          <option value="None">None</option>
-                          <option value="InlineKeyboard">Inline Keyboard</option>
-                          <option value="ReplyKeyboard">Reply Keyboard</option>
-                        </select>
-                      </div>
-
-                      {/* Additional Fields Accordion */}
-                      <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
-                        <button
-                          type="button"
-                          onClick={() => setShowAdditionalFields(!showAdditionalFields)}
-                          className="w-full px-3 py-2.5 flex items-center justify-between text-left text-slate-300 font-semibold text-xs hover:bg-slate-900 transition cursor-pointer"
-                        >
-                          <span>Additional Fields</span>
-                          <Plus className={`w-3.5 h-3.5 transition-transform ${showAdditionalFields ? 'rotate-45' : ''}`} />
-                        </button>
-
-                        {showAdditionalFields && (
-                          <div className="p-3 border-t border-slate-800 space-y-3">
-                            <div>
-                              <label className="text-[11px] font-semibold text-slate-300 block mb-1">Parse Mode</label>
-                              <select
-                                value={config.parseMode || 'HTML'}
-                                onChange={(e) => handleConfigChange('parseMode', e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-orange-500 focus:outline-none"
-                              >
-                                <option value="HTML">HTML</option>
-                                <option value="Markdown">Markdown</option>
-                                <option value="MarkdownV2">MarkdownV2</option>
-                                <option value="None">None</option>
-                              </select>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-slate-300 text-xs">Disable Notification</span>
-                              <input
-                                type="checkbox"
-                                checked={config.disableNotification || false}
-                                onChange={(e) => handleConfigChange('disableNotification', e.target.checked)}
-                                className="w-4 h-4 accent-emerald-500"
-                              />
-                            </div>
-                          </div>
-                        )}
+                      {/* Parse Mode & Reply Markup */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Parse Mode</label>
+                          <select
+                            value={config.parseMode || 'HTML'}
+                            onChange={(e) => handleConfigChange('parseMode', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="HTML">HTML (Formatted)</option>
+                            <option value="Markdown">Markdown</option>
+                            <option value="MarkdownV2">MarkdownV2</option>
+                            <option value="None">None (Plain Text)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">Reply Markup</label>
+                          <select
+                            value={config.replyMarkup || 'None'}
+                            onChange={(e) => handleConfigChange('replyMarkup', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="None">None</option>
+                            <option value="InlineKeyboard">Inline Keyboard</option>
+                            <option value="ReplyKeyboard">Reply Keyboard</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* 2. HTTP REQUEST */}
+                  {/* 2. HTTP REQUEST (Full n8n Specification) */}
                   {node.type === 'http_request' && (
                     <div className="space-y-3.5">
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Method</label>
-                        <select
-                          value={config.method || 'GET'}
-                          onChange={(e) => handleConfigChange('method', e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                      {/* Aaj Tak Preset Quick Selector */}
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-red-950/60 to-slate-950 border border-red-500/30 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-red-400" />
+                            Aaj Tak News Feed Preset
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Direct news scraper & Hindi headlines feed
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleConfigBatch({
+                              url: 'https://www.aajtak.in/',
+                              method: 'GET',
+                              responseFormat: 'HTML News Extractor',
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
                         >
-                          <option value="GET">GET</option>
-                          <option value="POST">POST</option>
-                          <option value="PUT">PUT</option>
-                          <option value="PATCH">PATCH</option>
-                          <option value="DELETE">DELETE</option>
-                        </select>
+                          Use Aaj Tak URL
+                        </button>
                       </div>
 
+                      {(config.url === 'https://www.aajtak.in/' || config.url?.includes('aajtak')) && (
+                        <div className="p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>
+                            <strong>Aaj Tak News Parser Active:</strong> Extracts live Hindi news headlines, title, description, and source link so downstream Telegram delivers clean news alerts without character limit errors.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Method & Authentication */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Method</label>
+                          <select
+                            value={config.method || 'GET'}
+                            onChange={(e) => handleConfigChange('method', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="HEAD">HEAD</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Authentication</label>
+                          <select
+                            value={config.authentication || 'none'}
+                            onChange={(e) => handleConfigChange('authentication', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="none">None</option>
+                            <option value="headerAuth">Header Auth</option>
+                            <option value="bearerAuth">Bearer Token</option>
+                            <option value="basicAuth">Basic Auth</option>
+                            <option value="oauth2">OAuth2</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* URL Endpoint */}
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">URL Endpoint</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">URL Endpoint</label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedField({
+                                key: 'url',
+                                label: 'HTTP Request URL',
+                                value: config.url || 'https://www.aajtak.in/',
+                              })
+                            }
+                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span>Expand</span>
+                          </button>
+                        </div>
                         <div className="flex items-stretch">
                           <span className="px-2.5 bg-slate-950 border border-r-0 border-slate-800 rounded-l-lg flex items-center font-mono text-[11px] text-cyan-400 italic">
                             fx
@@ -1263,45 +1626,251 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             type="text"
                             value={config.url || ''}
                             onChange={(e) => handleConfigChange('url', e.target.value)}
-                            placeholder="https://api.example.com/data"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                            placeholder="https://www.aajtak.in/"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                           />
                         </div>
                         {renderExpressionEvaluator(config.url)}
                       </div>
 
-                      {['POST', 'PUT', 'PATCH'].includes(config.method || 'GET') && (
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Request Body (JSON)</label>
-                          <textarea
-                            rows={4}
-                            value={config.body || ''}
-                            onChange={(e) => handleConfigChange('body', e.target.value)}
-                            placeholder='{\n  "query": "{{$json.customer}}"\n}'
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                      {/* Send Query Parameters */}
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-slate-300">Send Query Parameters</span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(config.sendQuery)}
+                            onChange={(e) => handleConfigChange('sendQuery', e.target.checked)}
+                            className="w-4 h-4 accent-[#FF6D5A]"
                           />
                         </div>
+                        {config.sendQuery && (
+                          <div className="space-y-1.5 pt-1">
+                            <input
+                              type="text"
+                              value={config.queryParamName || ''}
+                              onChange={(e) => handleConfigChange('queryParamName', e.target.value)}
+                              placeholder="Parameter Name (e.g. limit, query)"
+                              className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
+                            />
+                            <input
+                              type="text"
+                              value={config.queryParamValue || ''}
+                              onChange={(e) => handleConfigChange('queryParamValue', e.target.value)}
+                              placeholder="Value / {{$json.id}}"
+                              className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Send Headers */}
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-slate-300">Send Headers</span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(config.sendHeaders)}
+                            onChange={(e) => handleConfigChange('sendHeaders', e.target.checked)}
+                            className="w-4 h-4 accent-[#FF6D5A]"
+                          />
+                        </div>
+                        {config.sendHeaders && (
+                          <div className="space-y-1.5 pt-1">
+                            <input
+                              type="text"
+                              value={config.headerName || 'User-Agent'}
+                              onChange={(e) => handleConfigChange('headerName', e.target.value)}
+                              placeholder="Header Name"
+                              className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
+                            />
+                            <input
+                              type="text"
+                              value={config.headerValue || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                              onChange={(e) => handleConfigChange('headerValue', e.target.value)}
+                              placeholder="Header Value"
+                              className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Request Body for POST/PUT/PATCH */}
+                      {['POST', 'PUT', 'PATCH'].includes(config.method || 'GET') && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-semibold text-slate-300">Body Content Type</label>
+                            <select
+                              value={config.bodyContentType || 'json'}
+                              onChange={(e) => handleConfigChange('bodyContentType', e.target.value)}
+                              className="bg-slate-950 border border-slate-800 rounded p-1 text-slate-200 text-[10px]"
+                            >
+                              <option value="json">JSON</option>
+                              <option value="form-data">Form-Data</option>
+                              <option value="raw">Raw</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="relative flex items-stretch">
+                              <span className="px-2.5 bg-slate-950 border border-r-0 border-slate-800 rounded-l-lg flex items-center font-mono text-[11px] text-cyan-400 italic">
+                                fx
+                              </span>
+                              <textarea
+                                rows={4}
+                                value={config.body || ''}
+                                onChange={(e) => handleConfigChange('body', e.target.value)}
+                                placeholder='{\n  "query": "{{$json.headline || $json.title}}"\n}'
+                                className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none resize-y"
+                              />
+                            </div>
+                            {renderExpressionEvaluator(config.body)}
+                          </div>
+                        </div>
                       )}
+
+                      {/* n8n Additional Options Accordion */}
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                        <div
+                          onClick={() => setShowAdditionalFields(!showAdditionalFields)}
+                          className="flex items-center justify-between cursor-pointer text-slate-300 hover:text-white"
+                        >
+                          <span className="text-[11px] font-bold">Options</span>
+                          {showAdditionalFields ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </div>
+
+                        {showAdditionalFields && (
+                          <div className="space-y-2.5 pt-1 border-t border-slate-850 text-xs">
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-1">Response Format</label>
+                              <select
+                                value={config.responseFormat || 'Autodetect'}
+                                onChange={(e) => handleConfigChange('responseFormat', e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-200 text-xs"
+                              >
+                                <option value="Autodetect">Autodetect (JSON or HTML)</option>
+                                <option value="HTML News Extractor">HTML News Extractor (Hindi Headlines)</option>
+                                <option value="JSON">JSON only</option>
+                                <option value="Text">Raw Text</option>
+                              </select>
+                            </div>
+
+                            <div className="flex items-center justify-between p-2 rounded bg-slate-900">
+                              <div>
+                                <span className="font-semibold text-white block text-[11px]">Never Error</span>
+                                <span className="text-[10px] text-slate-500">Continue workflow even on 4xx/5xx responses</span>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={config.neverError || false}
+                                onChange={(e) => handleConfigChange('neverError', e.target.checked)}
+                                className="w-4 h-4 accent-[#FF6D5A]"
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between p-2 rounded bg-slate-900">
+                              <div>
+                                <span className="font-semibold text-white block text-[11px]">Follow Redirects</span>
+                                <span className="text-[10px] text-slate-500">Automatically follow HTTP 301/302 redirects</span>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={config.followRedirects !== false}
+                                onChange={(e) => handleConfigChange('followRedirects', e.target.checked)}
+                                className="w-4 h-4 accent-[#FF6D5A]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-1">Timeout (ms)</label>
+                              <input
+                                type="number"
+                                value={config.timeout || 10000}
+                                onChange={(e) => handleConfigChange('timeout', parseInt(e.target.value) || 10000)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-200 font-mono text-xs"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* 3. WEBHOOK TRIGGER */}
+                  {/* 3. WEBHOOK TRIGGER (Full n8n Specification) */}
                   {node.type === 'trigger_webhook' && (
                     <div className="space-y-3.5">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">HTTP Method</label>
+                          <select
+                            value={config.httpMethod || 'POST'}
+                            onChange={(e) => handleConfigChange('httpMethod', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs font-mono focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="POST">POST</option>
+                            <option value="GET">GET</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="ALL">ALL (Any Method)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Authentication</label>
+                          <select
+                            value={config.authentication || 'none'}
+                            onChange={(e) => handleConfigChange('authentication', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="none">None</option>
+                            <option value="basicAuth">Basic Auth</option>
+                            <option value="headerAuth">Header Auth</option>
+                          </select>
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Webhook Path</label>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Path</label>
                         <input
                           type="text"
                           value={config.webhookPath || ''}
                           onChange={(e) => handleConfigChange('webhookPath', e.target.value)}
                           placeholder="inbound-webhook"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                         />
                       </div>
 
-                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Respond</label>
+                          <select
+                            value={config.responseMode || 'onReceived'}
+                            onChange={(e) => handleConfigChange('responseMode', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                          >
+                            <option value="onReceived">Immediately</option>
+                            <option value="lastNode">When Last Node Finishes</option>
+                            <option value="responseNode">Using 'Respond to Webhook' Node</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Response Code</label>
+                          <input
+                            type="number"
+                            value={config.responseCode || 200}
+                            onChange={(e) => handleConfigChange('responseCode', parseInt(e.target.value) || 200)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Inbound Webhook URLs (Production & Test like n8n) */}
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-mono text-cyan-400">Inbound URL</span>
+                          <span className="text-[10px] uppercase font-mono text-cyan-400 font-bold">
+                            Production Webhook URL
+                          </span>
                           <button
                             type="button"
                             onClick={() => {
@@ -1309,22 +1878,68 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               setCopiedWebhook(true);
                               setTimeout(() => setCopiedWebhook(false), 2000);
                             }}
-                            className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px]"
+                            className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px] bg-slate-900 px-2 py-0.5 rounded border border-slate-800 cursor-pointer"
                           >
                             {copiedWebhook ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedWebhook ? 'Copied' : 'Copy'}</span>
+                            <span>{copiedWebhook ? 'Copied' : 'Copy URL'}</span>
                           </button>
                         </div>
-                        <p className="text-[11px] font-mono text-slate-300 break-all select-all">
+                        <p className="text-[11px] font-mono text-slate-300 break-all select-all bg-slate-900/80 p-2 rounded-lg border border-slate-850">
                           {fullWebhookUrl}
+                        </p>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] uppercase font-mono text-amber-400 font-bold">
+                            Test Webhook URL
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${fullWebhookUrl}-test`);
+                              setCopiedWebhook(true);
+                              setTimeout(() => setCopiedWebhook(false), 2000);
+                            }}
+                            className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px] bg-slate-900 px-2 py-0.5 rounded border border-slate-800 cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Test</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] font-mono text-slate-400 break-all select-all">
+                          {`${fullWebhookUrl}-test`}
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {/* 4. SCHEDULE TRIGGER */}
+                  {/* 4. SCHEDULE TRIGGER (Full n8n Specification) */}
                   {node.type === 'trigger_schedule' && (
                     <div className="space-y-3.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Interval</label>
+                        <select
+                          value={config.triggerInterval || 'cron'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            let newCron = config.cron || '0 9 * * 1';
+                            if (val === 'minutes') newCron = '*/15 * * * *';
+                            else if (val === 'hours') newCron = '0 * * * *';
+                            else if (val === 'days') newCron = '0 9 * * *';
+                            else if (val === 'weeks') newCron = '0 9 * * 1';
+                            else if (val === 'months') newCron = '0 9 1 * *';
+                            handleConfigBatch({ triggerInterval: val, cron: newCron });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                        >
+                          <option value="cron">Custom (Cron Expression)</option>
+                          <option value="minutes">Every 15 Minutes</option>
+                          <option value="hours">Every Hour</option>
+                          <option value="days">Every Day at 9:00 AM</option>
+                          <option value="weeks">Every Monday at 9:00 AM</option>
+                          <option value="months">1st of Every Month</option>
+                        </select>
+                      </div>
+
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression</label>
                         <input
@@ -1332,26 +1947,370 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           value={config.cron || '0 9 * * 1'}
                           onChange={(e) => handleConfigChange('cron', e.target.value)}
                           placeholder="0 9 * * 1"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                         />
-                        <span className="text-[10px] text-slate-500 mt-1 block">Every Monday at 9:00 AM UTC</span>
+                        <div className="mt-1.5 p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                          <span>Readable Schedule:</span>
+                          <strong className="text-emerald-400 font-medium">
+                            {config.cron === '*/15 * * * *'
+                              ? 'Every 15 minutes'
+                              : config.cron === '0 * * * *'
+                              ? 'Every hour at minute 0'
+                              : config.cron === '0 9 * * *'
+                              ? 'Every day at 09:00 AM'
+                              : config.cron === '0 9 * * 1'
+                              ? 'Every Monday at 09:00 AM'
+                              : config.cron || 'Scheduled Cron'}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Timezone</label>
+                        <select
+                          value={config.timezone || 'Asia/Kolkata'}
+                          onChange={(e) => handleConfigChange('timezone', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                        >
+                          <option value="Asia/Kolkata">Asia/Kolkata (IST - UTC+5:30)</option>
+                          <option value="UTC">UTC (Coordinated Universal Time)</option>
+                          <option value="America/New_York">America/New_York (EST/EDT)</option>
+                          <option value="Europe/London">Europe/London (GMT/BST)</option>
+                          <option value="Asia/Dubai">Asia/Dubai (GST - UTC+4)</option>
+                          <option value="Asia/Singapore">Asia/Singapore (SGT - UTC+8)</option>
+                        </select>
                       </div>
                     </div>
                   )}
 
-                  {/* 5. CHAT TRIGGER */}
-                  {node.type === 'chat_trigger' && (
+                  {/* 5. CHAT NODES (Chat Trigger, Chat Response, AI Chat, Webchat) */}
+                  {(node.type === 'chat_trigger' || node.type === 'chat_message' || node.type === 'chat_ai' || node.type === 'chat_webhook') && (
                     <div className="space-y-3.5">
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Welcome Message</label>
-                        <input
-                          type="text"
-                          value={config.welcomeMessage || ''}
-                          onChange={(e) => handleConfigChange('welcomeMessage', e.target.value)}
-                          placeholder="Hello! How can I assist your workflow today?"
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-orange-500 focus:outline-none"
-                        />
+                      {/* Dynamic External App Connection Status Card (Verified via Cloud/Internet) */}
+                      {chatVerifiedInfo && (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/70 to-slate-950 border border-emerald-500/40 space-y-1.5 shadow-sm animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              Status: Connected to External App (Success)
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Cloud Active
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-300 space-y-0.5">
+                            {chatVerifiedInfo.botName && (
+                              <p className="flex items-center gap-1">
+                                <strong className="text-slate-400">Bot:</strong>
+                                <span className="text-white font-medium">{chatVerifiedInfo.botName}</span>
+                                {chatVerifiedInfo.botUsername && (
+                                  <span className="text-blue-400 font-mono text-[10px]">(@{chatVerifiedInfo.botUsername})</span>
+                                )}
+                              </p>
+                            )}
+                            {chatVerifiedInfo.chatId && (
+                              <p className="flex items-center gap-1">
+                                <strong className="text-slate-400">Target Chat:</strong>
+                                <span className="text-emerald-400 font-mono text-[10px]">{chatVerifiedInfo.chatId}</span>
+                                {chatVerifiedInfo.chatName && (
+                                  <span className="text-white font-medium">({chatVerifiedInfo.chatName})</span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Toast notification */}
+                      {chatTestSuccessToast && (
+                        <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>{chatTestSuccessToast}</span>
+                        </div>
+                      )}
+
+                      {/* External App Credentials & Cloud Connection Card */}
+                      <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                            External App & Cloud Connection
+                          </label>
+                          <span className="text-[10px] text-cyan-400 font-mono">
+                            Telegram / External Bot
+                          </span>
+                        </div>
+
+                        {/* Credential Status & Quick Connect */}
+                        {selectedCredential ? (
+                          <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-purple-500/30 text-xs">
+                            <div className="flex items-center gap-2 truncate">
+                              <KeyRound className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                              <span className="text-slate-200 truncate">
+                                Credential: <strong className="text-purple-300">{selectedCredential.name}</strong>
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewCredName(selectedCredential.name);
+                                setNewCredKey(selectedCredential.data?.botToken || selectedCredential.data?.token || '');
+                                setNewCredSecondary(selectedCredential.data?.chatId || config.chatId || '');
+                                setShowNewCredModal(true);
+                              }}
+                              className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold underline shrink-0 cursor-pointer"
+                            >
+                              Edit Token
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-lg bg-slate-900/90 border border-dashed border-slate-700 flex items-center justify-between text-xs">
+                            <span className="text-slate-400 text-[11px]">No credential selected. Set Bot Token to connect:</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowNewCredModal(true)}
+                              className="px-2 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 font-semibold text-[10px] border border-purple-500/40 cursor-pointer"
+                            >
+                              + Set Credential
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Target Chat ID */}
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                            Target Chat ID (Mobile Device / Outside App Recipient)
+                          </label>
+                          <input
+                            type="text"
+                            value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
+                            onChange={(e) => {
+                              handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
+                            }}
+                            placeholder="e.g. 1234567890 or @mychannel"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                          />
+                          {renderExpressionEvaluator(config.chatId || config.chat_id)}
+                        </div>
+
+                        {/* Action Buttons: Verify Cloud Connection & Send Test to Outside App */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                              if (!token) {
+                                setChatTestSuccessToast('Please configure your Bot Token in the credential first');
+                                setShowNewCredModal(true);
+                                setTimeout(() => setChatTestSuccessToast(null), 3500);
+                                return;
+                              }
+                              setChatVerifying(true);
+                              try {
+                                const res = await fetch('/api/integrations/telegram/verify', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ botToken: token, chatId: cid }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setChatVerifiedInfo({
+                                    status: 'Connected to External App (Success)',
+                                    botName: data.bot?.first_name || 'External Bot',
+                                    botUsername: data.bot?.username,
+                                    chatName: data.chat ? [data.chat.first_name, data.chat.last_name].filter(Boolean).join(' ') || data.chat.title : undefined,
+                                    chatUsername: data.chat?.username,
+                                    chatId: cid || data.chat?.id,
+                                  });
+                                  setChatTestSuccessToast(`✓ Connected: ${data.bot?.first_name || 'External Bot'} (@${data.bot?.username || 'bot'})`);
+                                } else {
+                                  setChatTestSuccessToast(data.error || 'Connection check failed');
+                                }
+                              } catch (err: any) {
+                                setChatTestSuccessToast(`Connection error: ${err.message || 'Network error'}`);
+                              } finally {
+                                setChatVerifying(false);
+                                setTimeout(() => setChatTestSuccessToast(null), 3500);
+                              }
+                            }}
+                            disabled={chatVerifying}
+                            className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          >
+                            {chatVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />}
+                            <span>Verify Cloud Connection</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                              const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                              if (!token) {
+                                setChatTestSuccessToast('Please configure your Bot Token in the credential first');
+                                setShowNewCredModal(true);
+                                setTimeout(() => setChatTestSuccessToast(null), 3500);
+                                return;
+                              }
+                              if (!cid) {
+                                setChatTestSuccessToast('Please enter a Target Chat ID');
+                                setTimeout(() => setChatTestSuccessToast(null), 3000);
+                                return;
+                              }
+                              setChatTestSending(true);
+                              try {
+                                const testMsg = (config.message || config.text || config.welcomeMessage || '🚀 <b>Chat Node Connected!</b>\n\nReal cloud message delivered from Workflow to outside app.').trim();
+                                const res = await fetch('/api/integrations/telegram/send-test', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ botToken: token, chatId: cid, message: testMsg }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setChatTestSuccessToast(`✓ Delivered to outside app! (Msg #${data.messageId || '1'})`);
+                                } else {
+                                  setChatTestSuccessToast(`Delivery failed: ${data.error || 'Check token & chat ID'}`);
+                                }
+                              } catch (err: any) {
+                                setChatTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
+                              } finally {
+                                setChatTestSending(false);
+                                setTimeout(() => setChatTestSuccessToast(null), 4000);
+                              }
+                            }}
+                            disabled={chatTestSending}
+                            className="py-2 px-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                          >
+                            {chatTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            <span>Send Test to External App</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Node Type Specific Fields */}
+                      {node.type === 'chat_trigger' && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Welcome Message</label>
+                          <input
+                            type="text"
+                            value={config.welcomeMessage || ''}
+                            onChange={(e) => handleConfigChange('welcomeMessage', e.target.value)}
+                            placeholder="Hello! How can I assist your workflow today?"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-cyan-500 focus:outline-none text-xs"
+                          />
+                        </div>
+                      )}
+
+                      {node.type === 'chat_message' && (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-semibold text-slate-300">Response / Message Text</label>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedField({
+                                    key: 'message',
+                                    label: 'Chat Response Text',
+                                    value: config.message || config.text || '{{$json.output || $json.reply || "Thank you for reaching out!"}}',
+                                  })
+                                }
+                                className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                              >
+                                <Maximize2 className="w-3 h-3" />
+                                <span>Expand</span>
+                              </button>
+                            </div>
+                            <div className="relative flex items-stretch">
+                              <span className="px-2.5 bg-slate-950 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
+                                fx
+                              </span>
+                              <textarea
+                                rows={3}
+                                value={config.message || config.text || ''}
+                                onChange={(e) => {
+                                  handleConfigBatch({ message: e.target.value, text: e.target.value });
+                                }}
+                                placeholder="{{$json.output || $json.reply}}"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none resize-y"
+                              />
+                            </div>
+                            {renderExpressionEvaluator(config.message || config.text)}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">Role</label>
+                              <select
+                                value={config.role || 'assistant'}
+                                onChange={(e) => handleConfigChange('role', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-cyan-500 focus:outline-none"
+                              >
+                                <option value="assistant">Assistant (Bot)</option>
+                                <option value="user">User</option>
+                                <option value="system">System</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">Parse Mode</label>
+                              <select
+                                value={config.parseMode || 'HTML'}
+                                onChange={(e) => handleConfigChange('parseMode', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-cyan-500 focus:outline-none"
+                              >
+                                <option value="HTML">HTML (Formatted)</option>
+                                <option value="Markdown">Markdown</option>
+                                <option value="None">Plain Text</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {node.type === 'chat_ai' && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-300 block mb-1">System Instructions / Persona</label>
+                            <textarea
+                              rows={3}
+                              value={config.systemPrompt || ''}
+                              onChange={(e) => handleConfigChange('systemPrompt', e.target.value)}
+                              placeholder="You are an intelligent, helpful AI workflow assistant. Answer questions accurately and concisely."
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none resize-y"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-semibold text-slate-300">
+                                Temperature: <span className="text-cyan-400 font-mono">{config.temperature ?? 0.3}</span>
+                              </label>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={config.temperature ?? 0.3}
+                              onChange={(e) => handleConfigChange('temperature', parseFloat(e.target.value))}
+                              className="w-full accent-cyan-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {node.type === 'chat_webhook' && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Widget Endpoint Path</label>
+                          <input
+                            type="text"
+                            value={config.widgetPath || 'support-chat'}
+                            onChange={(e) => handleConfigChange('widgetPath', e.target.value)}
+                            placeholder="support-chat"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1979,6 +2938,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     'trigger_webhook',
                     'trigger_schedule',
                     'chat_trigger',
+                    'chat_message',
+                    'chat_ai',
+                    'chat_webhook',
                     'ai_agent',
                     'ai_model_gemini',
                     'app_google_sheets',
@@ -2273,43 +3235,155 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* EXPANDED EXPRESSION MODAL */}
+      {/* EXPANDED EXPRESSION MODAL (2-Column n8n Expression Builder) */}
       {expandedField && (
-        <div className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-bold text-white text-sm flex items-center gap-2">
-                <span className="text-cyan-400 italic font-mono">fx</span>
-                <span>Edit Expression: {expandedField.label}</span>
-              </span>
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
+          <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-xs">
+            {/* Modal Header */}
+            <div className="p-3.5 px-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-cyan-950/90 text-cyan-400 font-mono font-bold text-xs border border-cyan-800/80 italic">
+                  fx
+                </span>
+                <span className="font-bold text-white text-sm">
+                  Expression Editor &bull; {expandedField.label}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setExpandedField(null)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <textarea
-              rows={8}
-              value={expandedField.value}
-              onChange={(e) => {
-                const val = e.target.value;
-                setExpandedField({ ...expandedField, value: val });
-                handleConfigChange(expandedField.key, val);
-              }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 font-mono focus:border-orange-500 focus:outline-none"
-            />
+            {/* Modal Body: 2 Columns (Input Variables Left, Formula Right) */}
+            <div className="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden">
+              {/* Left Column: Input Variables ($json) */}
+              <div className="w-full sm:w-72 border-b sm:border-b-0 sm:border-r border-slate-800 bg-slate-950/60 p-3 overflow-y-auto shrink-0 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <TableIcon className="w-3.5 h-3.5 text-cyan-400" />
+                    Incoming ($json)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {inputKeys.length} {inputKeys.length === 1 ? 'variable' : 'variables'}
+                  </span>
+                </div>
 
-            {renderExpressionEvaluator(expandedField.value)}
+                {inputKeys.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {inputKeys.map(({ key, value, expr }) => (
+                      <div
+                        key={key}
+                        onClick={() => {
+                          const currentVal = expandedField.value || '';
+                          const nextVal = currentVal ? `${currentVal} ${expr}` : expr;
+                          setExpandedField({ ...expandedField, value: nextVal });
+                          handleConfigChange(expandedField.key, nextVal);
+                        }}
+                        className="group p-2 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/50 cursor-pointer transition flex items-center justify-between gap-1.5"
+                        title={`Click to insert ${expr}`}
+                      >
+                        <div className="min-w-0">
+                          <span className="font-mono text-cyan-400 font-medium truncate block text-[11px]">
+                            {key}
+                          </span>
+                          <span className="text-[10px] text-slate-400 truncate block">
+                            {typeof value === 'object' ? JSON.stringify(value).slice(0, 30) : String(value || '')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-cyan-300 opacity-0 group-hover:opacity-100 bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800 shrink-0">
+                          + Insert
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-center text-slate-500 space-y-1.5 text-[11px]">
+                    <p className="font-medium text-slate-400">No incoming data yet</p>
+                    <p className="text-[10px] text-slate-500">
+                      Execute preceding steps or use quick syntax presets below.
+                    </p>
+                  </div>
+                )}
 
-            <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1">
-              <span>Supports syntax: <code>&#123;&#123;$json.property&#125;&#125;</code> and <code>$(&quot;Node Name&quot;).all()</code></span>
+                {/* Quick Presets */}
+                <div className="pt-2 border-t border-slate-850 space-y-1.5">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                    Quick Insert
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      '{{$json.message}}',
+                      '{{$json.headline}}',
+                      '{{$json.title}}',
+                      '{{$json.url}}',
+                      '{{$json}}',
+                    ].map((snippet) => (
+                      <button
+                        key={snippet}
+                        type="button"
+                        onClick={() => {
+                          const currentVal = expandedField.value || '';
+                          const nextVal = currentVal ? `${currentVal} ${snippet}` : snippet;
+                          setExpandedField({ ...expandedField, value: nextVal });
+                          handleConfigChange(expandedField.key, nextVal);
+                        }}
+                        className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 font-mono text-[10px] border border-slate-800 cursor-pointer"
+                      >
+                        {snippet}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Formula Editor & Live Evaluation Preview */}
+              <div className="flex-1 p-3.5 flex flex-col min-w-0 bg-slate-900 space-y-2.5 overflow-y-auto">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Expression Formula
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={expandedField.value}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setExpandedField({ ...expandedField, value: val });
+                      handleConfigChange(expandedField.key, val);
+                    }}
+                    placeholder="{{$json.headline || $json.title || 'Breaking News'}}"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 font-mono text-xs focus:border-[#FF6D5A] focus:outline-none resize-y leading-relaxed"
+                  />
+                </div>
+
+                {/* Live Evaluator Box */}
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Live Result Preview
+                  </span>
+                  {renderExpressionEvaluator(expandedField.value) || (
+                    <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400">
+                      Evaluates to: <span className="text-white">{expandedField.value || '(empty)'}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[11px] text-slate-500 pt-1">
+                  Supports syntax: <code className="text-cyan-400">&#123;&#123;$json.property&#125;&#125;</code>, <code className="text-cyan-400">&#123;&#123;$json&#125;&#125;</code>, and <code className="text-cyan-400">$(&quot;Node Name&quot;).item.json.property</code>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 px-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-500">Press Esc or Done to save</span>
               <button
                 type="button"
                 onClick={() => setExpandedField(null)}
-                className="px-4 py-1.5 rounded-lg bg-[#FF6D5A] text-white font-bold cursor-pointer"
+                className="px-4 py-1.5 rounded-lg bg-[#FF6D5A] hover:bg-[#ff553e] text-white font-bold text-xs shadow-md transition cursor-pointer"
               >
                 Done
               </button>

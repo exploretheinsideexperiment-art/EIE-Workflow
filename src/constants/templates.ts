@@ -11,6 +11,59 @@ export interface WorkflowTemplate {
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
+    id: 'tpl_aajtak_telegram_broadcast',
+    name: 'Aaj Tak Hindi News → Telegram Cloud Delivery',
+    description: 'Fetches live news headlines from Aaj Tak (https://www.aajtak.in/) via HTTPS Request and delivers formatted news alerts directly to Telegram Mobile App (Chat ID: 5102553052).',
+    category: 'Communication',
+    tags: ['Aaj Tak News', 'Telegram Bot', 'Cloud Delivery', 'HTTPS Request'],
+    workflow: {
+      name: 'Aaj Tak News → Telegram Live Broadcast',
+      description: 'Executes HTTPS request to Aaj Tak News and sends instant alerts to Telegram mobile app.',
+      active: true,
+      viewport: { x: 80, y: 120, zoom: 0.95 },
+      nodes: [
+        {
+          id: 'node_aajtak_http',
+          type: 'http_request',
+          name: 'Aaj Tak News (HTTPS Request)',
+          category: 'HTTP',
+          icon: 'Globe',
+          position: { x: 120, y: 220 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Trigger' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'News Data' }],
+          config: {
+            method: 'GET',
+            url: 'https://www.aajtak.in/',
+            timeoutMs: 12000,
+            preset: 'aajtak'
+          }
+        },
+        {
+          id: 'node_telegram_dispatch',
+          type: 'app_telegram',
+          name: 'Telegram Bot (Alerts Channel)',
+          category: 'Communication',
+          icon: 'Send',
+          credentialId: 'cred_telegram_bot',
+          position: { x: 580, y: 220 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'News Input' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dispatched' }],
+          config: {
+            botToken: '',
+            accessToken: '',
+            chatId: '',
+            chat_id: '',
+            parseMode: 'HTML',
+            text: '{{$json.message}}'
+          }
+        }
+      ],
+      connections: [
+        { id: 'conn_http_to_tg', fromNodeId: 'node_aajtak_http', fromPortId: 'out_main', toNodeId: 'node_telegram_dispatch', toPortId: 'in_main' }
+      ]
+    }
+  },
+  {
     id: 'tpl_n8n_ai_agent',
     name: 'n8n Autonomous AI Agent (Tools, Memory & LLM Model)',
     description: 'Autonomous LangChain AI Agent connected with Google Gemini Model, Window Buffer Memory, Calculator Tool, and Web Search Tool to solve complex multi-step automations.',

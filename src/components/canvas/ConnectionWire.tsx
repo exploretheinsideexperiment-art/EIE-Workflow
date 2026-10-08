@@ -174,7 +174,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
       {/* Hover and Selected delete handle */}
       <g
         className={`${
-          isSelected ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100'
+          isSelected ? 'opacity-100 scale-105' : 'opacity-0 group-hover:opacity-100'
         } transition-all duration-150 cursor-pointer`}
         transform={`translate(${midX}, ${midY})`}
         style={{ pointerEvents: 'all' }}
@@ -187,19 +187,39 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
           onDelete?.(connection.id);
         }}
       >
-        <title>Delete Wire</title>
-        {/* Invisible wider hit circle */}
-        <circle r="20" fill="rgba(0, 0, 0, 0.001)" />
-        {/* High contrast visual delete badge */}
-        <circle
-          r="14"
+        <title>Delete Wire (Click or press Delete / Backspace)</title>
+        {/* Invisible wider hit area for easy clicking */}
+        <rect x="-48" y="-18" width="96" height="36" fill="rgba(0,0,0,0.001)" />
+        {/* Visual Pill Badge */}
+        <rect
+          x="-44"
+          y="-14"
+          width="88"
+          height="28"
+          rx="14"
           fill="#1c0a0e"
           stroke="#ef4444"
-          strokeWidth="2.5"
-          filter="drop-shadow(0 0 8px rgba(239, 68, 68, 0.9))"
+          strokeWidth="2"
+          filter="drop-shadow(0 0 10px rgba(239, 68, 68, 0.8))"
         />
-        <line x1="-5" y1="-5" x2="5" y2="5" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="5" y1="-5" x2="-5" y2="5" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+        {/* Trash/X Icon */}
+        <g transform="translate(-26, 0)">
+          <circle r="8" fill="#ef4444" />
+          <line x1="-3.5" y1="-3.5" x2="3.5" y2="3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+          <line x1="3.5" y1="-3.5" x2="-3.5" y2="3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+        </g>
+        <text
+          x="6"
+          y="4"
+          textAnchor="middle"
+          fill="#fca5a5"
+          fontSize="11"
+          fontWeight="bold"
+          fontFamily="sans-serif"
+          letterSpacing="0.3"
+        >
+          Delete
+        </text>
       </g>
     </g>
   );

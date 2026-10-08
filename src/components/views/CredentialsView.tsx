@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { KeyRound, Plus, Trash2, Shield, Lock, CheckCircle2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { KeyRound, Plus, Trash2, Shield, Lock, CheckCircle2, X, Send } from 'lucide-react';
 import { Credential } from '../../types/workflow';
 
 interface CredentialsViewProps {
@@ -24,6 +24,18 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [credSubTab, setCredSubTab] = useState<'connection' | 'sharing' | 'details'>('connection');
+  const [verifyingTg, setVerifyingTg] = useState(false);
+  const [verifiedTgResult, setVerifiedTgResult] = useState<any>(null);
+  const [sendingTestPing, setSendingTestPing] = useState(false);
+  const [testPingSuccess, setTestPingSuccess] = useState<string | null>(null);
+
+  // Set default credential name when type changes
+  useEffect(() => {
+    if (credType === 'telegram') {
+      if (!credName) setCredName('Telegram Bot API');
+    }
+  }, [credType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,55 +260,249 @@ export const CredentialsView: React.FC<CredentialsViewProps> = ({
                 </select>
               </div>
 
-              {/* Main Secret / Token / Password Input */}
-              <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  {credType === 'telegram'
-                    ? 'Telegram Bot Token (from @BotFather)'
-                    : credType === 'slack' || credType === 'discord'
-                    ? 'Webhook URL'
-                    : credType === 'postgres' || credType === 'mysql'
-                    ? 'Database Password'
-                    : credType === 'gemini'
-                    ? 'Gemini API Key (AIzaSy...)'
-                    : credType === 'openai'
-                    ? 'OpenAI Secret API Key (sk-...)'
-                    : credType === 'anthropic'
-                    ? 'Anthropic Claude API Key (sk-ant-...)'
-                    : credType === 'google_sheets'
-                    ? 'Google OAuth Token / Service Account Key'
-                    : 'API Key / Secret Token'}
-                </label>
-                <input
-                  type={credType === 'slack' || credType === 'discord' ? 'text' : 'password'}
-                  required
-                  value={secretVal}
-                  onChange={(e) => setSecretVal(e.target.value)}
-                  placeholder={
-                    credType === 'telegram'
-                      ? '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ'
-                      : credType === 'slack'
-                      ? 'https://hooks.slack.com/services/...'
-                      : credType === 'discord'
-                      ? 'https://discord.com/api/webhooks/...'
-                      : '••••••••••••••••••••••••'
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Telegram Optional Chat ID */}
+              {/* Telegram 3 Options Tabs */}
               {credType === 'telegram' && (
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">Default Chat ID / Channel (Optional)</label>
-                  <input
-                    type="text"
-                    value={extraVal}
-                    onChange={(e) => setExtraVal(e.target.value)}
-                    placeholder="e.g. -100123456789 or @my_channel"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono"
-                  />
+                <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCredSubTab('connection')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      credSubTab === 'connection'
+                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Connection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCredSubTab('sharing')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      credSubTab === 'sharing'
+                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Sharing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCredSubTab('details')}
+                    className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      credSubTab === 'details'
+                        ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Details
+                  </button>
                 </div>
+              )}
+
+              {/* Telegram Test Ping Feedback */}
+              {testPingSuccess && (
+                <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{testPingSuccess}</span>
+                </div>
+              )}
+
+              {/* Telegram Sharing Tab */}
+              {credType === 'telegram' && credSubTab === 'sharing' && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-white">Share with all Workflows</span>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-purple-500" />
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-white">Team Member Dispatch</span>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-purple-500" />
+                  </div>
+                  <div className="p-2 rounded bg-blue-950/40 border border-blue-800/30 text-[11px] text-blue-300">
+                    Cloud Delivery: Active across all connected web & mobile devices with Internet connection.
+                  </div>
+                </div>
+              )}
+
+              {/* Telegram Details Tab */}
+              {credType === 'telegram' && credSubTab === 'details' && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                  {verifiedTgResult ? (
+                    <>
+                      <div className="flex justify-between pb-1 border-b border-slate-800">
+                        <span className="text-slate-400">Bot Name:</span>
+                        <strong className="text-white">{verifiedTgResult.botName || 'Telegram Bot'}</strong>
+                      </div>
+                      <div className="flex justify-between pb-1 border-b border-slate-800">
+                        <span className="text-slate-400">Username:</span>
+                        <strong className="text-blue-400 font-mono">@{verifiedTgResult.botUsername || 'bot'}</strong>
+                      </div>
+                      {verifiedTgResult.chatId && (
+                        <div className="flex justify-between pb-1 border-b border-slate-800">
+                          <span className="text-slate-400">Recipient Chat ID:</span>
+                          <strong className="text-emerald-400 font-mono">{verifiedTgResult.chatId}</strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Cloud Status:</span>
+                        <span className="text-emerald-400 font-semibold">{verifiedTgResult.status || 'Connected (Success)'}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-2 text-slate-400 text-xs">
+                      Enter your Telegram Bot Token and click "Test & Verify Connection" to view live bot metadata.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Connection Tab Fields */}
+              {(credType !== 'telegram' || credSubTab === 'connection') && (
+                <>
+                  {credType === 'telegram' && verifiedTgResult && (
+                    <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Status: {verifiedTgResult.status || 'Connected (Success)'}</span>
+                      </div>
+                      {verifiedTgResult.botUsername && (
+                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          @{verifiedTgResult.botUsername}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Main Secret / Token / Password Input */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                      {credType === 'telegram'
+                        ? 'Telegram Bot Token / Access Token'
+                        : credType === 'slack' || credType === 'discord'
+                        ? 'Webhook URL'
+                        : credType === 'postgres' || credType === 'mysql'
+                        ? 'Database Password'
+                        : credType === 'gemini'
+                        ? 'Gemini API Key (AIzaSy...)'
+                        : credType === 'openai'
+                        ? 'OpenAI Secret API Key (sk-...)'
+                        : credType === 'anthropic'
+                        ? 'Anthropic Claude API Key (sk-ant-...)'
+                        : credType === 'google_sheets'
+                        ? 'Google OAuth Token / Service Account Key'
+                        : 'API Key / Secret Token'}
+                    </label>
+                    <input
+                      type={credType === 'slack' || credType === 'discord' ? 'text' : 'password'}
+                      required
+                      value={secretVal}
+                      onChange={(e) => setSecretVal(e.target.value)}
+                      placeholder={
+                        credType === 'telegram'
+                          ? '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz...'
+                          : credType === 'slack'
+                          ? 'https://hooks.slack.com/services/...'
+                          : credType === 'discord'
+                          ? 'https://discord.com/api/webhooks/...'
+                          : '••••••••••••••••••••••••'
+                      }
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Telegram Chat Selection Process */}
+                  {credType === 'telegram' && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                      <label className="text-[11px] font-bold text-white block">Recipient Chat ID</label>
+
+                      <div>
+                        <input
+                          type="text"
+                          value={extraVal}
+                          onChange={(e) => setExtraVal(e.target.value)}
+                          placeholder="e.g. 1234567890 or @mychannel"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-cyan-500 focus:outline-none font-mono text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!secretVal) {
+                              setTestPingSuccess('Please enter your Bot Token first');
+                              setTimeout(() => setTestPingSuccess(null), 3000);
+                              return;
+                            }
+                            setVerifyingTg(true);
+                            try {
+                              const res = await fetch('/api/integrations/telegram/verify', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ botToken: secretVal, chatId: extraVal }),
+                              });
+                              const d = await res.json();
+                              if (d.ok) {
+                                setVerifiedTgResult({
+                                  status: 'Connected (Success)',
+                                  botName: d.bot?.first_name || 'Telegram Bot',
+                                  botUsername: d.bot?.username,
+                                  chatId: extraVal || d.chat?.id,
+                                });
+                                setTestPingSuccess(`✓ Connected: ${d.bot?.first_name || 'Success'}`);
+                              } else {
+                                setTestPingSuccess(`Verification failed: ${d.error || 'Check token'}`);
+                              }
+                            } catch {
+                              setTestPingSuccess('Network error verifying bot token.');
+                            } finally {
+                              setVerifyingTg(false);
+                              setTimeout(() => setTestPingSuccess(null), 3500);
+                            }
+                          }}
+                          className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Shield className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Verify Connection</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!secretVal || !extraVal) {
+                              setTestPingSuccess('Please enter both Bot Token and Chat ID to send test');
+                              setTimeout(() => setTestPingSuccess(null), 3000);
+                              return;
+                            }
+                            setSendingTestPing(true);
+                            try {
+                              const res = await fetch('/api/integrations/telegram/send-test', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ botToken: secretVal, chatId: extraVal }),
+                              });
+                              const d = await res.json();
+                              if (d.ok) {
+                                setTestPingSuccess(`✓ Message delivered to mobile app! (#${d.messageId || '1'})`);
+                              } else {
+                                setTestPingSuccess(`Delivery failed: ${d.error || 'Check credentials'}`);
+                              }
+                            } catch {
+                              setTestPingSuccess('Network error sending message.');
+                            } finally {
+                              setSendingTestPing(false);
+                              setTimeout(() => setTestPingSuccess(null), 4000);
+                            }
+                          }}
+                          className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Send Test to Mobile</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Slack Optional Channel */}

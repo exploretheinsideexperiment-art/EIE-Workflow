@@ -1494,7 +1494,11 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     accentColor: '#0284c7',
     inputs: [],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'User Chat Message' }],
+    requiresCredentials: true,
+    credentialType: 'telegram',
     defaultConfig: {
+      botToken: '',
+      chatId: '',
       welcomeMessage: 'Hello! How can I assist your workflow today?',
       requireSession: true,
       streamingEnabled: true
@@ -1509,7 +1513,11 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     accentColor: '#0ea5e9',
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Message Data' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chat Result' }],
+    requiresCredentials: true,
+    credentialType: 'telegram',
     defaultConfig: {
+      botToken: '',
+      chatId: '',
       message: '{{$json.output || $json.reply || "Thank you for reaching out!"}}',
       role: 'assistant',
       showTypingIndicator: true
@@ -1528,7 +1536,11 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       { id: 'in_memory', name: 'memory', type: 'memory', label: 'Memory' }
     ],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chat Reply' }],
+    requiresCredentials: true,
+    credentialType: 'telegram',
     defaultConfig: {
+      botToken: '',
+      chatId: '',
       systemPrompt: 'You are an intelligent, helpful AI workflow assistant. Answer questions accurately and concisely.',
       temperature: 0.3,
       maxTokens: 1024
@@ -2035,3 +2047,230 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     }
   }
 ];
+
+export interface N8nNodeMeta {
+  package: string;
+  version: string;
+  docsUrl: string;
+  category: string;
+  resourceDefault?: string;
+  operationDefault?: string;
+}
+
+export function getN8nNodeMeta(type: string, name?: string): N8nNodeMeta {
+  const t = (type || '').toLowerCase();
+
+  if (t === 'http_request' || t === 'http') {
+    return {
+      package: 'n8n-nodes-base.httpRequest',
+      version: 'v4.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/',
+      category: 'Core',
+    };
+  }
+  if (t.includes('telegram')) {
+    return {
+      package: 'n8n-nodes-base.telegram',
+      version: 'v1.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.telegram/',
+      category: 'Communication',
+      resourceDefault: 'message',
+      operationDefault: 'sendMessage',
+    };
+  }
+  if (t === 'trigger_webhook' || t === 'webhook') {
+    return {
+      package: 'n8n-nodes-base.webhook',
+      version: 'v2.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/',
+      category: 'Triggers',
+    };
+  }
+  if (t === 'chat_trigger' || t === 'trigger_chat') {
+    return {
+      package: 'n8n-nodes-base.chatTrigger',
+      version: 'v1.1',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.chattrigger/',
+      category: 'Chat',
+      resourceDefault: 'chat',
+      operationDefault: 'receiveMessage',
+    };
+  }
+  if (t === 'chat_message') {
+    return {
+      package: 'n8n-nodes-base.chatMessage',
+      version: 'v1.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.chat/',
+      category: 'Chat',
+      resourceDefault: 'message',
+      operationDefault: 'sendMessage',
+    };
+  }
+  if (t === 'chat_ai') {
+    return {
+      package: 'n8n-nodes-langchain.chainLlm',
+      version: 'v1.4',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.chainllm/',
+      category: 'Chat',
+    };
+  }
+  if (t === 'trigger_schedule' || t === 'schedule') {
+    return {
+      package: 'n8n-nodes-base.scheduleTrigger',
+      version: 'v1.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.scheduletrigger/',
+      category: 'Triggers',
+    };
+  }
+  if (t === 'core_code' || t === 'code') {
+    return {
+      package: 'n8n-nodes-base.code',
+      version: 'v2.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/',
+      category: 'Core',
+    };
+  }
+  if (t === 'condition_if' || t === 'core_if' || t === 'if') {
+    return {
+      package: 'n8n-nodes-base.if',
+      version: 'v2.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.if/',
+      category: 'Flow',
+    };
+  }
+  if (t === 'core_edit_fields' || t === 'core_set' || t === 'set') {
+    return {
+      package: 'n8n-nodes-base.set',
+      version: 'v3.4',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.set/',
+      category: 'Core',
+    };
+  }
+  if (t === 'core_switch' || t === 'condition_switch' || t === 'switch') {
+    return {
+      package: 'n8n-nodes-base.switch',
+      version: 'v3.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.switch/',
+      category: 'Flow',
+    };
+  }
+  if (t === 'core_wait' || t === 'wait') {
+    return {
+      package: 'n8n-nodes-base.wait',
+      version: 'v1.1',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.wait/',
+      category: 'Flow',
+    };
+  }
+  if (t === 'core_respond_to_webhook' || t === 'respond_to_webhook') {
+    return {
+      package: 'n8n-nodes-base.respondToWebhook',
+      version: 'v1.1',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/',
+      category: 'Core',
+    };
+  }
+  if (t.includes('google_sheets') || t.includes('sheets')) {
+    return {
+      package: 'n8n-nodes-base.googleSheets',
+      version: 'v4.5',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.googlesheets/',
+      category: 'Applications',
+      resourceDefault: 'sheet',
+      operationDefault: 'readRows',
+    };
+  }
+  if (t.includes('gmail')) {
+    return {
+      package: 'n8n-nodes-base.gmail',
+      version: 'v2.1',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.gmail/',
+      category: 'Applications',
+      resourceDefault: 'message',
+      operationDefault: 'send',
+    };
+  }
+  if (t.includes('slack')) {
+    return {
+      package: 'n8n-nodes-base.slack',
+      version: 'v2.2',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.slack/',
+      category: 'Applications',
+      resourceDefault: 'message',
+      operationDefault: 'postMessage',
+    };
+  }
+  if (t.includes('discord')) {
+    return {
+      package: 'n8n-nodes-base.discord',
+      version: 'v2.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.discord/',
+      category: 'Applications',
+    };
+  }
+  if (t.includes('whatsapp')) {
+    return {
+      package: 'n8n-nodes-base.whatsApp',
+      version: 'v1.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.whatsapp/',
+      category: 'Applications',
+      resourceDefault: 'message',
+      operationDefault: 'sendTemplate',
+    };
+  }
+  if (t.includes('openai')) {
+    return {
+      package: 'n8n-nodes-base.openAi',
+      version: 'v1.4',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.openai/',
+      category: 'AI',
+      resourceDefault: 'chat',
+      operationDefault: 'complete',
+    };
+  }
+  if (t.includes('gemini')) {
+    return {
+      package: 'n8n-nodes-langchain.lmChatGoogleGemini',
+      version: 'v1.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.lmchatgooglegemini/',
+      category: 'AI',
+    };
+  }
+  if (t.includes('claude') || t.includes('anthropic')) {
+    return {
+      package: 'n8n-nodes-langchain.lmChatAnthropic',
+      version: 'v1.0',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/sub-nodes/n8n-nodes-langchain.lmchatanthropic/',
+      category: 'AI',
+    };
+  }
+  if (t === 'ai_agent') {
+    return {
+      package: 'n8n-nodes-langchain.agent',
+      version: 'v1.7',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/cluster-nodes/root-nodes/n8n-nodes-langchain.agent/',
+      category: 'AI',
+    };
+  }
+  if (t.includes('postgres') || t.includes('mysql') || t.includes('supabase')) {
+    return {
+      package: 'n8n-nodes-base.postgres',
+      version: 'v2.5',
+      docsUrl: 'https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.postgres/',
+      category: 'Database',
+      resourceDefault: 'database',
+      operationDefault: 'executeQuery',
+    };
+  }
+
+  const sanitized = t
+    .replace(/^(app_|core_|comm_|trigger_|flow_|chain_|db_)/, '')
+    .replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+
+  return {
+    package: `n8n-nodes-base.${sanitized || 'node'}`,
+    version: 'v1.0',
+    docsUrl: 'https://docs.n8n.io/integrations/',
+    category: 'Applications',
+  };
+}

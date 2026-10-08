@@ -220,7 +220,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           : '200px',
         touchAction: 'none',
       }}
-      className={`absolute select-none rounded-xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move shadow-md shadow-black/30 ${
+      className={`absolute select-none pointer-events-auto rounded-xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move shadow-md shadow-black/30 ${
         isConnectTargetCandidate
           ? 'border-cyan-400/80 ring-2 ring-cyan-500/40 shadow-xl shadow-cyan-950/50'
           : borderGlowClass
