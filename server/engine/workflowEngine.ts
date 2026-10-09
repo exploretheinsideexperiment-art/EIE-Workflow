@@ -136,10 +136,10 @@ function resolveSingleExpression(expr: string, context: { json: any; nodes: Reco
     if (trimmed === '$executionId') return `exec_${Date.now()}`;
 
     // Standard expression syntax: $('Node Name').item.json.field or $('Node Name').all()[0].json.field or $('Node Name').json.field
-    const n8nDollarMatch = trimmed.match(/^\$\(['"](.*?)['"]\)(.*)$/);
-    if (n8nDollarMatch) {
-      const nodeName = n8nDollarMatch[1];
-      const rest = n8nDollarMatch[2] || '';
+    const dollarNodeMatch = trimmed.match(/^\$\(['"](.*?)['"]\)(.*)$/);
+    if (dollarNodeMatch) {
+      const nodeName = dollarNodeMatch[1];
+      const rest = dollarNodeMatch[2] || '';
       const nodeData = context.nodes[nodeName];
       if (!nodeData) return undefined;
       if (!rest) return nodeData.json || nodeData;
@@ -1572,56 +1572,71 @@ export class WorkflowEngine {
           message = message.slice(0, 3900) + '...\n\n<i>[Message truncated to fit Telegram limit]</i>';
         }
 
+        // Require valid Bot Token and Chat ID to ensure messages reach the real app
+        if (!botToken || !botToken.trim()) {
+          throw new Error('Telegram delivery failed: Missing Bot Token! Open Telegram Node settings and enter your Bot Token (from @BotFather).');
+        }
+
+        if (!botToken.includes(':')) {
+          throw new Error('Telegram delivery failed: Invalid Bot Token format! Token must look like "123456789:ABCDefGh...".');
+        }
+
+        if (!targetChatId || !targetChatId.toString().trim()) {
+          throw new Error('Telegram delivery failed: Missing Chat ID! Please enter your Telegram Chat ID (recipient ID) in node settings.');
+        }
+
         let realTelegramResponse: any = null;
-        let realTelegramError: string | null = null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const cleanPlainText = message.replace(/<[^>]*>/g, '');
+        const sendPayload: any = {
+          chat_id: targetChatId,
+          text: message,
+          parse_mode: 'HTML',
+        };
 
-        if (botToken && botToken.includes(':')) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
-            const cleanPlainText = message.replace(/<[^>]*>/g, '');
-            const sendPayload: any = {
-              chat_id: targetChatId,
-              text: message,
-              parse_mode: 'HTML',
-            };
+        try {
+          let tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sendPayload),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          let tgData = await tgRes.json();
 
-            let tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          // If parse_mode caused entity parse failure, retry automatically as clean plain text
+          if (
+            !tgRes.ok &&
+            (tgData?.description?.toLowerCase().includes('parse') ||
+             tgData?.description?.toLowerCase().includes('entity') ||
+             tgData?.description?.toLowerCase().includes('tag') ||
+             tgData?.description?.toLowerCase().includes('html'))
+          ) {
+            tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sendPayload),
-              signal: controller.signal,
+              body: JSON.stringify({
+                chat_id: targetChatId,
+                text: cleanPlainText || message,
+              }),
             });
-            clearTimeout(timeoutId);
-            let tgData = await tgRes.json();
-
-            // If parse_mode caused entity parse failure, retry automatically as clean plain text
-            if (
-              !tgRes.ok &&
-              (tgData?.description?.toLowerCase().includes('parse') ||
-               tgData?.description?.toLowerCase().includes('entity') ||
-               tgData?.description?.toLowerCase().includes('tag') ||
-               tgData?.description?.toLowerCase().includes('html'))
-            ) {
-              tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: targetChatId,
-                  text: cleanPlainText || message,
-                }),
-              });
-              tgData = await tgRes.json();
-            }
-
-            if (tgRes.ok) {
-              realTelegramResponse = tgData;
-            } else {
-              realTelegramError = tgData?.description || `HTTP ${tgRes.status}`;
-            }
-          } catch (e: any) {
-            realTelegramError = e.message;
+            tgData = await tgRes.json();
           }
+
+          if (!tgRes.ok || !tgData.ok) {
+            const apiError = tgData?.description || `HTTP ${tgRes.status}`;
+            throw new Error(`Telegram API Error: ${apiError} (Chat ID: ${targetChatId}). Please check your Chat ID and make sure you have started your bot with /start in Telegram.`);
+          }
+
+          realTelegramResponse = tgData;
+        } catch (e: any) {
+          clearTimeout(timeoutId);
+          // If already formatted error, rethrow
+          if (e.message?.startsWith('Telegram API Error:')) {
+            throw e;
+          }
+          throw new Error(`Telegram network delivery error: Could not connect to Telegram servers (${e.message}). Check your internet connection.`);
         }
 
         const msgId = realTelegramResponse?.result?.message_id || Math.floor(10000 + Math.random() * 90000);
@@ -1633,7 +1648,7 @@ export class WorkflowEngine {
           text: message,
           reply: message,
           messageId: msgId,
-          connectedExternally: Boolean(realTelegramResponse?.ok),
+          connectedExternally: true,
           deliveredAt: new Date().toISOString(),
           status: 'success',
           output: {
@@ -1642,11 +1657,9 @@ export class WorkflowEngine {
             message,
             text: message,
             reply: message,
-            botTokenConfigured: Boolean(botToken),
-            realDispatched: Boolean(realTelegramResponse?.ok),
-            apiNotice: realTelegramResponse?.ok
-              ? `🚀 Dispatched successfully to Telegram Bot API (Message ID #${msgId})`
-              : (realTelegramError || 'Dispatched via Telegram Cloud API'),
+            botTokenConfigured: true,
+            realDispatched: true,
+            apiNotice: `🚀 Delivered directly to Telegram Bot API (Message ID #${msgId})`,
             messagePreview: message.slice(0, 160),
             messageId: msgId,
             status: 'sent',
@@ -2552,44 +2565,94 @@ export class WorkflowEngine {
           context
         );
 
+        const isTelegramTarget = (config.platform === 'telegram' || Boolean(botToken) || Boolean(targetChatId));
+        const isWebhookTarget = (config.platform === 'webhook' || Boolean(config.webhookUrl));
+
         let externalDelivery: any = null;
-        if (botToken && botToken.includes(':') && targetChatId) {
+        if (isTelegramTarget) {
+          if (!botToken || !botToken.trim()) {
+            throw new Error('Chat message delivery failed: Telegram Bot Token missing! Please configure Bot Token in node settings.');
+          }
+          if (!targetChatId || !targetChatId.toString().trim()) {
+            throw new Error('Chat message delivery failed: Telegram Chat ID missing! Please specify recipient Chat ID in node settings.');
+          }
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
           try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
-            const tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
+            const sendText = typeof evaluatedMsg === 'object' ? JSON.stringify(evaluatedMsg, null, 2) : String(evaluatedMsg);
+            let tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 chat_id: targetChatId.toString().trim(),
-                text: typeof evaluatedMsg === 'object' ? JSON.stringify(evaluatedMsg, null, 2) : String(evaluatedMsg),
+                text: sendText,
                 parse_mode: config.parseMode === 'None' ? undefined : (config.parseMode || 'HTML'),
               }),
               signal: controller.signal,
             });
             clearTimeout(timeout);
-            const tgData = await tgRes.json();
-            if (tgRes.ok && tgData.ok) {
-              externalDelivery = {
-                connected: true,
-                messageId: tgData.result?.message_id,
-                channel: 'Telegram / External Phone App',
-                chatId: targetChatId,
-                status: 'delivered',
-              };
-            } else {
-              externalDelivery = {
-                connected: false,
-                error: tgData?.description || `HTTP ${tgRes.status}`,
-                chatId: targetChatId,
-              };
+            let tgData = await tgRes.json();
+
+            // Retry plain text if parse error
+            if (!tgRes.ok && (tgData?.description?.includes('parse') || tgData?.description?.includes('entity'))) {
+              tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: targetChatId.toString().trim(),
+                  text: sendText.replace(/<[^>]*>/g, ''),
+                }),
+              });
+              tgData = await tgRes.json();
             }
-          } catch (e: any) {
+
+            if (!tgRes.ok || !tgData.ok) {
+              const tgErr = tgData?.description || `HTTP ${tgRes.status}`;
+              throw new Error(`Telegram Chat API Error: ${tgErr} (Chat ID: ${targetChatId}). Check Chat ID and ensure you sent /start to your bot.`);
+            }
+
             externalDelivery = {
-              connected: false,
-              error: e.message,
+              connected: true,
+              messageId: tgData.result?.message_id,
+              channel: 'Telegram / External Phone App',
               chatId: targetChatId,
+              status: 'delivered',
             };
+          } catch (e: any) {
+            clearTimeout(timeout);
+            throw new Error(e.message?.startsWith('Telegram Chat API') ? e.message : `Telegram network connection error: ${e.message}`);
+          }
+        } else if (isWebhookTarget && config.webhookUrl) {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10000);
+          try {
+            const isDiscord = (config.platform === 'discord' || config.webhookUrl.includes('discord.com'));
+            const isSlack = (config.platform === 'slack' || config.webhookUrl.includes('slack.com'));
+            const bodyPayload = isDiscord
+              ? { content: typeof evaluatedMsg === 'object' ? JSON.stringify(evaluatedMsg, null, 2) : String(evaluatedMsg) }
+              : isSlack
+              ? { text: typeof evaluatedMsg === 'object' ? JSON.stringify(evaluatedMsg, null, 2) : String(evaluatedMsg) }
+              : { message: evaluatedMsg, payload: incomingData, timestamp: new Date().toISOString() };
+
+            const whRes = await fetch(config.webhookUrl.trim(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bodyPayload),
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!whRes.ok) {
+              throw new Error(`Webhook dispatch error: HTTP ${whRes.status} (${whRes.statusText})`);
+            }
+            externalDelivery = {
+              connected: true,
+              channel: isDiscord ? 'Discord' : isSlack ? 'Slack' : 'Custom Mobile Webhook',
+              status: 'delivered',
+            };
+          } catch (e: any) {
+            clearTimeout(timeout);
+            throw new Error(`External webhook delivery error: ${e.message}`);
           }
         }
 
@@ -2678,8 +2741,42 @@ export class WorkflowEngine {
                 chatId: targetChatId,
                 status: 'delivered',
               };
+            } else {
+              throw new Error(`Telegram error: ${tgData?.description || 'HTTP ' + tgRes.status}`);
             }
-          } catch {}
+          } catch (e: any) {
+            throw new Error(`Chat AI delivery to Telegram failed: ${e.message}`);
+          }
+        } else if (config.webhookUrl && aiReply) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const isDiscord = (config.platform === 'discord' || config.webhookUrl.includes('discord.com'));
+            const isSlack = (config.platform === 'slack' || config.webhookUrl.includes('slack.com'));
+            const bodyPayload = isDiscord
+              ? { content: aiReply }
+              : isSlack
+              ? { text: aiReply }
+              : { message: aiReply, query: userQuery, timestamp: new Date().toISOString() };
+
+            const whRes = await fetch(config.webhookUrl.trim(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bodyPayload),
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!whRes.ok) {
+              throw new Error(`Webhook HTTP ${whRes.status}`);
+            }
+            externalDelivery = {
+              connected: true,
+              channel: isDiscord ? 'Discord' : isSlack ? 'Slack' : 'Custom Mobile Webhook',
+              status: 'delivered',
+            };
+          } catch (e: any) {
+            throw new Error(`Chat AI webhook delivery failed: ${e.message}`);
+          }
         }
 
         return {

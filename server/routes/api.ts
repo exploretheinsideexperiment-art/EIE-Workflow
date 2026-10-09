@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { db, hashPassword, Workflow, Webhook, Credential, ApiKey, AuditLog } from '../db';
 import { WorkflowEngine, executionEvents } from '../engine/workflowEngine';
 import { handleEiDoctorChat } from '../engine/workflowAiArchitect';
+import { WorkflowScheduler } from '../services/workflowScheduler';
 
 export const router = express.Router();
 
@@ -21,6 +22,37 @@ router.get('/health', (req: Request, res: Response) => {
     workflowEngine: 'online',
     version: '2.5.0-cloud',
   });
+});
+
+// --- WORKFLOW SCHEDULER (TIME-BASED EXECUTION) ---
+router.get('/scheduler/status', (req: Request, res: Response) => {
+  return res.json(WorkflowScheduler.getStatus());
+});
+
+router.post('/scheduler/trigger-now', async (req: Request, res: Response) => {
+  const { workflowId, nodeId } = req.body;
+  const workflows = db.get('workflows');
+  let targetWf = workflowId ? workflows.find((w) => w.id === workflowId) : null;
+  if (!targetWf && workflows.length > 0) {
+    targetWf = workflows[0];
+  }
+  if (!targetWf) {
+    return res.status(404).json({ ok: false, error: 'No workflow found to trigger.' });
+  }
+
+  try {
+    const node = targetWf.nodes.find((n) => n.id === nodeId || n.type === 'trigger_schedule');
+    const execution = await WorkflowEngine.executeWorkflow(targetWf, 'schedule', {
+      scheduledTime: new Date().toISOString(),
+      cron: node?.config?.cron || '* * * * *',
+      triggerNodeId: node?.id,
+      triggerNodeName: node?.name || 'Schedule Trigger',
+      manualTestTrigger: true,
+    });
+    return res.json({ ok: true, executionId: execution.id, status: execution.status, workflow: targetWf.name });
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // --- AUTHENTICATION ---

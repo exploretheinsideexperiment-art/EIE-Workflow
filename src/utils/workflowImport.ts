@@ -1,30 +1,32 @@
 import { Workflow, WorkflowNodeData, WorkflowConnection } from '../types/workflow';
 import { NODE_LIBRARY } from '../constants/nodeLibrary';
 
-// Mapping table from official n8n node types to our internal node catalog
-const N8N_TYPE_MAP: Record<string, string> = {
-  'n8n-nodes-base.telegram': 'app_telegram',
-  'n8n-nodes-base.webhook': 'trigger_webhook',
-  'n8n-nodes-base.scheduleTrigger': 'trigger_schedule',
-  'n8n-nodes-base.code': 'core_code',
-  'n8n-nodes-base.if': 'logic_if',
-  'n8n-nodes-base.switch': 'flow_switch',
-  'n8n-nodes-base.httpRequest': 'core_http',
-  'n8n-nodes-base.set': 'core_edit_fields',
-  'n8n-nodes-base.slack': 'app_slack',
-  'n8n-nodes-base.discord': 'app_discord',
-  'n8n-nodes-base.gmail': 'app_gmail',
-  'n8n-nodes-base.postgres': 'db_postgres',
-  'n8n-nodes-base.mySql': 'db_mysql',
-  'n8n-nodes-base.openAi': 'app_openai',
-  '@n8n/n8n-nodes-langchain.agent': 'ai_agent',
-  '@n8n/n8n-nodes-langchain.lmChatOpenAi': 'ai_model_openai',
-  '@n8n/n8n-nodes-langchain.lmChatAnthropic': 'ai_model_anthropic',
-  '@n8n/n8n-nodes-langchain.lmChatGoogleGemini': 'ai_model_gemini',
-  '@n8n/n8n-nodes-langchain.memoryBufferWindow': 'ai_memory_window',
-  '@n8n/n8n-nodes-langchain.toolCalculator': 'ai_tool_calculator',
-  '@n8n/n8n-nodes-langchain.toolHttpRequest': 'ai_tool_http',
-  '@n8n/n8n-nodes-langchain.toolCustom': 'ai_tool_custom',
+// Mapping table from external workflow node types to our internal node catalog
+const IMPORT_TYPE_MAP: Record<string, string> = {
+  'telegram': 'app_telegram',
+  'webhook': 'trigger_webhook',
+  'scheduleTrigger': 'trigger_schedule',
+  'schedule': 'trigger_schedule',
+  'code': 'core_code',
+  'if': 'logic_if',
+  'switch': 'flow_switch',
+  'httpRequest': 'core_http',
+  'http': 'core_http',
+  'set': 'core_edit_fields',
+  'slack': 'app_slack',
+  'discord': 'app_discord',
+  'gmail': 'app_gmail',
+  'postgres': 'db_postgres',
+  'mySql': 'db_mysql',
+  'openAi': 'app_openai',
+  'agent': 'ai_agent',
+  'lmChatOpenAi': 'ai_model_openai',
+  'lmChatAnthropic': 'ai_model_anthropic',
+  'lmChatGoogleGemini': 'ai_model_gemini',
+  'memoryBufferWindow': 'ai_memory_window',
+  'toolCalculator': 'ai_tool_calculator',
+  'toolHttpRequest': 'ai_tool_http',
+  'toolCustom': 'ai_tool_custom',
 };
 
 export function normalizeImportedWorkflow(
@@ -70,7 +72,7 @@ export function normalizeImportedWorkflow(
 
     // Determine type
     const rawType = rawNode.type || 'core_code';
-    const mappedType = N8N_TYPE_MAP[rawType] || rawType;
+    const mappedType = IMPORT_TYPE_MAP[rawType] || rawType;
     const libDef =
       NODE_LIBRARY.find((n) => n.type === mappedType) ||
       NODE_LIBRARY.find((n) => n.type.toLowerCase() === mappedType.toLowerCase()) ||

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Trash2, Settings, Copy, AlertCircle, Bot, Sparkles, Stethoscope, MessageSquare, Link2, CheckCircle2, X } from 'lucide-react';
+import { Trash2, Settings, Copy, AlertCircle, AlertTriangle, Bot, Sparkles, Stethoscope, MessageSquare, Link2, CheckCircle2, X } from 'lucide-react';
 import {
   Workflow,
   WorkflowNodeData,
@@ -203,6 +203,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   // Execution & Live Stream State
   const [latestExecution, setLatestExecution] = useState<Execution | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [activeTransferConnectionIds, setActiveTransferConnectionIds] = useState<Set<string>>(new Set());
+  const [workflowExecutionError, setWorkflowExecutionError] = useState<{
+    nodeId: string;
+    nodeName: string;
+    error: string;
+  } | null>(null);
+  const [workflowExecutionSuccessToast, setWorkflowExecutionSuccessToast] = useState<{
+    message: string;
+    messageId?: number | string;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const workflowRef = useRef<Workflow>(workflow);
@@ -262,10 +272,64 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               },
             };
           });
+
+          // Wire active transfer animation when node starts or finishes
+          if (data.nodeResult?.status === 'running') {
+            const incoming = workflowRef.current.connections.filter((c) => c.toNodeId === data.nodeId);
+            if (incoming.length > 0) {
+              setActiveTransferConnectionIds((prev) => {
+                const next = new Set(prev);
+                incoming.forEach((c) => next.add(c.id));
+                return next;
+              });
+              setTimeout(() => {
+                setActiveTransferConnectionIds((prev) => {
+                  const next = new Set(prev);
+                  incoming.forEach((c) => next.delete(c.id));
+                  return next;
+                });
+              }, 750);
+            }
+          } else if (data.nodeResult?.status === 'success') {
+            const outgoing = workflowRef.current.connections.filter((c) => c.fromNodeId === data.nodeId);
+            if (outgoing.length > 0) {
+              setActiveTransferConnectionIds((prev) => {
+                const next = new Set(prev);
+                outgoing.forEach((c) => next.add(c.id));
+                return next;
+              });
+              setTimeout(() => {
+                setActiveTransferConnectionIds((prev) => {
+                  const next = new Set(prev);
+                  outgoing.forEach((c) => next.delete(c.id));
+                  return next;
+                });
+              }, 750);
+            }
+          } else if (data.nodeResult?.status === 'failed') {
+            setWorkflowExecutionError({
+              nodeId: data.nodeId,
+              nodeName: data.nodeResult.nodeName || 'Node',
+              error: data.nodeResult.error || 'Execution step failed',
+            });
+          }
         } else if (data.type === 'finished' && data.execution) {
           if (data.execution.workflowId === workflow.id) {
             setLatestExecution(data.execution);
             setIsExecuting(false);
+            setActiveTransferConnectionIds(new Set());
+            if (data.execution.status === 'failed') {
+              const failedItem = Object.values(data.execution.nodeResults || {}).find((r: any) => r.status === 'failed') as any;
+              if (failedItem) {
+                setWorkflowExecutionError({
+                  nodeId: failedItem.nodeId,
+                  nodeName: failedItem.nodeName || 'Node',
+                  error: failedItem.error || 'Execution failed',
+                });
+              }
+            } else if (data.execution.status === 'success') {
+              setWorkflowExecutionError(null);
+            }
           }
         }
       } catch (err) {
@@ -1501,6 +1565,47 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           }
         }
 
+        // 1. Visually mark current node as running and animate incoming wires
+        if (incomingConns.length > 0) {
+          setActiveTransferConnectionIds((prev) => {
+            const next = new Set(prev);
+            incomingConns.forEach((c) => next.add(c.id));
+            return next;
+          });
+        }
+
+        nodeResults[curr.id] = {
+          nodeId: curr.id,
+          nodeName: curr.name,
+          nodeType: curr.type,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+          input: stepInput,
+        };
+
+        setLatestExecution({
+          id: execId,
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          triggerType: 'manual',
+          status: 'running',
+          startedAt: new Date(startTime).toISOString(),
+          nodeResults: { ...nodeResults },
+          logs: [...logs, { timestamp: new Date().toISOString(), level: 'info', message: `Executing step "${curr.name}"...`, nodeId: curr.id }],
+        });
+
+        // Visible pause so data flow along the wire and step execution are clearly seen
+        await new Promise((r) => setTimeout(r, 420));
+
+        // Clear incoming wire transfer animation
+        if (incomingConns.length > 0) {
+          setActiveTransferConnectionIds((prev) => {
+            const next = new Set(prev);
+            incomingConns.forEach((c) => next.delete(c.id));
+            return next;
+          });
+        }
+
         // Compute genuine node output
         let stepOutput: any = {};
         let duration = 35;
@@ -1646,24 +1751,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         ) {
           duration = 220;
           const nodeCred = credentialsList.find((c: Credential) => c.id === curr.credentialId);
-          const token =
+          const token = (
             curr.config?.botToken ||
-            curr.config?.accessToken ||
             curr.config?.token ||
+            curr.config?.accessToken ||
             curr.config?.tokenId ||
             nodeCred?.data?.botToken ||
-            nodeCred?.data?.accessToken ||
             nodeCred?.data?.token ||
-            '';
+            nodeCred?.data?.accessToken ||
+            ''
+          ).trim();
 
-          const targetChat =
+          const targetChat = (
             curr.config?.chatId ||
             curr.config?.chat_id ||
             nodeCred?.data?.chatId ||
             nodeCred?.data?.chat_id ||
             stepInput?.chatId ||
             stepInput?.chat_id ||
-            '';
+            ''
+          ).toString().trim();
 
           const rawCandidate =
             curr.config?.text ||
@@ -1684,12 +1791,94 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             msg = msg.slice(0, 3900) + '...\n\n<i>[Message truncated]</i>';
           }
 
+          // Strict check for Telegram / chat delivery: must not fake success if credentials or chat ID are missing
+          const isTelegramPlatform = (curr.type === 'app_telegram' || curr.type === 'comm_telegram' || curr.config?.platform === 'telegram' || Boolean(token));
+
+          if (isTelegramPlatform) {
+            if (!token) {
+              const errMsg = `Step "${curr.name}" failed: Telegram Bot Token is missing! Please open Telegram Node settings and enter your Bot Token from @BotFather.`;
+              nodeResults[curr.id] = {
+                nodeId: curr.id,
+                nodeName: curr.name,
+                nodeType: curr.type,
+                status: 'failed',
+                error: errMsg,
+                startedAt: new Date(stepTime).toISOString(),
+                finishedAt: new Date(stepTime + 30).toISOString(),
+                durationMs: 30,
+                input: stepInput,
+              };
+              logs.push({
+                timestamp: new Date().toISOString(),
+                level: 'error',
+                message: `❌ ${errMsg}`,
+                nodeId: curr.id,
+              });
+              setLatestExecution({
+                id: execId,
+                workflowId: workflow.id,
+                workflowName: workflow.name,
+                triggerType: 'manual',
+                status: 'failed',
+                startedAt: new Date(startTime).toISOString(),
+                finishedAt: new Date().toISOString(),
+                nodeResults: { ...nodeResults },
+                logs: [...logs],
+              });
+              setWorkflowExecutionError({
+                nodeId: curr.id,
+                nodeName: curr.name,
+                error: errMsg,
+              });
+              return;
+            }
+
+            if (!targetChat) {
+              const errMsg = `Step "${curr.name}" failed: Telegram Chat ID is missing! Enter your recipient Chat ID (or @channel) in node settings.`;
+              nodeResults[curr.id] = {
+                nodeId: curr.id,
+                nodeName: curr.name,
+                nodeType: curr.type,
+                status: 'failed',
+                error: errMsg,
+                startedAt: new Date(stepTime).toISOString(),
+                finishedAt: new Date(stepTime + 30).toISOString(),
+                durationMs: 30,
+                input: stepInput,
+              };
+              logs.push({
+                timestamp: new Date().toISOString(),
+                level: 'error',
+                message: `❌ ${errMsg}`,
+                nodeId: curr.id,
+              });
+              setLatestExecution({
+                id: execId,
+                workflowId: workflow.id,
+                workflowName: workflow.name,
+                triggerType: 'manual',
+                status: 'failed',
+                startedAt: new Date(startTime).toISOString(),
+                finishedAt: new Date().toISOString(),
+                nodeResults: { ...nodeResults },
+                logs: [...logs],
+              });
+              setWorkflowExecutionError({
+                nodeId: curr.id,
+                nodeName: curr.name,
+                error: errMsg,
+              });
+              return;
+            }
+          }
+
           let deliveredSuccess = false;
-          let realMsgId = Math.floor(10000 + Math.random() * 90000);
+          let realMsgId = 0;
+          let deliveryError: string | null = null;
           let realNotice = 'Processed in Workflow Engine';
 
           if (token && targetChat) {
-            // First try backend dispatch
+            // First try backend dispatch to real Telegram API
             try {
               const sendRes = await fetch('/api/integrations/telegram/send-test', {
                 method: 'POST',
@@ -1700,16 +1889,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   message: msg,
                 }),
               });
-              if (sendRes.ok) {
-                const sData = await sendRes.json();
-                if (sData.ok && sData.messageId) {
-                  deliveredSuccess = true;
-                  realMsgId = sData.messageId;
-                  realNotice = `🚀 Real Message #${realMsgId} delivered directly to external app (Chat ID: ${targetChat}) via Cloud API`;
-                }
+              const sData = await sendRes.json();
+              if (sendRes.ok && sData.ok && sData.delivered) {
+                deliveredSuccess = true;
+                realMsgId = sData.messageId;
+                realNotice = `🚀 Real Message #${realMsgId} delivered directly to phone (Chat ID: ${targetChat}) via Telegram Bot API`;
+              } else {
+                deliveryError = sData.error || `Telegram API returned error: HTTP ${sendRes.status}`;
               }
-            } catch (e) {
-              // direct Telegram API fetch fallback
+            } catch (e: any) {
+              // Direct Telegram API fallback
               try {
                 const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                   method: 'POST',
@@ -1720,22 +1909,60 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     parse_mode: 'HTML',
                   }),
                 });
-                if (tgRes.ok) {
-                  const tgData = await tgRes.json();
-                  if (tgData.ok) {
-                    deliveredSuccess = true;
-                    realMsgId = tgData.result.message_id;
-                    realNotice = `🚀 Real Message #${realMsgId} delivered directly to external app (Chat ID: ${targetChat}) via Telegram Bot API`;
-                  }
+                const tgData = await tgRes.json();
+                if (tgRes.ok && tgData.ok) {
+                  deliveredSuccess = true;
+                  realMsgId = tgData.result.message_id;
+                  realNotice = `🚀 Real Message #${realMsgId} delivered directly to phone (Chat ID: ${targetChat}) via Telegram Bot API`;
+                } else {
+                  deliveryError = tgData?.description || `HTTP ${tgRes.status}`;
                 }
-              } catch (err) {
-                // network offline
+              } catch (err: any) {
+                deliveryError = `Network error: ${err.message}`;
               }
+            }
+
+            if (!deliveredSuccess) {
+              const finalErrMsg = `Step "${curr.name}" failed: ${deliveryError || 'Failed to deliver to Telegram'}. Check Chat ID and make sure you sent /start to your bot.`;
+              nodeResults[curr.id] = {
+                nodeId: curr.id,
+                nodeName: curr.name,
+                nodeType: curr.type,
+                status: 'failed',
+                error: finalErrMsg,
+                startedAt: new Date(stepTime).toISOString(),
+                finishedAt: new Date(stepTime + duration).toISOString(),
+                durationMs: duration,
+                input: stepInput,
+              };
+              logs.push({
+                timestamp: new Date().toISOString(),
+                level: 'error',
+                message: `❌ ${finalErrMsg}`,
+                nodeId: curr.id,
+              });
+              setLatestExecution({
+                id: execId,
+                workflowId: workflow.id,
+                workflowName: workflow.name,
+                triggerType: 'manual',
+                status: 'failed',
+                startedAt: new Date(startTime).toISOString(),
+                finishedAt: new Date().toISOString(),
+                nodeResults: { ...nodeResults },
+                logs: [...logs],
+              });
+              setWorkflowExecutionError({
+                nodeId: curr.id,
+                nodeName: curr.name,
+                error: finalErrMsg,
+              });
+              return;
             }
           }
 
           stepOutput = {
-            sent: Boolean(deliveredSuccess || !token),
+            sent: true,
             platform: 'External Chat / Telegram',
             chatId: targetChat || undefined,
             message: msg,
@@ -1756,6 +1983,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               statusNotice: realNotice,
             },
           };
+
+          setWorkflowExecutionSuccessToast({
+            message: `Message #${realMsgId} delivered to Telegram (Chat ${targetChat})!`,
+            messageId: realMsgId,
+          });
+          setTimeout(() => setWorkflowExecutionSuccessToast(null), 5000);
         } else {
           duration = 50;
           stepOutput = {
@@ -1789,11 +2022,37 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           nodeId: curr.id,
         });
 
+        // Immediately update state so canvas reflects completed step with checkmark & output
+        setLatestExecution({
+          id: execId,
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          triggerType: 'manual',
+          status: 'running',
+          startedAt: new Date(startTime).toISOString(),
+          nodeResults: { ...nodeResults },
+          logs: [...logs],
+        });
+
         stepTime += duration;
         executedIds.add(curr.id);
 
-        // Queue downstream
+        // Queue downstream & animate outgoing wires into next steps
         const outgoing = workflow.connections.filter((c) => c.fromNodeId === curr.id);
+        if (outgoing.length > 0) {
+          setActiveTransferConnectionIds((prev) => {
+            const next = new Set(prev);
+            outgoing.forEach((c) => next.add(c.id));
+            return next;
+          });
+          await new Promise((r) => setTimeout(r, 350));
+          setActiveTransferConnectionIds((prev) => {
+            const next = new Set(prev);
+            outgoing.forEach((c) => next.delete(c.id));
+            return next;
+          });
+        }
+
         for (const conn of outgoing) {
           if (['in_model', 'in_memory', 'in_tools'].includes(conn.toPortId)) continue;
           const target = workflow.nodes.find((n) => n.id === conn.toNodeId);
@@ -1802,6 +2061,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           }
         }
       }
+
+      setActiveTransferConnectionIds(new Set());
 
       // Check any remaining
       const remaining = workflow.nodes.filter((n) => !executedIds.has(n.id) && !isProvider(n));
@@ -1857,6 +2118,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       if (res.ok) {
         const data = await res.json();
         setLatestExecution(data);
+        if (data.status === 'failed') {
+          const failedEntry = Object.values(data.nodeResults || {}).find((r: any) => r.status === 'failed') as any;
+          if (failedEntry) {
+            setWorkflowExecutionError({
+              nodeId: failedEntry.nodeId,
+              nodeName: failedEntry.nodeName || 'Node',
+              error: failedEntry.error || 'Execution step failed',
+            });
+          }
+        } else if (data.status === 'success') {
+          setWorkflowExecutionError(null);
+          const deliveredNode = Object.values(data.nodeResults || {}).find((r: any) => r.output?.delivered) as any;
+          if (deliveredNode) {
+            setWorkflowExecutionSuccessToast({
+              message: `Delivered to real application via ${deliveredNode.nodeName}!`,
+              messageId: deliveredNode.output?.messageId,
+            });
+            setTimeout(() => setWorkflowExecutionSuccessToast(null), 5000);
+          }
+        }
       } else {
         await runRealClientExecution();
       }
@@ -2293,6 +2574,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     toPortType={toPortType}
                     isSelected={selectedConnectionId === conn.id}
                     isExecuting={isExecuting}
+                    isActivelyTransferring={activeTransferConnectionIds.has(conn.id)}
                     executionStatus={stepResult?.status}
                     onDelete={handleDeleteConnection}
                     onSelect={(id) => {
@@ -2707,6 +2989,79 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onClose={() => setIsCloudModalOpen(false)}
         workflow={workflow}
       />
+
+      {/* Real Execution Error Alert Banner (prominently shown when any step fails) */}
+      {workflowExecutionError && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xl w-[92vw] sm:w-full px-4 animate-in slide-in-from-top-4 duration-300">
+          <div className="p-3.5 rounded-2xl bg-slate-950/98 border-2 border-rose-500 shadow-2xl shadow-rose-950/90 text-rose-100 backdrop-blur-xl flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
+              <AlertTriangle className="w-4 h-4 animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-rose-200">
+                  Workflow Error at Step: <span className="text-white underline font-mono">{workflowExecutionError.nodeName}</span>
+                </span>
+                <button
+                  onClick={() => setWorkflowExecutionError(null)}
+                  className="text-rose-400 hover:text-white p-0.5 rounded cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[11px] font-mono text-rose-200/95 mt-1 leading-snug break-words bg-rose-950/60 p-2 rounded-lg border border-rose-900/60">
+                {workflowExecutionError.error}
+              </p>
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    setEditingNodeId(workflowExecutionError.nodeId);
+                    setWorkflowExecutionError(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-rose-600/30"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Open Step Settings to Fix</span>
+                </button>
+                <button
+                  onClick={() => setExecutionDrawerOpen(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs border border-slate-700 transition cursor-pointer"
+                >
+                  View Error Logs
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Real Internet Delivery Success Toast */}
+      {workflowExecutionSuccessToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92vw] sm:w-full px-4 animate-in slide-in-from-top-4 duration-300">
+          <div className="p-3 rounded-2xl bg-slate-950/98 border border-emerald-500/80 shadow-2xl shadow-emerald-950/80 text-emerald-200 backdrop-blur-xl flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-white">Delivered to Real Application</div>
+              <div className="text-[11px] text-emerald-300 truncate">
+                {workflowExecutionSuccessToast.message}
+              </div>
+            </div>
+            {workflowExecutionSuccessToast.messageId && (
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300">
+                Msg #{workflowExecutionSuccessToast.messageId}
+              </span>
+            )}
+            <button
+              onClick={() => setWorkflowExecutionSuccessToast(null)}
+              className="text-slate-400 hover:text-white p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

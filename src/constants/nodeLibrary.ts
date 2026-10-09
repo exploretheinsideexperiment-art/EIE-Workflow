@@ -2057,9 +2057,6 @@ export interface WorkflowNodeMeta {
   operationDefault?: string;
 }
 
-// Backward-compatible alias
-export type N8nNodeMeta = WorkflowNodeMeta;
-
 export function getNodePackageMeta(type: string, name?: string): WorkflowNodeMeta {
   const t = (type || '').toLowerCase();
 
@@ -2277,5 +2274,3 @@ export function getNodePackageMeta(type: string, name?: string): WorkflowNodeMet
     category: 'Applications',
   };
 }
-
-export const getN8nNodeMeta = getNodePackageMeta;

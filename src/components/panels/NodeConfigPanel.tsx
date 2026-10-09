@@ -39,7 +39,9 @@ import {
   Mail,
   Loader2,
   Save,
-  Download
+  Download,
+  ArrowDownLeft,
+  Radio
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { Workflow, WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
@@ -177,6 +179,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   } | null>(null);
   const [tgTestSending, setTgTestSending] = useState(false);
   const [tgTestSuccessToast, setTgTestSuccessToast] = useState<string | null>(null);
+  const [tgTestErrorToast, setTgTestErrorToast] = useState<string | null>(null);
+  const [showBotToken, setShowBotToken] = useState(false);
 
   // Live Mobile App Connectivity State
   const [isReceivingMobile, setIsReceivingMobile] = useState(false);
@@ -1379,18 +1383,106 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                       {tgTestSuccessToast && (
                         <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>{tgTestSuccessToast}</span>
+                          <span className="font-semibold">{tgTestSuccessToast}</span>
                         </div>
                       )}
+                      {tgTestErrorToast && (
+                        <div className="p-2.5 rounded-xl bg-rose-950/90 border border-rose-500 text-rose-200 text-xs flex items-center gap-2 animate-in fade-in">
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span className="font-medium">{tgTestErrorToast}</span>
+                        </div>
+                      )}
+
+                      {/* Telegram Bot Token (Direct Field & Verification) */}
+                      <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-200 flex items-center gap-1.5">
+                            <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
+                            Telegram Bot Token
+                          </label>
+                          <span className="text-[9.5px] text-cyan-400 font-mono">From @BotFather</span>
+                        </div>
+                        <div className="relative flex items-stretch">
+                          <input
+                            type={showBotToken ? 'text' : 'password'}
+                            value={config.botToken || config.token || (selectedCredential?.data?.botToken || '')}
+                            onChange={(e) => {
+                              handleConfigBatch({ botToken: e.target.value, token: e.target.value });
+                            }}
+                            placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-l-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowBotToken(!showBotToken)}
+                            className="px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] border border-l-0 border-slate-700 cursor-pointer"
+                            title={showBotToken ? 'Hide token' : 'Show token'}
+                          >
+                            {showBotToken ? 'Hide' : 'Show'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={tgVerifying || !(config.botToken || config.token || selectedCredential?.data?.botToken)}
+                            onClick={async () => {
+                              const t = (config.botToken || config.token || selectedCredential?.data?.botToken || '').trim();
+                              if (!t) return;
+                              setTgVerifying(true);
+                              setTgTestErrorToast(null);
+                              setTgTestSuccessToast(null);
+                              try {
+                                const res = await fetch('/api/integrations/telegram/verify', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ botToken: t }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setTgVerifiedInfo({
+                                    status: 'Connected',
+                                    botName: data.bot?.first_name,
+                                    botUsername: data.bot?.username,
+                                  });
+                                  setTgTestSuccessToast(`✓ Bot Connected: ${data.bot?.first_name} (@${data.bot?.username})`);
+                                } else {
+                                  setTgTestErrorToast(`Invalid Bot Token: ${data.error || 'Check token from @BotFather'}`);
+                                }
+                              } catch (e: any) {
+                                setTgTestErrorToast(`Verification error: ${e.message}`);
+                              } finally {
+                                setTgVerifying(false);
+                              }
+                            }}
+                            className="px-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-[11px] font-bold rounded-r-lg cursor-pointer transition flex items-center gap-1"
+                          >
+                            {tgVerifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                            <span>Verify</span>
+                          </button>
+                        </div>
+                        {tgVerifiedInfo?.botUsername && (
+                          <div className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            <span>Active Bot: @{tgVerifiedInfo.botUsername} ({tgVerifiedInfo.botName})</span>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Chat ID (Recipient) */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
                             <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-                            Chat ID
+                            Chat ID (Recipient Mobile Phone / Group)
                           </label>
-                          <span className="text-[10px] text-slate-500 font-mono">Recipient ID, channel, or {'{{$json.chatId}}'}</span>
+                          <button
+                            type="button"
+                            onClick={handleFetchMobileMessages}
+                            disabled={isReceivingMobile}
+                            className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-blue-950 hover:bg-blue-900 border border-blue-500/50 text-blue-300 flex items-center gap-1 cursor-pointer transition"
+                            title="Auto-detect Chat ID from latest message sent to your bot"
+                          >
+                            {isReceivingMobile ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Radio className="w-2.5 h-2.5 text-cyan-400" />}
+                            <span>Auto-Detect My Chat ID</span>
+                          </button>
                         </div>
                         <div className="relative flex items-stretch">
                           <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
@@ -1405,6 +1497,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
                           />
+                        </div>
+                        <div className="text-[9.5px] text-slate-400 mt-1 flex items-center justify-between">
+                          <span>Tip: Message <span className="text-cyan-300 font-mono">@userinfobot</span> on Telegram to get your Chat ID.</span>
                         </div>
                         {renderExpressionEvaluator(config.chatId || config.chat_id)}
                       </div>
@@ -1528,20 +1623,21 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <button
                           type="button"
                           onClick={async () => {
-                            const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+                            const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
                             const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
                             if (!token) {
-                              setTgTestSuccessToast('Please configure your Telegram Bot Token in the credential at top first');
-                              setShowNewCredModal(true);
-                              setTimeout(() => setTgTestSuccessToast(null), 3500);
+                              setTgTestErrorToast('Missing Bot Token! Please enter your Telegram Bot Token above or create a Telegram Credential.');
+                              setTimeout(() => setTgTestErrorToast(null), 4500);
                               return;
                             }
                             if (!cid) {
-                              setTgTestSuccessToast('Please enter a Target Chat ID');
-                              setTimeout(() => setTgTestSuccessToast(null), 3000);
+                              setTgTestErrorToast('Missing Chat ID! Please enter your Telegram Chat ID (recipient phone/user ID) above.');
+                              setTimeout(() => setTgTestErrorToast(null), 4500);
                               return;
                             }
                             setTgTestSending(true);
+                            setTgTestErrorToast(null);
+                            setTgTestSuccessToast(null);
                             try {
                               const testText = (config.text || config.message || '🚀 <b>Workflow Connection Verified!</b>\n\n✅ <b>Status:</b> Success\n🌐 <i>Dispatched via Telegram Bot API</i>').trim();
                               const res = await fetch('/api/integrations/telegram/send-test', {
@@ -1550,23 +1646,22 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                                 body: JSON.stringify({ botToken: token, chatId: cid, text: testText }),
                               });
                               const data = await res.json();
-                              if (data.ok) {
-                                setTgTestSuccessToast(`✓ Delivered to Chat ID ${cid}! (Msg #${data.messageId || '1'})`);
+                              if (data.ok && data.delivered) {
+                                setTgTestSuccessToast(`✓ Real Message Delivered to Telegram Chat ${cid}! (Msg ID #${data.messageId || '1'})`);
                               } else {
-                                setTgTestSuccessToast(`Failed: ${data.error || 'Check token & chat ID'}`);
+                                setTgTestErrorToast(`Delivery Failed: ${data.error || 'Check Chat ID & Token. Did you send /start to your bot?'}`);
                               }
                             } catch (err: any) {
-                              setTgTestSuccessToast(`Send error: ${err.message || 'Network error'}`);
+                              setTgTestErrorToast(`Send error: ${err.message || 'Network connection failed'}`);
                             } finally {
                               setTgTestSending(false);
-                              setTimeout(() => setTgTestSuccessToast(null), 4000);
                             }
                           }}
                           disabled={tgTestSending}
-                          className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md shadow-blue-600/30 cursor-pointer"
+                          className="w-full py-2.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md shadow-blue-600/30 cursor-pointer"
                         >
                           {tgTestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                          <span>Execute Step (Test Send Message)</span>
+                          <span>Execute Step (Send Real Test Message to Mobile Phone)</span>
                         </button>
                       </div>
 
@@ -2016,14 +2111,17 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {node.type === 'trigger_schedule' && (
                     <div className="space-y-3.5">
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Interval</label>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Schedule Mode</label>
                         <select
                           value={config.triggerInterval || 'cron'}
                           onChange={(e) => {
                             const val = e.target.value;
                             let newCron = config.cron || '0 9 * * 1';
-                            if (val === 'minutes') newCron = '*/15 * * * *';
+                            if (val === 'minute') newCron = '* * * * *';
+                            else if (val === 'minutes_5') newCron = '*/5 * * * *';
+                            else if (val === 'minutes_15') newCron = '*/15 * * * *';
                             else if (val === 'hours') newCron = '0 * * * *';
+                            else if (val === 'daily_time') newCron = '0 9 * * *';
                             else if (val === 'days') newCron = '0 9 * * *';
                             else if (val === 'weeks') newCron = '0 9 * * 1';
                             else if (val === 'months') newCron = '0 9 1 * *';
@@ -2031,14 +2129,34 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
                         >
-                          <option value="cron">Custom (Cron Expression)</option>
-                          <option value="minutes">Every 15 Minutes</option>
+                          <option value="minute">Every 1 Minute (Instant Testing & Live Sync)</option>
+                          <option value="minutes_5">Every 5 Minutes</option>
+                          <option value="minutes_15">Every 15 Minutes</option>
                           <option value="hours">Every Hour</option>
+                          <option value="daily_time">Daily at Specific Time (HH:MM)</option>
                           <option value="days">Every Day at 9:00 AM</option>
                           <option value="weeks">Every Monday at 9:00 AM</option>
                           <option value="months">1st of Every Month</option>
+                          <option value="cron">Custom (Cron Expression)</option>
                         </select>
                       </div>
+
+                      {config.triggerInterval === 'daily_time' && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Exact Time of Day (24-Hour)</label>
+                          <input
+                            type="time"
+                            value={config.exactTime || '09:00'}
+                            onChange={(e) => {
+                              const timeVal = e.target.value;
+                              const [h, m] = timeVal.split(':');
+                              const newCron = `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
+                              handleConfigBatch({ exactTime: timeVal, cron: newCron });
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+                      )}
 
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression</label>
@@ -2052,10 +2170,16 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <div className="mt-1.5 p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
                           <span>Readable Schedule:</span>
                           <strong className="text-emerald-400 font-medium">
-                            {config.cron === '*/15 * * * *'
+                            {config.cron === '* * * * *'
+                              ? 'Every 1 minute (Continuously)'
+                              : config.cron === '*/5 * * * *'
+                              ? 'Every 5 minutes'
+                              : config.cron === '*/15 * * * *'
                               ? 'Every 15 minutes'
                               : config.cron === '0 * * * *'
                               ? 'Every hour at minute 0'
+                              : config.exactTime
+                              ? `Every day at ${config.exactTime}`
                               : config.cron === '0 9 * * *'
                               ? 'Every day at 09:00 AM'
                               : config.cron === '0 9 * * 1'
@@ -2080,37 +2204,182 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           <option value="Asia/Singapore">Asia/Singapore (SGT - UTC+8)</option>
                         </select>
                       </div>
+
+                      {/* Instant Test Schedule Trigger Button */}
+                      <div className="pt-2 border-t border-slate-800">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setTgTestSuccessToast('⚡ Simulating scheduled trigger execution...');
+                              const res = await fetch('/api/scheduler/trigger-now', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ workflowId: workflow?.id, nodeId: node.id }),
+                              });
+                              const data = await res.json();
+                              if (data.ok) {
+                                setTgTestSuccessToast(`✓ Scheduled trigger fired successfully (Exec ID: ${data.executionId})`);
+                              } else {
+                                setTgTestSuccessToast(`Error: ${data.error || 'Failed'}`);
+                              }
+                            } catch (e: any) {
+                              setTgTestSuccessToast(`Error: ${e.message}`);
+                            } finally {
+                              setTimeout(() => setTgTestSuccessToast(null), 5000);
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/40 text-xs font-semibold cursor-pointer transition active:scale-98"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Test Trigger Now (Simulate Scheduled Execution)</span>
+                        </button>
+                        <p className="text-[10px] text-slate-400 text-center mt-1.5">
+                          Background scheduler runs continuously on server: triggers automatically when the set time arrives.
+                        </p>
+                      </div>
                     </div>
                   )}
 
                   {/* 5. CHAT NODES (Chat Trigger, Chat Response, AI Chat, Webchat) */}
                   {(node.type === 'chat_trigger' || node.type === 'chat_message' || node.type === 'chat_ai' || node.type === 'chat_webhook') && (
                     <div className="space-y-3.5">
-                      {/* Target Chat ID (Recipient) */}
+                      {/* Destination Platform / Channel */}
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
-                            <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-                            Target Chat ID
-                          </label>
-                          <span className="text-[10px] text-slate-500 font-mono">Recipient ID, channel, or {'{{$json.chatId}}'}</span>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Target Chat Platform / Channel</label>
+                        <select
+                          value={config.platform || (config.chatId?.startsWith('@') || config.botToken ? 'telegram' : 'telegram')}
+                          onChange={(e) => handleConfigChange('platform', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-cyan-500 focus:outline-none"
+                        >
+                          <option value="telegram">Telegram (Mobile App & Bot)</option>
+                          <option value="discord">Discord (Channel Webhook)</option>
+                          <option value="slack">Slack (Channel Webhook)</option>
+                          <option value="mobile_webhook">Custom Mobile App (REST / Webhook URL)</option>
+                          <option value="live_chat">Built-in Live Web Chat Box</option>
+                        </select>
+                      </div>
+
+                      {/* Telegram Mobile Config */}
+                      {(config.platform === 'telegram' || !config.platform || config.platform === 'live_chat') && (
+                        <div className="space-y-2.5 p-2.5 rounded-xl bg-slate-950/70 border border-cyan-900/40">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              Internet Connected: Telegram Mobile API
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-mono">Real-Time Mobile Sync</span>
+                          </div>
+
+                          {/* Bot Token if not provided via credential */}
+                          {!selectedCredential?.data?.botToken && (
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">Telegram Bot Token (from @BotFather)</label>
+                              <input
+                                type="password"
+                                value={config.botToken || ''}
+                                onChange={(e) => handleConfigChange('botToken', e.target.value)}
+                                placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                              />
+                            </div>
+                          )}
+
+                          {/* Target Chat ID (Recipient) */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                                Target Mobile Chat ID
+                              </label>
+                              <span className="text-[10px] text-slate-500 font-mono">User ID, channel, or {'{{$json.chatId}}'}</span>
+                            </div>
+                            <div className="relative flex items-stretch">
+                              <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
+                                fx
+                              </span>
+                              <input
+                                type="text"
+                                value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
+                                onChange={(e) => {
+                                  handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
+                                }}
+                                placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
+                                className="w-full bg-slate-900 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                              />
+                            </div>
+                            {renderExpressionEvaluator(config.chatId || config.chat_id)}
+                          </div>
+
+                          {/* Mobile Action Buttons */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const token = (config.botToken || selectedCredential?.data?.botToken || '').trim();
+                                const chat = (config.chatId || config.chat_id || selectedCredential?.data?.chatId || '').trim();
+                                if (!token || !chat) {
+                                  setTgTestSuccessToast('Enter Bot Token and Target Chat ID first');
+                                  setTimeout(() => setTgTestSuccessToast(null), 3500);
+                                  return;
+                                }
+                                try {
+                                  setTgTestSuccessToast('📱 Sending real message to your phone...');
+                                  const res = await fetch('/api/integrations/telegram/send-test', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      botToken: token,
+                                      chatId: chat,
+                                      message: config.message || config.text || '👋 Live message from EIE-Workflow Chat Node to your mobile app!',
+                                    }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.ok) {
+                                    setTgTestSuccessToast(`✓ Delivered to mobile! Message ID: #${data.messageId}`);
+                                  } else {
+                                    setTgTestSuccessToast(`Telegram error: ${data.error || 'Failed'}`);
+                                  }
+                                } catch (e: any) {
+                                  setTgTestSuccessToast(`Network error: ${e.message}`);
+                                } finally {
+                                  setTimeout(() => setTgTestSuccessToast(null), 5000);
+                                }
+                              }}
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold cursor-pointer transition active:scale-98"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>Send to Mobile</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleFetchMobileMessages}
+                              disabled={isReceivingMobile}
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold cursor-pointer transition active:scale-98"
+                            >
+                              <ArrowDownLeft className="w-3 h-3" />
+                              <span>{isReceivingMobile ? 'Receiving...' : 'Receive from Phone'}</span>
+                            </button>
+                          </div>
                         </div>
-                        <div className="relative flex items-stretch">
-                          <span className="px-2.5 bg-slate-950/80 border border-r-0 border-slate-800 rounded-l-lg flex items-center justify-center font-mono text-[11px] text-cyan-400 font-bold select-none italic">
-                            fx
-                          </span>
+                      )}
+
+                      {/* Discord / Slack / Mobile Webhook URL */}
+                      {(config.platform === 'discord' || config.platform === 'slack' || config.platform === 'mobile_webhook') && (
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-300 block mb-1">
+                            {config.platform === 'discord' ? 'Discord Webhook URL' : config.platform === 'slack' ? 'Slack Webhook URL' : 'Mobile App Webhook / API URL'}
+                          </label>
                           <input
                             type="text"
-                            value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
-                            onChange={(e) => {
-                              handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
-                            }}
-                            placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                            value={config.webhookUrl || ''}
+                            onChange={(e) => handleConfigChange('webhookUrl', e.target.value)}
+                            placeholder="https://..."
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
                           />
                         </div>
-                        {renderExpressionEvaluator(config.chatId || config.chat_id)}
-                      </div>
+                      )}
 
                       {/* Node Type Specific Fields */}
                       {node.type === 'chat_trigger' && (

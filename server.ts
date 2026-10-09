@@ -5,6 +5,7 @@ import express, { Request, Response } from 'express';
 import http from 'http';
 import path from 'path';
 import { router as apiRouter } from './server/routes/api';
+import { WorkflowScheduler } from './server/services/workflowScheduler';
 
 const app = express();
 const PORT = 3000;
@@ -51,6 +52,7 @@ async function startServer() {
 
   server.listen(PORT, HOST, () => {
     console.log(`[EIE-Workflow] Server running at http://${HOST}:${PORT}`);
+    WorkflowScheduler.start();
   });
 }
 

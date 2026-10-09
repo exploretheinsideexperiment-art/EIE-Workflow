@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import * as Icons from 'lucide-react';
 import {
   Plus,
@@ -199,6 +199,38 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   const toolCount = toolConns.length;
   const mainOutputTargets = getPortConnections('out_main', true);
 
+  const nodeSubtitle = useMemo(() => {
+    const t = (node.type || '').toLowerCase();
+    const cfg = node.config || {};
+    if (t === 'trigger_schedule') {
+      return cfg.exactTime ? `Time: ${cfg.exactTime}` : cfg.cron ? `Cron: ${cfg.cron}` : 'Scheduled Trigger';
+    }
+    if (t === 'chat_trigger') {
+      return 'Mobile / Web Chat Trigger';
+    }
+    if (t === 'chat_message') {
+      return cfg.chatId ? `To: ${cfg.chatId}` : 'Send Chat Response';
+    }
+    if (t === 'chat_ai') {
+      return 'Google Gemini AI Reasoning';
+    }
+    if (t.includes('telegram')) {
+      return cfg.chatId ? `Chat: ${cfg.chatId}` : 'Telegram Mobile & Bot API';
+    }
+    if (t === 'http_request') {
+      const u = cfg.url || 'API';
+      const cleanUrl = u.replace(/^https?:\/\//, '').split('/')[0];
+      return `${cfg.method || 'GET'} ${cleanUrl}`;
+    }
+    if (t === 'trigger_webhook') {
+      return cfg.path ? `/webhook/${cfg.path}` : 'Webhook Inbound';
+    }
+    if (t === 'app_google_sheets') {
+      return cfg.sheetName ? `Sheet: ${cfg.sheetName}` : 'Spreadsheet Sync';
+    }
+    return null;
+  }, [node.type, node.config]);
+
   const handleOutputPortPointerDown = (
     e: React.MouseEvent | React.TouchEvent,
     portId: string
@@ -270,16 +302,16 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         width: isExpanded
           ? isAiAgent
             ? toolCount > 1
-              ? '330px'
-              : '300px'
-            : '300px'
+              ? '340px'
+              : '310px'
+            : '310px'
           : isAiAgent
           ? toolCount > 1
-            ? '290px'
+            ? '310px'
             : toolCount === 1
-            ? '265px'
-            : '245px'
-          : '235px',
+            ? '285px'
+            : '270px'
+          : '265px',
         touchAction: 'none',
       }}
       className={`absolute select-none pointer-events-auto rounded-xl bg-slate-900/98 backdrop-blur-xl border transition-all duration-150 group cursor-move shadow-md shadow-black/30 ${
@@ -436,11 +468,16 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <h4
-              className="text-[13px] font-bold text-white tracking-normal leading-tight line-clamp-2 drop-shadow-xs"
+              className="text-[13.5px] font-extrabold text-white tracking-tight leading-snug drop-shadow-xs group-hover:text-cyan-200 transition-colors"
               title={node.name}
             >
               {node.name}
             </h4>
+            {nodeSubtitle && (
+              <div className="text-[10px] font-mono text-cyan-300/85 truncate mt-0.5" title={nodeSubtitle}>
+                {nodeSubtitle}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 flex-wrap mt-1">
               <span className={`text-[9px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800/80 ${catStyle.text}`}>
                 {isAiAgent ? 'Autonomous Agent' : isAiTool ? 'Tool' : node.category}
@@ -730,27 +767,42 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       {!isExpanded && executionResult && (
         <div className="px-3 pb-2.5">
           {executionResult.status === 'failed' ? (
-            <div className="p-2 rounded-xl bg-rose-950/70 border border-rose-500/50 text-[10px] text-rose-200">
+            <div className="p-2 rounded-xl bg-rose-950/90 border border-rose-500/80 text-[10px] text-rose-200 animate-in fade-in">
               <div className="flex items-center justify-between gap-1 mb-1">
                 <div className="flex items-center gap-1 font-bold text-rose-300">
-                  <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
-                  <span>Error Detected</span>
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span>Execution Error</span>
                 </div>
-                {onOpenDoctorForNode && (
+                <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onOpenDoctorForNode(node.id);
+                      onOpenConfig(node.id);
                     }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold cursor-pointer transition"
-                    title="Fix this error with Build-Ai"
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-900/90 hover:bg-rose-800 border border-rose-500/60 text-white text-[9px] font-bold cursor-pointer transition shadow-xs"
+                    title="Open configuration to fix this node"
                   >
-                    <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
-                    <span>Build-Ai</span>
+                    <Settings className="w-2.5 h-2.5 text-white" />
+                    <span>Fix Step</span>
                   </button>
-                )}
+                  {onOpenDoctorForNode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenDoctorForNode(node.id);
+                      }}
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[9px] font-bold cursor-pointer transition"
+                      title="Fix this error with Build-Ai"
+                    >
+                      <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
+                      <span>Build-Ai</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="line-clamp-2 text-[10px] text-rose-300/90 leading-tight">
+              <p className="line-clamp-3 text-[10px] text-rose-200 leading-tight font-mono bg-rose-950/60 p-1.5 rounded border border-rose-900/60 break-words">
                 {executionResult.error || 'Execution failed'}
               </p>
             </div>

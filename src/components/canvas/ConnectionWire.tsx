@@ -10,6 +10,7 @@ interface ConnectionWireProps {
   toPortType?: string;
   isSelected?: boolean;
   isExecuting?: boolean;
+  isActivelyTransferring?: boolean;
   executionStatus?: 'waiting' | 'running' | 'success' | 'failed' | 'skipped';
   onDelete?: (connectionId: string) => void;
   onSelect?: (connectionId: string) => void;
@@ -23,6 +24,7 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   toPortType,
   isSelected,
   isExecuting,
+  isActivelyTransferring = false,
   executionStatus,
   onDelete,
   onSelect,
@@ -126,10 +128,12 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
   let strokeGlow = isSelected ? colorDef.glow : `drop-shadow(0 0 4px ${colorDef.hex}60)`;
 
   // Keep authentic port color at all times; enhance with brightness during execution
-  if (executionStatus === 'running' || isExecuting) {
-    strokeGlow = `drop-shadow(0 0 10px ${colorDef.hex})`;
+  if (isActivelyTransferring) {
+    strokeGlow = `drop-shadow(0 0 12px ${colorDef.hex})`;
+  } else if (executionStatus === 'running') {
+    strokeGlow = `drop-shadow(0 0 8px ${colorDef.hex})`;
   } else if (executionStatus === 'success') {
-    strokeGlow = `drop-shadow(0 0 7px ${colorDef.hex}b3)`;
+    strokeGlow = `drop-shadow(0 0 5px ${colorDef.hex}80)`;
   } else if (executionStatus === 'failed') {
     strokeGlow = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.8))';
   }
@@ -214,10 +218,10 @@ export const ConnectionWire: React.FC<ConnectionWireProps> = ({
         </g>
       )}
 
-      {/* Flowing animated pulse particle during execution in exact port point color */}
-      {(isExecuting || executionStatus === 'running' || executionStatus === 'success') && (
-        <circle r="4" fill={strokeColor} filter={`drop-shadow(0 0 6px ${strokeColor})`}>
-          <animateMotion path={pathData} dur="1.2s" repeatCount="indefinite" />
+      {/* Flowing animated pulse packet ONLY when data is actively transferring between nodes */}
+      {isActivelyTransferring && (
+        <circle r="4.5" fill={strokeColor} filter={`drop-shadow(0 0 8px ${strokeColor})`}>
+          <animateMotion path={pathData} dur="0.9s" repeatCount="indefinite" />
         </circle>
       )}
 
