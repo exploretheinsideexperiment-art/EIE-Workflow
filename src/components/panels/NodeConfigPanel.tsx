@@ -192,38 +192,71 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   } | null>(null);
 
   const handleFetchMobileMessages = async () => {
-    const token = (selectedCredential?.data?.botToken || selectedCredential?.data?.token || config.botToken || config.accessToken || '').trim();
+    const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
     if (!token) {
-      setTgTestSuccessToast('Please configure your Bot Token in the credential first');
-      setShowNewCredModal(true);
-      setTimeout(() => setTgTestSuccessToast(null), 3500);
+      setTgTestErrorToast('Please enter your Telegram Bot Token first');
+      setTimeout(() => setTgTestErrorToast(null), 3500);
       return;
     }
     setIsReceivingMobile(true);
+    setTgTestErrorToast(null);
+
+    let foundChatId: string | null = null;
+    let foundSender: string = 'User';
+    let foundText: string = '';
+
+    // 1. Try direct Telegram API getUpdates with native CORS
     try {
-      const res = await fetch('/api/integrations/telegram/updates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ botToken: token }),
-      });
-      const data = await res.json();
-      if (data.ok && data.latestMessage) {
-        setReceivedMobileMsg(data.latestMessage);
-        if (!config.chatId && data.latestMessage.chatId) {
-          handleConfigBatch({ chatId: String(data.latestMessage.chatId), chat_id: String(data.latestMessage.chatId) });
+      const directRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=10`);
+      const directData = await directRes.json();
+      if (directData.ok && Array.isArray(directData.result) && directData.result.length > 0) {
+        for (let i = directData.result.length - 1; i >= 0; i--) {
+          const u = directData.result[i];
+          const msg = u.message || u.channel_post || u.edited_message;
+          if (msg?.chat?.id) {
+            foundChatId = String(msg.chat.id).replace(/^=+/, '').trim();
+            foundSender = [msg.chat.first_name, msg.chat.last_name].filter(Boolean).join(' ') || msg.chat.username || msg.chat.title || 'User';
+            foundText = msg.text || '(message)';
+            break;
+          }
         }
-        setTgTestSuccessToast(`✓ Received from ${data.latestMessage.senderName}: "${data.latestMessage.text}"`);
-      } else if (data.ok) {
-        setTgTestSuccessToast('Listening: Send any message to your bot on your phone, then click again!');
-      } else {
-        setTgTestSuccessToast(`Update error: ${data.error || 'Failed to fetch'}`);
       }
-    } catch (e: any) {
-      setTgTestSuccessToast(`Error: ${e.message}`);
-    } finally {
-      setIsReceivingMobile(false);
-      setTimeout(() => setTgTestSuccessToast(null), 5000);
+    } catch (e) {
+      // Fallback to server route
     }
+
+    // 2. Fallback to server updates route if direct fetch didn't locate updates
+    if (!foundChatId) {
+      try {
+        const res = await fetch('/api/integrations/telegram/updates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botToken: token }),
+        });
+        const data = await res.json();
+        if (data.ok && data.latestMessage?.chatId) {
+          foundChatId = String(data.latestMessage.chatId).replace(/^=+/, '').trim();
+          foundSender = data.latestMessage.senderName || 'User';
+          foundText = data.latestMessage.text || '(message)';
+        }
+      } catch (err: any) {
+        // Continue to user feedback
+      }
+    }
+
+    if (foundChatId) {
+      handleConfigBatch({ chatId: foundChatId, chat_id: foundChatId });
+      setReceivedMobileMsg({
+        text: foundText,
+        senderName: foundSender,
+        chatId: foundChatId,
+        date: new Date().toISOString(),
+      });
+      setTgTestSuccessToast(`✓ Auto-detected Chat ID ${foundChatId} from ${foundSender}!`);
+    } else {
+      setTgTestErrorToast('No incoming messages found! Open Telegram, search your bot, send "Hello" or /start, then click Auto-Detect again.');
+    }
+    setIsReceivingMobile(false);
   };
 
   const handleReceiveAndTriggerWorkflow = async () => {
@@ -1429,28 +1462,49 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               setTgVerifying(true);
                               setTgTestErrorToast(null);
                               setTgTestSuccessToast(null);
+
+                              let verifiedBot: any = null;
+                              let errorReason: string | null = null;
+
+                              // 1. Direct Telegram API fetch (supports native CORS, 100% immune to proxy/network timeouts)
                               try {
-                                const res = await fetch('/api/integrations/telegram/verify', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ botToken: t }),
-                                });
-                                const data = await res.json();
-                                if (data.ok) {
-                                  setTgVerifiedInfo({
-                                    status: 'Connected',
-                                    botName: data.bot?.first_name,
-                                    botUsername: data.bot?.username,
-                                  });
-                                  setTgTestSuccessToast(`✓ Bot Connected: ${data.bot?.first_name} (@${data.bot?.username})`);
+                                const directRes = await fetch(`https://api.telegram.org/bot${t}/getMe`);
+                                const directData = await directRes.json();
+                                if (directData.ok && directData.result) {
+                                  verifiedBot = directData.result;
                                 } else {
-                                  setTgTestErrorToast(`Invalid Bot Token: ${data.error || 'Check token from @BotFather'}`);
+                                  errorReason = directData.description || 'Invalid Bot Token';
                                 }
-                              } catch (e: any) {
-                                setTgTestErrorToast(`Verification error: ${e.message}`);
-                              } finally {
-                                setTgVerifying(false);
+                              } catch (directErr: any) {
+                                // 2. Fallback to server route if direct browser fetch is blocked by local firewall/adblocker
+                                try {
+                                  const res = await fetch('/api/integrations/telegram/verify', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ botToken: t }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.ok && data.bot) {
+                                    verifiedBot = data.bot;
+                                  } else {
+                                    errorReason = data.error || 'Invalid Bot Token';
+                                  }
+                                } catch (proxyErr: any) {
+                                  errorReason = `Connection check failed (${directErr?.message || proxyErr?.message}). Please verify token in @BotFather.`;
+                                }
                               }
+
+                              if (verifiedBot) {
+                                setTgVerifiedInfo({
+                                  status: 'Connected',
+                                  botName: verifiedBot.first_name,
+                                  botUsername: verifiedBot.username,
+                                });
+                                setTgTestSuccessToast(`✓ Bot Connected: ${verifiedBot.first_name} (@${verifiedBot.username})`);
+                              } else {
+                                setTgTestErrorToast(`Invalid Bot Token: ${errorReason || 'Please check token from @BotFather'}`);
+                              }
+                              setTgVerifying(false);
                             }}
                             className="px-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-[11px] font-bold rounded-r-lg cursor-pointer transition flex items-center gap-1"
                           >
@@ -1492,14 +1546,24 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             type="text"
                             value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
                             onChange={(e) => {
-                              handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
+                              let val = e.target.value;
+                              // Auto-strip leading '=' if user typed '=5102553052' (common in Excel/n8n formulas)
+                              if (val.startsWith('=') && !val.includes('{{') && !val.includes('$')) {
+                                val = val.replace(/^=+/, '').trim();
+                              }
+                              handleConfigBatch({ chatId: val, chat_id: val });
                             }}
-                            placeholder="e.g. 1234567890 or @mychannel or {{$json.chatId}}"
+                            placeholder="e.g. 5102553052 or @mychannel or {{$json.chatId}}"
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
                           />
                         </div>
+                        {String(config.chatId || config.chat_id || '').startsWith('=') && (
+                          <div className="text-[9.5px] text-amber-300 font-mono mt-1 flex items-center gap-1">
+                            <span>Note: Leading '=' will be automatically stripped for Telegram delivery ({String(config.chatId || config.chat_id).replace(/^=+/, '')})</span>
+                          </div>
+                        )}
                         <div className="text-[9.5px] text-slate-400 mt-1 flex items-center justify-between">
-                          <span>Tip: Message <span className="text-cyan-300 font-mono">@userinfobot</span> on Telegram to get your Chat ID.</span>
+                          <span>Tip: Send /start to your bot, then click <strong className="text-cyan-300">Auto-Detect My Chat ID</strong></span>
                         </div>
                         {renderExpressionEvaluator(config.chatId || config.chat_id)}
                       </div>

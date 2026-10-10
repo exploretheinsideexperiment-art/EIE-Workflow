@@ -702,57 +702,62 @@ export class WorkflowEngine {
           if (!executionError) {
             executionError = `Node "${currentNode.name}" failed: ${nodeResult.error}`;
           }
+          // Stop execution immediately so the failing node is highlighted in red and no downstream steps run
+          break;
         }
       }
     }
 
-    // 3. Make sure all remaining non-provider nodes in the workflow are executed
-    const remainingNodes = workflow.nodes.filter(
-      (n) => !executedNodeIds.has(n.id) && !isProviderNode(n) && execution.nodeResults[n.id]?.status !== 'skipped'
-    );
-    for (const remNode of remainingNodes) {
-      const nodeStart = Date.now();
-      const nodeResult: ExecutionNodeResult = {
-        nodeId: remNode.id,
-        nodeName: remNode.name,
-        nodeType: remNode.type,
-        status: 'running',
-        startedAt: new Date(nodeStart).toISOString(),
-        input: initialPayload,
-      };
-      execution.nodeResults[remNode.id] = nodeResult;
-
-      try {
-        const context = {
-          json: initialPayload || {},
-          nodes: nodeOutputsByName,
+    // 3. Make sure all remaining non-provider nodes in the workflow are executed (only if workflow hasn't failed)
+    if (overallSuccess) {
+      const remainingNodes = workflow.nodes.filter(
+        (n) => !executedNodeIds.has(n.id) && !isProviderNode(n) && execution.nodeResults[n.id]?.status !== 'skipped'
+      );
+      for (const remNode of remainingNodes) {
+        const nodeStart = Date.now();
+        const nodeResult: ExecutionNodeResult = {
+          nodeId: remNode.id,
+          nodeName: remNode.name,
+          nodeType: remNode.type,
+          status: 'running',
+          startedAt: new Date(nodeStart).toISOString(),
+          input: initialPayload,
         };
-        const outputData = await this.executeNode(remNode, context, initialPayload, workflow, providerOutputs);
-        const nodeDuration = Date.now() - nodeStart;
+        execution.nodeResults[remNode.id] = nodeResult;
 
-        nodeResult.status = 'success';
-        nodeResult.finishedAt = new Date().toISOString();
-        nodeResult.durationMs = nodeDuration;
-        nodeResult.output = outputData;
+        try {
+          const context = {
+            json: initialPayload || {},
+            nodes: nodeOutputsByName,
+          };
+          const outputData = await this.executeNode(remNode, context, initialPayload, workflow, providerOutputs);
+          const nodeDuration = Date.now() - nodeStart;
 
-        nodeOutputs[remNode.id] = outputData;
-        nodeOutputsByName[remNode.name] = { json: outputData, ...outputData };
-        nodeOutputsByName[remNode.id] = { json: outputData, ...outputData };
-        executedNodeIds.add(remNode.id);
+          nodeResult.status = 'success';
+          nodeResult.finishedAt = new Date().toISOString();
+          nodeResult.durationMs = nodeDuration;
+          nodeResult.output = outputData;
 
-        execution.logs.push({
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          message: `Node "${remNode.name}" executed in fallback chain.`,
-          nodeId: remNode.id
-        });
-      } catch (remErr: any) {
-        nodeResult.status = 'failed';
-        nodeResult.finishedAt = new Date().toISOString();
-        nodeResult.durationMs = Date.now() - nodeStart;
-        nodeResult.error = remErr?.message || String(remErr);
-        overallSuccess = false;
-        if (!executionError) executionError = `Node "${remNode.name}" failed: ${nodeResult.error}`;
+          nodeOutputs[remNode.id] = outputData;
+          nodeOutputsByName[remNode.name] = { json: outputData, ...outputData };
+          nodeOutputsByName[remNode.id] = { json: outputData, ...outputData };
+          executedNodeIds.add(remNode.id);
+
+          execution.logs.push({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: `Node "${remNode.name}" executed in fallback chain.`,
+            nodeId: remNode.id
+          });
+        } catch (remErr: any) {
+          nodeResult.status = 'failed';
+          nodeResult.finishedAt = new Date().toISOString();
+          nodeResult.durationMs = Date.now() - nodeStart;
+          nodeResult.error = remErr?.message || String(remErr);
+          overallSuccess = false;
+          if (!executionError) executionError = `Node "${remNode.name}" failed: ${nodeResult.error}`;
+          break;
+        }
       }
     }
 
@@ -1476,7 +1481,7 @@ export class WorkflowEngine {
           config.tokenId ||
           '';
 
-        const targetChatId = evaluateExpressions(
+        const rawChatId = evaluateExpressions(
           config.chatId ||
           config.chat_id ||
           incomingData?.chatId ||
@@ -1488,6 +1493,7 @@ export class WorkflowEngine {
           '',
           context
         );
+        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '') : '');
 
         const rawTemplate =
           config.text ||
@@ -1674,24 +1680,30 @@ export class WorkflowEngine {
         const text = evaluateExpressions(config.text || config.messageText || 'EIE-Workflow Notification: ' + JSON.stringify(incomingData || {}), context);
         const webhookUrl = credential?.data?.webhookUrl || credential?.data?.token || config.webhookUrl;
 
+        if (!webhookUrl || !webhookUrl.startsWith('http')) {
+          throw new Error('Slack delivery failed: Webhook URL is missing! Open Slack Node settings and enter your Incoming Webhook URL.');
+        }
+
         let realSlackDispatched = false;
         let realSlackError: string | null = null;
-        if (webhookUrl && webhookUrl.startsWith('http')) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const slRes = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text, channel }),
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-            realSlackDispatched = slRes.ok;
-            if (!slRes.ok) realSlackError = `HTTP ${slRes.status}`;
-          } catch (e: any) {
-            realSlackError = e.message;
-          }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const slRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, channel }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          realSlackDispatched = slRes.ok;
+          if (!slRes.ok) realSlackError = `HTTP ${slRes.status}`;
+        } catch (e: any) {
+          realSlackError = e.message;
+        }
+
+        if (!realSlackDispatched) {
+          throw new Error(`Slack delivery failed: ${realSlackError || 'Webhook request failed'}. Please verify your Webhook URL.`);
         }
 
         return {
@@ -1699,13 +1711,14 @@ export class WorkflowEngine {
           platform: 'Slack',
           channel,
           text,
-          connectedExternally: realSlackDispatched,
-          apiNotice: realSlackDispatched ? 'Dispatched to Slack webhook' : realSlackError || 'Simulated (set Slack Webhook URL to send live)',
+          connectedExternally: true,
+          apiNotice: 'Dispatched to Slack webhook',
           timestamp: new Date().toISOString(),
           output: {
+            delivered: true,
             channel,
             text,
-            realDispatched: realSlackDispatched,
+            realDispatched: true,
             status: 'success',
           },
         };
@@ -1719,24 +1732,30 @@ export class WorkflowEngine {
         const content = evaluateExpressions(rawContent, context);
         const webhookUrl = credential?.data?.webhookUrl || credential?.data?.token || config.webhookUrl;
 
+        if (!webhookUrl || !webhookUrl.startsWith('http')) {
+          throw new Error('Discord delivery failed: Webhook URL is missing! Open Discord Node settings and enter your Discord Webhook URL.');
+        }
+
         let realDiscordDispatched = false;
         let realDiscordError: string | null = null;
-        if (webhookUrl && webhookUrl.startsWith('http')) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const dcRes = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content }),
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-            realDiscordDispatched = dcRes.ok;
-            if (!dcRes.ok) realDiscordError = `HTTP ${dcRes.status}`;
-          } catch (e: any) {
-            realDiscordError = e.message;
-          }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const dcRes = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          realDiscordDispatched = dcRes.ok;
+          if (!dcRes.ok) realDiscordError = `HTTP ${dcRes.status}`;
+        } catch (e: any) {
+          realDiscordError = e.message;
+        }
+
+        if (!realDiscordDispatched) {
+          throw new Error(`Discord delivery failed: ${realDiscordError || 'Webhook request failed'}. Please verify your Webhook URL.`);
         }
 
         return {
@@ -1744,13 +1763,14 @@ export class WorkflowEngine {
           platform: 'Discord',
           channel,
           content,
-          connectedExternally: realDiscordDispatched,
-          apiNotice: realDiscordDispatched ? 'Dispatched to Discord webhook' : realDiscordError || 'Simulated (set Discord Webhook URL to send live)',
+          connectedExternally: true,
+          apiNotice: 'Dispatched to Discord webhook',
           timestamp: new Date().toISOString(),
           output: {
+            delivered: true,
             channel,
             content,
-            realDispatched: realDiscordDispatched,
+            realDispatched: true,
             status: 'success',
           },
         };
@@ -2554,7 +2574,7 @@ export class WorkflowEngine {
           credential?.data?.accessToken ||
           credential?.data?.token;
 
-        const targetChatId = evaluateExpressions(
+        const rawChatId = evaluateExpressions(
           config.chatId ||
           config.chat_id ||
           credential?.data?.chatId ||
@@ -2564,6 +2584,7 @@ export class WorkflowEngine {
           '',
           context
         );
+        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '') : '');
 
         const isTelegramTarget = (config.platform === 'telegram' || Boolean(botToken) || Boolean(targetChatId));
         const isWebhookTarget = (config.platform === 'webhook' || Boolean(config.webhookUrl));

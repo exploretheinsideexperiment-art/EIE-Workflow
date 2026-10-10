@@ -650,6 +650,32 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       {/* EXPANDED IN-CANVAS VIEW */}
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 space-y-2 bg-slate-950/60 rounded-b-2xl">
+          {/* Execution Error Banner (when expanded) */}
+          {executionResult?.status === 'failed' && (
+            <div className="p-2 rounded-xl bg-rose-950/90 border border-rose-500/80 text-[10px] text-rose-200 animate-in fade-in">
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <div className="flex items-center gap-1 font-bold text-rose-300">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span>Execution Error</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenConfig(node.id);
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-900 hover:bg-rose-800 border border-rose-500/60 text-white text-[9px] font-bold cursor-pointer transition shadow-xs"
+                >
+                  <Settings className="w-2.5 h-2.5 text-white" />
+                  <span>Fix Step</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-rose-200 leading-tight font-mono bg-rose-950/60 p-1.5 rounded border border-rose-900/60 break-words">
+                {executionResult.error || 'Execution failed'}
+              </p>
+            </div>
+          )}
+
           {/* Quick Parameters & Operations Summary */}
           <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 space-y-1">
             <div className="flex items-center justify-between text-slate-400 font-bold border-b border-slate-800 pb-1">

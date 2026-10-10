@@ -384,6 +384,21 @@ router.post('/workflows/:id/run', async (req: Request, res: Response) => {
     wf = clientWf;
   }
 
+  // Merge client credentials into DB so execution engine has latest tokens
+  if (req.body?.credentials && Array.isArray(req.body.credentials)) {
+    db.mutate((d) => {
+      for (const c of req.body.credentials) {
+        if (!c || !c.id) continue;
+        const cIdx = d.credentials.findIndex((existing) => existing.id === c.id);
+        if (cIdx !== -1) {
+          d.credentials[cIdx] = { ...d.credentials[cIdx], ...c, data: { ...d.credentials[cIdx].data, ...c.data } };
+        } else {
+          d.credentials.push(c);
+        }
+      }
+    });
+  }
+
   // If still not found in DB, fallback to any available workflow or auto-create fallback
   if (!wf) {
     const allWfs = db.get('workflows');
@@ -704,7 +719,7 @@ router.post('/integrations/telegram/test', async (req: Request, res: Response) =
 router.post('/integrations/telegram/verify', async (req: Request, res: Response) => {
   const { botToken, chatId } = req.body;
   const token = (botToken || '').trim();
-  const targetChatId = (chatId || '').toString().trim();
+  const targetChatId = (chatId || '').toString().trim().replace(/^=+/, '');
 
   if (!token) {
     return res.status(400).json({ ok: false, error: 'Telegram Bot Token is required for connection verification.' });
@@ -716,8 +731,12 @@ router.post('/integrations/telegram/verify', async (req: Request, res: Response)
   let errorDetail: string | null = null;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
     // 1. Verify Bot via getMe
-    const botRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const botRes = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: controller.signal });
+    clearTimeout(timeout);
     const botData = await botRes.json();
     if (botData.ok) {
       botInfo = botData.result;
@@ -728,11 +747,15 @@ router.post('/integrations/telegram/verify', async (req: Request, res: Response)
     // 2. Verify target Chat ID if provided
     if (botInfo && targetChatId) {
       try {
+        const chatController = new AbortController();
+        const chatTimeout = setTimeout(() => chatController.abort(), 4000);
         const chatRes = await fetch(`https://api.telegram.org/bot${token}/getChat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: targetChatId })
+          body: JSON.stringify({ chat_id: targetChatId }),
+          signal: chatController.signal
         });
+        clearTimeout(chatTimeout);
         const chatData = await chatRes.json();
         if (chatData.ok) {
           chatInfo = chatData.result;
@@ -745,7 +768,12 @@ router.post('/integrations/telegram/verify', async (req: Request, res: Response)
     // 3. Fetch recent updates to populate chat selection list
     if (botInfo) {
       try {
-        const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=10`);
+        const updController = new AbortController();
+        const updTimeout = setTimeout(() => updController.abort(), 4000);
+        const updatesRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=10`, {
+          signal: updController.signal
+        });
+        clearTimeout(updTimeout);
         const updatesData = await updatesRes.json();
         if (updatesData.ok && Array.isArray(updatesData.result)) {
           recentUpdates = updatesData.result;
@@ -796,7 +824,7 @@ router.post('/integrations/telegram/verify', async (req: Request, res: Response)
 router.post('/integrations/telegram/send-test', async (req: Request, res: Response) => {
   const { botToken, chatId, message, text } = req.body;
   const token = (botToken || '').trim();
-  const targetChatId = (chatId || '').toString().trim();
+  const targetChatId = (chatId || '').toString().trim().replace(/^=+/, '');
 
   if (!token || !targetChatId) {
     return res.status(400).json({

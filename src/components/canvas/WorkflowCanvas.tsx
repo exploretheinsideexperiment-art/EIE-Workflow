@@ -92,7 +92,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       await fetch('/api/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credData),
+        body: JSON.stringify(newCred),
       });
     } catch {
       // offline fallback
@@ -1770,7 +1770,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             stepInput?.chatId ||
             stepInput?.chat_id ||
             ''
-          ).toString().trim();
+          ).toString().trim().replace(/^=+/, '');
 
           const rawCandidate =
             curr.config?.text ||
@@ -2112,6 +2112,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           triggerType: 'manual',
           payload: { testRun: true, triggeredAt: new Date().toISOString() },
           workflow, // Send current canvas workflow state
+          credentials: credentialsList,
         }),
       });
 
