@@ -226,9 +226,19 @@ export function evaluateExpressionInContext(
   latestExecution?: Execution | null
 ): any {
   if (typeof exprStr !== 'string') return exprStr;
-  if (!exprStr.includes('{{') && !exprStr.includes('$')) return exprStr;
+  
+  // Clean leading '=' if n8n formula style like '={{ $json.text }}' or '=5102553052'
+  const trimmed = exprStr.trim();
+  const cleanExpr = trimmed.startsWith('=') ? trimmed.replace(/^=+/, '').trim() : trimmed;
+  if (!cleanExpr) return '';
 
-  const firstItem = Array.isArray(inputData) ? (inputData[0]?.json || inputData[0] || {}) : (inputData?.json || inputData || {});
+  if (!cleanExpr.includes('{{') && !cleanExpr.includes('$')) return cleanExpr;
+
+  const incomingItems = Array.isArray(inputData)
+    ? inputData
+    : (inputData && Object.keys(inputData).length > 0 ? [{ json: inputData }] : []);
+
+  const firstItem = incomingItems[0]?.json || incomingItems[0] || {};
 
   // Build nodes lookup
   const nodesLookup: Record<string, any> = {};
@@ -248,83 +258,122 @@ export function evaluateExpressionInContext(
     }
   }
 
+  // Exact match of single expression like "{{$json.data}}"
+  const exactMatch = cleanExpr.match(/^\{\{\s*(.*?)\s*\}\}$/s);
+  if (exactMatch) {
+    const rawVal = resolveSubExpr(exactMatch[1].trim(), firstItem, incomingItems, nodesLookup, inputData, workflow, latestExecution);
+    if (rawVal !== undefined && rawVal !== null && rawVal !== '') return rawVal;
+    // Fallback across all incoming items if array
+    if (incomingItems.length > 0) {
+      const joined = incomingItems.map((it: any) => it.json?.text || it.text || it.json?.message || it.message || it.json?.title).filter(Boolean).join('\n\n');
+      if (joined) return joined;
+    }
+  }
+
   // Replace {{ ... }}
-  return exprStr.replace(/\{\{\s*(.*?)\s*\}\}/g, (_, expression) => {
-    try {
-      const trimmed = expression.trim();
+  const replaced = cleanExpr.replace(/\{\{\s*(.*?)\s*\}\}/g, (_, expression) => {
+    return resolveSubExpr(expression.trim(), firstItem, incomingItems, nodesLookup, inputData, workflow, latestExecution);
+  });
 
-      // Logical OR: expr1 || expr2
-      if (trimmed.includes('||')) {
-        const parts = trimmed.split('||');
-        for (const part of parts) {
-          const p = part.trim();
-          if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
-            return p.slice(1, -1);
-          }
-          const evaluated = evaluateExpressionInContext(`{{${p}}}`, inputData, workflow, latestExecution);
-          if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
-            return evaluated;
-          }
+  if (replaced && replaced.trim() !== '') return replaced;
+
+  // Fallback if expression resolved to empty: extract from inputData
+  if (incomingItems.length > 0) {
+    const joined = incomingItems.map((it: any) => it.json?.text || it.text || it.json?.message || it.message || it.json?.title).filter(Boolean).join('\n\n');
+    if (joined) return joined;
+  }
+
+  return firstItem?.message || firstItem?.text || firstItem?.headline || firstItem?.summary || '';
+}
+
+function resolveSubExpr(
+  trimmed: string,
+  firstItem: any,
+  incomingItems: any[],
+  nodesLookup: Record<string, any>,
+  inputData: any,
+  workflow?: Workflow,
+  latestExecution?: Execution | null
+): any {
+  try {
+    // Logical OR: expr1 || expr2
+    if (trimmed.includes('||')) {
+      const parts = trimmed.split('||');
+      for (const part of parts) {
+        const p = part.trim();
+        if ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+          return p.slice(1, -1);
         }
-        return '';
+        const evaluated = evaluateExpressionInContext(`{{${p}}}`, inputData, workflow, latestExecution);
+        if (evaluated !== undefined && evaluated !== null && evaluated !== '') {
+          return evaluated;
+        }
       }
+      return '';
+    }
 
-      // Exact $json or $input
-      if (trimmed === '$json' || trimmed === '$input') {
-        return typeof firstItem === 'object' ? JSON.stringify(firstItem, null, 2) : String(firstItem);
+    // Exact $json or $input
+    if (trimmed === '$json' || trimmed === '$input') {
+      return typeof firstItem === 'object' ? JSON.stringify(firstItem, null, 2) : String(firstItem);
+    }
+
+    // Simple property path: $json.foo.bar or $json["foo"]
+    if (trimmed.startsWith('$json.') || trimmed.startsWith('$json[')) {
+      const path = trimmed.replace(/^\$json\./, '').replace(/^\$json/, '').replace(/\[['"]?(.*?)['"]?\]/g, '.$1').replace(/^\./, '');
+      let val = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem);
+      if (val !== undefined && val !== null && val !== '') {
+        return typeof val === 'object' ? JSON.stringify(val) : String(val);
       }
-
-      // Simple property path: $json.foo.bar or $json["foo"]
-      if (trimmed.startsWith('$json.') || trimmed.startsWith('$json[')) {
-        const path = trimmed.replace(/^\$json\./, '').replace(/^\$json/, '').replace(/\[['"]?(.*?)['"]?\]/g, '.$1').replace(/^\./, '');
-        const val = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem);
-        if (val !== undefined && val !== null) {
+      // Fallback if wrapped in .json or .data
+      if (firstItem?.json) {
+        val = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem.json);
+        if (val !== undefined && val !== null && val !== '') {
           return typeof val === 'object' ? JSON.stringify(val) : String(val);
         }
-        // Fallback if wrapped in .json or .data
-        if (firstItem?.json) {
-          const val2 = path.split('.').reduce((acc: any, part: string) => acc?.[part], firstItem.json);
-          if (val2 !== undefined && val2 !== null) {
-            return typeof val2 === 'object' ? JSON.stringify(val2) : String(val2);
-          }
-        }
-        return '';
       }
-
-      // $('Node Name').all()[i].json.field or $('Node Name').item.json.field
-      const nodeMatch = trimmed.match(/^\$\(['"](.*?)['"]\)\.(.*)$/);
-      if (nodeMatch) {
-        const nodeName = nodeMatch[1];
-        const rest = nodeMatch[2];
-        const targetNode = nodesLookup[nodeName];
-        if (!targetNode) return '';
-
-        // Safe evaluation
-        const fn = new Function('$', '$json', '$input', `return $("${nodeName}").${rest};`);
-        const val = fn(
-          (name: string) => nodesLookup[name] || { all: () => [], first: () => ({ json: {} }), json: {} },
-          firstItem,
-          { all: () => (Array.isArray(inputData) ? inputData : [{ json: inputData }]), item: { json: firstItem } }
-        );
-        if (val !== undefined && val !== null) {
-          return typeof val === 'object' ? JSON.stringify(val) : String(val);
+      // Try across items array
+      for (const it of incomingItems) {
+        const itemVal = path.split('.').reduce((acc: any, part: string) => acc?.[part], it.json || it);
+        if (itemVal !== undefined && itemVal !== null && itemVal !== '') {
+          return typeof itemVal === 'object' ? JSON.stringify(itemVal) : String(itemVal);
         }
-        return '';
       }
+      return '';
+    }
 
-      // Generic expression fallback
-      const fn = new Function('$', '$json', '$input', `return (${trimmed});`);
+    // $('Node Name').all()[i].json.field or $('Node Name').item.json.field
+    const nodeMatch = trimmed.match(/^\$\(['"](.*?)['"]\)\.(.*)$/);
+    if (nodeMatch) {
+      const nodeName = nodeMatch[1];
+      const rest = nodeMatch[2];
+      const targetNode = nodesLookup[nodeName];
+      if (!targetNode) return '';
+
+      // Safe evaluation
+      const fn = new Function('$', '$json', '$input', `return $("${nodeName}").${rest};`);
       const val = fn(
         (name: string) => nodesLookup[name] || { all: () => [], first: () => ({ json: {} }), json: {} },
         firstItem,
-        { all: () => (Array.isArray(inputData) ? inputData : [{ json: inputData }]), item: { json: firstItem } }
+        { all: () => (incomingItems.length > 0 ? incomingItems : [{ json: inputData }]), item: { json: firstItem } }
       );
       if (val !== undefined && val !== null) {
         return typeof val === 'object' ? JSON.stringify(val) : String(val);
       }
       return '';
-    } catch {
-      return '';
     }
-  });
+
+    // Generic expression fallback
+    const fn = new Function('$', '$json', '$input', `return (${trimmed});`);
+    const val = fn(
+      (name: string) => nodesLookup[name] || { all: () => [], first: () => ({ json: {} }), json: {} },
+      firstItem,
+      { all: () => (incomingItems.length > 0 ? incomingItems : [{ json: inputData }]), item: { json: firstItem } }
+    );
+    if (val !== undefined && val !== null) {
+      return typeof val === 'object' ? JSON.stringify(val) : String(val);
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }

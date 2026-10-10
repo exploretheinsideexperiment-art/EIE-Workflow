@@ -12,54 +12,124 @@ export interface WorkflowTemplate {
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'tpl_aajtak_telegram_broadcast',
-    name: 'Aaj Tak Hindi News → Telegram Cloud Delivery',
-    description: 'Fetches live news headlines from Aaj Tak (https://www.aajtak.in/) via HTTPS Request and delivers formatted news alerts directly to Telegram Mobile App (Chat ID: 5102553052).',
+    name: 'Aaj Tak Hindi State News → Telegram Live Broadcast',
+    description: 'Enterprise 7-step pipeline: Schedules automated runs, fetches 18 state pages from Aaj Tak (https://www.aajtak.in/), extracts structured JSON-LD headlines, removes duplicate stories, formats rich Hindi news bulletins, and delivers directly to Telegram (Chat ID: 5102553052).',
     category: 'Communication',
-    tags: ['Aaj Tak News', 'Telegram Bot', 'Cloud Delivery', 'HTTPS Request'],
+    tags: ['Aaj Tak News', 'Telegram Bot', 'Cloud Delivery', 'Web Scraper', 'Deduplication', 'Hindi News'],
     workflow: {
-      name: 'Aaj Tak News → Telegram Live Broadcast',
-      description: 'Executes HTTPS request to Aaj Tak News and sends instant alerts to Telegram mobile app.',
+      name: 'Aaj Tak State News to Telegram',
+      description: 'Automated news pipeline that crawls Aaj Tak state portals, extracts headlines, deduplicates, and broadcasts formatted bulletins to Telegram.',
       active: true,
-      viewport: { x: 80, y: 120, zoom: 0.95 },
+      viewport: { x: 50, y: 100, zoom: 0.85 },
       nodes: [
         {
-          id: 'node_aajtak_http',
-          type: 'http_request',
-          name: 'Aaj Tak News (HTTPS Request)',
-          category: 'HTTP',
-          icon: 'Globe',
-          position: { x: 120, y: 220 },
-          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Trigger' }],
-          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'News Data' }],
+          id: 'node_tg_sched',
+          type: 'trigger_schedule',
+          name: 'Every Day 9,21',
+          category: 'Triggers',
+          icon: 'Clock',
+          position: { x: 60, y: 240 },
+          inputs: [],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Trigger' }],
           config: {
-            method: 'GET',
-            url: 'https://www.aajtak.in/',
-            timeoutMs: 12000,
-            preset: 'aajtak'
+            interval: 'hourly',
+            cron: '0 0 9,21 * * *',
+            cronExpression: '0 0 9,21 * * *'
           }
         },
         {
-          id: 'node_telegram_dispatch',
+          id: 'node_state_list',
+          type: 'core_code',
+          name: 'State Pages List',
+          category: 'Data',
+          icon: 'Code',
+          position: { x: 380, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Trigger In' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'State URLs' }],
+          config: {
+            jsCode: "const base = 'https://www.aajtak.in/';\nconst list = [\n  ['उत्तर प्रदेश', 'uttar-pradesh'],\n  ['बिहार', 'bihar'],\n  ['मध्य प्रदेश', 'madhya-pradesh'],\n  ['राजस्थान', 'rajasthan'],\n  ['ओडिशा', 'odisha'],\n  ['पश्चिम बंगाल', 'west-bengal'],\n  ['कर्नाटक', 'karnataka'],\n  ['छत्तीसगढ़', 'india/chhattisgarh'],\n  ['दिल्ली', 'india/delhi'],\n  ['गुजरात', 'india/gujarat'],\n  ['हरियाणा', 'india/haryana'],\n  ['हिमाचल प्रदेश', 'india/himachal-pradesh'],\n  ['जम्मू-कश्मीर', 'india/jammu-kashmir'],\n  ['झारखंड', 'india/jharkhand'],\n  ['महाराष्ट्र', 'india/maharashtra'],\n  ['पंजाब', 'india/punjab'],\n  ['तेलंगाना', 'india/telangana'],\n  ['उत्तराखंड', 'india/uttarakhand'],\n];\nreturn list.map(([state, slug]) => ({ json: { state, url: base + slug } }));"
+          }
+        },
+        {
+          id: 'node_fetch_states',
+          type: 'core_http',
+          name: 'Fetch State Page',
+          category: 'HTTP',
+          icon: 'Globe',
+          position: { x: 700, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'State In' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'HTML Data' }],
+          config: {
+            method: 'GET',
+            url: '={{ $json.url }}',
+            timeoutMs: 12000
+          }
+        },
+        {
+          id: 'node_extract_hl',
+          type: 'core_code',
+          name: 'Extract Headlines',
+          category: 'Data',
+          icon: 'FileCode',
+          position: { x: 1020, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'HTML In' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Headlines' }],
+          config: {
+            jsCode: "const MAX_PER_STATE = 5;\nconst stateItems = $('State Pages List').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const state = stateItems[i] ? stateItems[i].json.state : 'राज्य';\n  const html = String(item.json.data || '');\n  const re = /<script type=\"application\\/ld\\+json\">([\\s\\S]*?)<\\/script>/g;\n  let m;\n  while ((m = re.exec(html)) !== null) {\n    if (m[1].indexOf('\"ItemList\"') === -1) continue;\n    try {\n      const data = JSON.parse(m[1]);\n      const list = (data.itemListElement || []).slice(0, MAX_PER_STATE);\n      for (const el of list) {\n        if (el && el.url && el.name) out.push({ json: { state, title: el.name, link: el.url } });\n      }\n    } catch (e) {}\n    break;\n  }\n});\nreturn out;"
+          }
+        },
+        {
+          id: 'node_dedupe_hl',
+          type: 'eie-nodes-base.removeDuplicates',
+          name: 'Only New Headlines',
+          category: 'Flow',
+          icon: 'Filter',
+          position: { x: 1340, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Raw News' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Unique' }],
+          config: {
+            dedupeValue: '={{ $json.link }}'
+          }
+        },
+        {
+          id: 'node_build_msgs',
+          type: 'core_code',
+          name: 'Build State Messages',
+          category: 'Data',
+          icon: 'MessageSquare',
+          position: { x: 1660, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Unique News' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Bulletins' }],
+          config: {
+            jsCode: "const dec = (s) => String(s).replace(/&#0?39;/g, \"'\").replace(/&quot;/g, '\"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();\nconst esc = (s) => dec(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst byState = {};\nconst order = [];\nfor (const it of $input.all()) {\n  const s = it.json.state;\n  if (!byState[s]) { byState[s] = []; order.push(s); }\n  byState[s].push(it.json);\n}\nreturn order.map((s) => {\n  const lines = byState[s].map((n, idx) => (idx + 1) + '. <a href=\"' + n.link + '\">' + esc(n.title) + '</a>');\n  return { json: { state: s, text: '<b>' + esc(s) + ' की ताज़ा खबरें</b>\\n\\n' + lines.join('\\n\\n') } };\n});"
+          }
+        },
+        {
+          id: 'node_tg_dispatch',
           type: 'app_telegram',
-          name: 'Telegram Bot (Alerts Channel)',
+          name: 'Send to Telegram',
           category: 'Communication',
           icon: 'Send',
           credentialId: 'cred_telegram_bot',
-          position: { x: 580, y: 220 },
-          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'News Input' }],
+          position: { x: 1980, y: 240 },
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Bulletins' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dispatched' }],
           config: {
             botToken: '',
-            accessToken: '',
-            chatId: '',
-            chat_id: '',
+            chatId: '5102553052',
+            chat_id: '5102553052',
             parseMode: 'HTML',
-            text: '{{$json.message}}'
+            text: '{{$json.text || $json.message}}'
           }
         }
       ],
       connections: [
-        { id: 'conn_http_to_tg', fromNodeId: 'node_aajtak_http', fromPortId: 'out_main', toNodeId: 'node_telegram_dispatch', toPortId: 'in_main' }
+        { id: 'conn_sched_to_list', fromNodeId: 'node_tg_sched', fromPortId: 'out_main', toNodeId: 'node_state_list', toPortId: 'in_main' },
+        { id: 'conn_list_to_fetch', fromNodeId: 'node_state_list', fromPortId: 'out_main', toNodeId: 'node_fetch_states', toPortId: 'in_main' },
+        { id: 'conn_fetch_to_extract', fromNodeId: 'node_fetch_states', fromPortId: 'out_main', toNodeId: 'node_extract_hl', toPortId: 'in_main' },
+        { id: 'conn_extract_to_dedupe', fromNodeId: 'node_extract_hl', fromPortId: 'out_main', toNodeId: 'node_dedupe_hl', toPortId: 'in_main' },
+        { id: 'conn_dedupe_to_build', fromNodeId: 'node_dedupe_hl', fromPortId: 'out_main', toNodeId: 'node_build_msgs', toPortId: 'in_main' },
+        { id: 'conn_build_to_tg', fromNodeId: 'node_build_msgs', fromPortId: 'out_main', toNodeId: 'node_tg_dispatch', toPortId: 'in_main' }
       ]
     }
   },
