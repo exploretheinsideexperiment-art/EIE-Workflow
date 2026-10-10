@@ -202,8 +202,18 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   const nodeSubtitle = useMemo(() => {
     const t = (node.type || '').toLowerCase();
     const cfg = node.config || {};
-    if (t === 'trigger_schedule') {
-      return cfg.exactTime ? `Time: ${cfg.exactTime}` : cfg.cron ? `Cron: ${cfg.cron}` : 'Scheduled Trigger';
+    if (
+      t === 'trigger_schedule' ||
+      t === 'scheduletrigger' ||
+      t === 'eie-nodes-base.scheduletrigger' ||
+      t === 'schedule'
+    ) {
+      if (cfg.cron === '0 9,21 * * *' || cfg.cron === '0 0 9,21 * * *') return 'Daily at 09:00 & 21:00 IST';
+      if (cfg.cron === '* * * * *') return 'Every 1 Min (Continuous)';
+      if (cfg.cron === '*/5 * * * *') return 'Every 5 Minutes';
+      if (cfg.exactTime) return `Daily at ${cfg.exactTime}`;
+      if (cfg.cron) return `Cron: ${cfg.cron}`;
+      return 'Scheduled Trigger';
     }
     if (t === 'chat_trigger') {
       return 'Mobile / Web Chat Trigger';

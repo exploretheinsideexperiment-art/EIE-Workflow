@@ -2172,27 +2172,53 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   )}
 
                   {/* 4. SCHEDULE TRIGGER */}
-                  {node.type === 'trigger_schedule' && (
+                  {(node.type === 'trigger_schedule' ||
+                    node.type === 'scheduleTrigger' ||
+                    node.type === 'eie-nodes-base.scheduleTrigger' ||
+                    node.type === 'schedule' ||
+                    node.packageIdentifier === 'eie-nodes-base.scheduleTrigger') && (
                     <div className="space-y-3.5">
+                      {/* Active Status Banner */}
+                      <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 text-emerald-300">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="font-semibold">Automatic Scheduler Active</span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-200 font-mono">
+                          Live on Server
+                        </span>
+                      </div>
+
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Schedule Mode</label>
                         <select
-                          value={config.triggerInterval || 'cron'}
+                          value={
+                            config.triggerInterval ||
+                            (config.cron === '0 9,21 * * *' || config.cron === '0 0 9,21 * * *' ? 'twice_daily' :
+                             config.cron === '* * * * *' ? 'minute' :
+                             config.cron === '*/5 * * * *' ? 'minutes_5' :
+                             config.cron === '*/15 * * * *' ? 'minutes_15' :
+                             config.cron === '0 * * * *' ? 'hours' :
+                             config.exactTime ? 'daily_time' : 'cron')
+                          }
                           onChange={(e) => {
                             const val = e.target.value;
-                            let newCron = config.cron || '0 9 * * 1';
-                            if (val === 'minute') newCron = '* * * * *';
-                            else if (val === 'minutes_5') newCron = '*/5 * * * *';
-                            else if (val === 'minutes_15') newCron = '*/15 * * * *';
-                            else if (val === 'hours') newCron = '0 * * * *';
-                            else if (val === 'daily_time') newCron = '0 9 * * *';
-                            else if (val === 'days') newCron = '0 9 * * *';
-                            else if (val === 'weeks') newCron = '0 9 * * 1';
-                            else if (val === 'months') newCron = '0 9 1 * *';
-                            handleConfigBatch({ triggerInterval: val, cron: newCron });
+                            let newCron = config.cron || '0 9,21 * * *';
+                            let newExact = config.exactTime || '09:00, 21:00';
+                            if (val === 'minute') { newCron = '* * * * *'; newExact = ''; }
+                            else if (val === 'minutes_5') { newCron = '*/5 * * * *'; newExact = ''; }
+                            else if (val === 'minutes_15') { newCron = '*/15 * * * *'; newExact = ''; }
+                            else if (val === 'hours') { newCron = '0 * * * *'; newExact = ''; }
+                            else if (val === 'twice_daily') { newCron = '0 9,21 * * *'; newExact = '09:00, 21:00'; }
+                            else if (val === 'daily_time') { newCron = '0 9 * * *'; newExact = '09:00'; }
+                            else if (val === 'days') { newCron = '0 9 * * *'; newExact = '09:00'; }
+                            else if (val === 'weeks') { newCron = '0 9 * * 1'; newExact = '09:00'; }
+                            else if (val === 'months') { newCron = '0 9 1 * *'; newExact = '09:00'; }
+                            handleConfigBatch({ triggerInterval: val, cron: newCron, exactTime: newExact });
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
                         >
+                          <option value="twice_daily">Twice Daily at 9:00 AM & 9:00 PM (09:00, 21:00 IST)</option>
                           <option value="minute">Every 1 Minute (Instant Testing & Live Sync)</option>
                           <option value="minutes_5">Every 5 Minutes</option>
                           <option value="minutes_15">Every 15 Minutes</option>
@@ -2205,20 +2231,34 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </select>
                       </div>
 
-                      {config.triggerInterval === 'daily_time' && (
+                      {(config.triggerInterval === 'daily_time' || config.triggerInterval === 'twice_daily') && (
                         <div>
-                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">Exact Time of Day (24-Hour)</label>
+                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                            Exact Time of Day (24-Hour, comma-separated for multiple)
+                          </label>
                           <input
-                            type="time"
-                            value={config.exactTime || '09:00'}
+                            type="text"
+                            value={config.exactTime || (config.triggerInterval === 'twice_daily' ? '09:00, 21:00' : '09:00')}
                             onChange={(e) => {
                               const timeVal = e.target.value;
-                              const [h, m] = timeVal.split(':');
-                              const newCron = `${parseInt(m, 10)} ${parseInt(h, 10)} * * *`;
-                              handleConfigBatch({ exactTime: timeVal, cron: newCron });
+                              if (timeVal.includes(',')) {
+                                const hours = timeVal.split(',').map((t) => t.trim().split(':')[0]).filter(Boolean);
+                                const newCron = `0 ${hours.join(',')} * * *`;
+                                handleConfigBatch({ exactTime: timeVal, cron: newCron });
+                              } else if (timeVal.includes(':')) {
+                                const [h, m] = timeVal.split(':');
+                                const newCron = `${parseInt(m, 10) || 0} ${parseInt(h, 10) || 0} * * *`;
+                                handleConfigBatch({ exactTime: timeVal, cron: newCron });
+                              } else {
+                                handleConfigChange('exactTime', timeVal);
+                              }
                             }}
+                            placeholder="09:00, 21:00"
                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                           />
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Enter single time (e.g. <code>09:00</code>) or multiple times (e.g. <code>09:00, 21:00</code>).
+                          </p>
                         </div>
                       )}
 
@@ -2226,9 +2266,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression</label>
                         <input
                           type="text"
-                          value={config.cron || '0 9 * * 1'}
+                          value={config.cron || '0 9,21 * * *'}
                           onChange={(e) => handleConfigChange('cron', e.target.value)}
-                          placeholder="0 9 * * 1"
+                          placeholder="0 9,21 * * *"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                         />
                         <div className="mt-1.5 p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
@@ -2242,6 +2282,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               ? 'Every 15 minutes'
                               : config.cron === '0 * * * *'
                               ? 'Every hour at minute 0'
+                              : config.cron === '0 9,21 * * *' || config.cron === '0 0 9,21 * * *'
+                              ? 'Every day at 9:00 AM & 9:00 PM (09:00, 21:00 IST)'
                               : config.exactTime
                               ? `Every day at ${config.exactTime}`
                               : config.cron === '0 9 * * *'
@@ -2260,7 +2302,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           onChange={(e) => handleConfigChange('timezone', e.target.value)}
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
                         >
-                          <option value="Asia/Kolkata">Asia/Kolkata (IST - UTC+5:30)</option>
+                          <option value="Asia/Kolkata">Asia/Kolkata (IST - UTC+5:30 - India)</option>
                           <option value="UTC">UTC (Coordinated Universal Time)</option>
                           <option value="America/New_York">America/New_York (EST/EDT)</option>
                           <option value="Europe/London">Europe/London (GMT/BST)</option>
@@ -2283,7 +2325,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               });
                               const data = await res.json();
                               if (data.ok) {
-                                setTgTestSuccessToast(`✓ Scheduled trigger fired successfully (Exec ID: ${data.executionId})`);
+                                setTgTestSuccessToast(`✓ Scheduled trigger fired successfully! (Exec ID: ${data.executionId})`);
                               } else {
                                 setTgTestSuccessToast(`Error: ${data.error || 'Failed'}`);
                               }
@@ -2293,13 +2335,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               setTimeout(() => setTgTestSuccessToast(null), 5000);
                             }
                           }}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/40 text-xs font-semibold cursor-pointer transition active:scale-98"
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/40 text-xs font-semibold cursor-pointer transition active:scale-98"
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Test Trigger Now (Simulate Scheduled Execution)</span>
+                          <span>Simulate Scheduled Trigger (Run Full Workflow)</span>
                         </button>
                         <p className="text-[10px] text-slate-400 text-center mt-1.5">
-                          Background scheduler runs continuously on server: triggers automatically when the set time arrives.
+                          The background worker runs 24/7 on the server and will execute this entire workflow automatically when the scheduled time arrives.
                         </p>
                       </div>
                     </div>

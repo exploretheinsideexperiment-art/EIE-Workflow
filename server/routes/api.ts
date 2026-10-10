@@ -41,13 +41,22 @@ router.post('/scheduler/trigger-now', async (req: Request, res: Response) => {
   }
 
   try {
-    const node = targetWf.nodes.find((n) => n.id === nodeId || n.type === 'trigger_schedule');
+    const node = targetWf.nodes.find(
+      (n) =>
+        n.id === nodeId ||
+        n.type === 'trigger_schedule' ||
+        n.type === 'scheduleTrigger' ||
+        n.type === 'eie-nodes-base.scheduleTrigger' ||
+        n.type === 'schedule' ||
+        n.packageIdentifier === 'eie-nodes-base.scheduleTrigger'
+    );
     const execution = await WorkflowEngine.executeWorkflow(targetWf, 'schedule', {
       scheduledTime: new Date().toISOString(),
-      cron: node?.config?.cron || '* * * * *',
+      cron: node?.config?.cron || '0 9,21 * * *',
       triggerNodeId: node?.id,
       triggerNodeName: node?.name || 'Schedule Trigger',
       manualTestTrigger: true,
+      reason: 'Manual Trigger Now test from Studio',
     });
     return res.json({ ok: true, executionId: execution.id, status: execution.status, workflow: targetWf.name });
   } catch (err: any) {

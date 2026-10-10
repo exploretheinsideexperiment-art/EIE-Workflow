@@ -344,7 +344,26 @@ export class WorkflowEngine {
     const rootNodes = workflow.nodes.filter((n) => !isProviderNode(n) && !mainTargetNodeIds.has(n.id));
 
     let startNodes: WorkflowNodeData[] = [];
-    if (triggerType === 'chat') {
+    if (triggerType === 'schedule') {
+      if (initialPayload?.triggerNodeId) {
+        const targetNode = workflow.nodes.find((n) => n.id === initialPayload.triggerNodeId);
+        if (targetNode) startNodes = [targetNode];
+      }
+      if (startNodes.length === 0) {
+        const schedTriggers = rootNodes.filter(
+          (n) =>
+            n.type === 'trigger_schedule' ||
+            n.type === 'scheduleTrigger' ||
+            n.type === 'eie-nodes-base.scheduleTrigger' ||
+            n.type === 'schedule' ||
+            n.type === 'core_schedule' ||
+            n.packageIdentifier === 'eie-nodes-base.scheduleTrigger'
+        );
+        if (schedTriggers.length > 0) {
+          startNodes = schedTriggers;
+        }
+      }
+    } else if (triggerType === 'chat') {
       const chatTriggers = rootNodes.filter((n) => n.type === 'chat_trigger' || n.type.startsWith('chat_'));
       if (chatTriggers.length > 0) {
         startNodes = chatTriggers;
@@ -869,22 +888,29 @@ export class WorkflowEngine {
 
     switch (node.type) {
       // 1. Trigger nodes
-      case 'trigger_schedule': {
+      case 'trigger_schedule':
+      case 'scheduleTrigger':
+      case 'eie-nodes-base.scheduleTrigger':
+      case 'schedule':
+      case 'core_schedule': {
         const schedTime = new Date().toISOString();
+        const schedCron = config.cron || config.cronExpression || '0 9,21 * * *';
+        const schedInterval = config.exactTime ? `Daily at ${config.exactTime}` : (config.interval || 'Every day at 9:00 AM & 9:00 PM');
         const schedData = {
           scheduledTime: schedTime,
-          cron: config.cron || '0 9 * * 1-5',
-          interval: config.interval || 'Every weekday morning at 09:00 AM',
+          cron: schedCron,
+          interval: schedInterval,
           triggeredAt: schedTime,
           event: 'scheduled_trigger',
           status: 'success',
-          text: `Schedule Trigger activated for morning automation run (Cron: ${config.cron || '0 9 * * 1-5'}).`,
+          text: `Schedule Trigger activated according to set instructions (Cron: ${schedCron}, ${schedInterval}).`,
           timestamp: schedTime,
           output: {
             timestamp: schedTime,
-            cron: config.cron || '0 9 * * 1-5',
-            interval: config.interval || 'Every weekday at 09:00 AM',
-            status: 'active'
+            cron: schedCron,
+            interval: schedInterval,
+            status: 'active',
+            triggeredAt: schedTime,
           }
         };
         return schedData;
