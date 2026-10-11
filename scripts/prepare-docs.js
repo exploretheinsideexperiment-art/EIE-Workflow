@@ -29,11 +29,22 @@ if (fs.existsSync(distDir)) {
   copyRecursiveSync(distDir, docsDir);
   console.log('[prepare-docs] Copied dist/ to docs/ successfully.');
 
-  // Create .nojekyll in dist/ and docs/ to disable Jekyll on GitHub Pages
+  // Create .nojekyll in dist/, docs/, and root to disable Jekyll processing on GitHub Pages
   fs.writeFileSync(path.join(distDir, '.nojekyll'), '');
   fs.writeFileSync(path.join(docsDir, '.nojekyll'), '');
   fs.writeFileSync(path.resolve(process.cwd(), '.nojekyll'), '');
   console.log('[prepare-docs] Created .nojekyll in dist, docs, and root');
+
+  // Copy CNAME if user added custom domain in root or public
+  const cnameRoot = path.resolve(process.cwd(), 'CNAME');
+  const cnamePublic = path.resolve(process.cwd(), 'public', 'CNAME');
+  if (fs.existsSync(cnameRoot)) {
+    fs.copyFileSync(cnameRoot, path.join(distDir, 'CNAME'));
+    fs.copyFileSync(cnameRoot, path.join(docsDir, 'CNAME'));
+  } else if (fs.existsSync(cnamePublic)) {
+    fs.copyFileSync(cnamePublic, path.join(distDir, 'CNAME'));
+    fs.copyFileSync(cnamePublic, path.join(docsDir, 'CNAME'));
+  }
 
   // Create 404.html as a fallback to index.html for SPA routing on GitHub Pages
   if (fs.existsSync(path.join(distDir, 'index.html'))) {

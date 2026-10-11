@@ -1,33 +1,33 @@
-name: Deploy to GitHub Pages
+name: Deploy Website to GitHub Pages
 
 on:
   push:
     branches: ["main", "master"]
   workflow_dispatch:
 
-# Allow GITHUB_TOKEN to deploy to GitHub Pages and push to gh-pages branch
+# Permissions needed for deploying to GitHub Pages, committing docs, and pushing to branches
 permissions:
   contents: write
   pages: write
   id-token: write
 
+# Prevent duplicate concurrent deployment runs
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
+    name: Build Website
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -36,9 +36,40 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Build project
+      - name: Build project (creates dist/ and docs/)
         run: npm run build
 
+      - name: Verify build outputs
+        run: |
+          test -f dist/index.html || (echo "dist/index.html missing!" && exit 1)
+          test -f docs/index.html || (echo "docs/index.html missing!" && exit 1)
+          echo "Build verification passed: dist/ and docs/ are ready."
+
+      # Auto-sync docs/ directory in repository for GitHub Pages 'main/docs' source
+      - name: Sync docs folder to repository
+        continue-on-error: true
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -f docs/ .nojekyll
+          if ! git diff-index --quiet HEAD -- docs/ .nojekyll; then
+            git commit -m "Auto-update docs/ for GitHub Pages [skip ci]"
+            git push origin ${{ github.ref_name }} || echo "Auto-push to branch skipped (insufficient token write permission)"
+          else
+            echo "docs/ folder is already up to date with latest build."
+          fi
+
+      # Deploy to gh-pages branch for GitHub Pages 'gh-pages' source
+      - name: Deploy to gh-pages branch
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+
+      # Prepare artifact for official GitHub Actions Pages deployer
       - name: Setup Pages
         continue-on-error: true
         uses: actions/configure-pages@v5
@@ -49,17 +80,17 @@ jobs:
         with:
           path: './dist'
 
-      - name: Deploy to GitHub Pages (Actions Source)
+  deploy:
+    name: Deploy to GitHub Pages (Actions Source)
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
         id: deployment
         continue-on-error: true
         uses: actions/deploy-pages@v4
-
-      - name: Deploy to gh-pages branch (Branch Source)
-        uses: peaceiris/actions-gh-pages@v4
-        if: always()
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          publish_branch: gh-pages
-          force_orphan: true
 
