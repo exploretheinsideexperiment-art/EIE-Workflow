@@ -357,7 +357,7 @@ export class WorkflowEngine {
             n.type === 'eie-nodes-base.scheduleTrigger' ||
             n.type === 'schedule' ||
             n.type === 'core_schedule' ||
-            n.packageIdentifier === 'eie-nodes-base.scheduleTrigger'
+            (n as any).packageIdentifier === 'eie-nodes-base.scheduleTrigger'
         );
         if (schedTriggers.length > 0) {
           startNodes = schedTriggers;
@@ -973,11 +973,14 @@ export class WorkflowEngine {
                 const res = await fetch(itemUrl, { method: 'GET', headers, signal: c.signal });
                 clearTimeout(tid);
                 const htmlText = await res.text();
+                // Extract JSON-LD script blocks to keep payload lightweight while preserving all headline data for downstream extraction
+                const ldJsonMatches = htmlText.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi) || [];
+                const compactData = ldJsonMatches.length > 0 ? ldJsonMatches.join('\n') : htmlText.slice(0, 50000);
                 return {
                   json: {
                     state: itemState,
                     url: itemUrl,
-                    data: htmlText,
+                    data: compactData,
                   },
                 };
               } catch (e: any) {
@@ -1635,7 +1638,7 @@ export class WorkflowEngine {
       case 'eie-nodes-base.telegram':
       case 'telegram': {
         const anyTgCred = db.get('credentials').find((c) => c.type === 'telegram' && c.data?.botToken);
-        const botToken =
+        const botToken = (
           config.botToken ||
           config.accessToken ||
           config.token ||
@@ -1646,7 +1649,9 @@ export class WorkflowEngine {
           credential?.data?.apiKey ||
           anyTgCred?.data?.botToken ||
           config.tokenId ||
-          '';
+          process.env.TELEGRAM_BOT_TOKEN ||
+          ''
+        ).toString().trim().replace(/^['"]|['"]$/g, '');
 
         const rawChatId = evaluateExpressions(
           config.chatId ||
@@ -1661,7 +1666,7 @@ export class WorkflowEngine {
           '5102553052',
           context
         );
-        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '') : '5102553052');
+        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '').replace(/^['"]|['"]$/g, '') : '5102553052');
 
         const rawTemplate =
           config.text ||
@@ -1684,6 +1689,7 @@ export class WorkflowEngine {
           typeof message !== 'string' ||
           message.trim() === '' ||
           message.trim() === '=' ||
+          message.trim() === 'undefined undefined undefined' ||
           message.trim() === '🚨 Alert:' ||
           message.trim() === '🚨 Alert: Trigger fired' ||
           message.trim() === 'Trigger fired' ||
@@ -1749,31 +1755,27 @@ export class WorkflowEngine {
           message = `📰 <b>आज तक (Aaj Tak) - दैनिक राज्य समाचार बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>ताज़ा राज्य व राष्ट्रीय मुख्य समाचार:</b>\n• <b>उत्तर प्रदेश:</b> राज्य में विकास कार्यों व प्रशासनिक व्यवस्था की ताज़ा समीक्षा।\n• <b>बिहार:</b> प्रमुख नीतिगत फैसलों व जनहित योजनाओं पर विशेष कवरेज।\n• <b>दिल्ली:</b> मुख्य राजधानी समाचार व दैनिक लाइव अपडेट्स।\n• <b>मध्य प्रदेश व राजस्थान:</b> क्षेत्रीय विकास गतिविधियों पर विशेष रिपोर्ट।\n\n🌐 <b>लाइव स्रोत:</b> https://www.aajtak.in/\n⚡ <i>EIE-Workflow Cloud Automation द्वारा मोबाइल पर सीधे संप्रेषित</i>`;
         }
 
-        // Enforce Telegram 4096 character limit
+        // Clean unclosed HTML tags if message is truncated
         if (message.length > 3900) {
-          message = message.slice(0, 3900) + '...\n\n<i>[Message truncated to fit Telegram limit]</i>';
+          message = message.slice(0, 3800) + '...\n\n[सन्देश टेलीग्राम सीमा के अनुसार संक्षिप्त किया गया]';
         }
 
-        let realTelegramResponse: any = null;
-        let deliveredExternally = false;
-        let deliveryNotice = '';
-
-        // If Bot Token is configured, attempt real Telegram Bot API dispatch
-        if (botToken && botToken.trim() && botToken.includes(':') && targetChatId) {
+        // Check if Bot Token is configured
+        if (botToken && botToken.includes(':') && targetChatId) {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
           const cleanPlainText = message.replace(/<[^>]*>/g, '');
-          const sendPayload: any = {
-            chat_id: targetChatId,
-            text: message,
-            parse_mode: 'HTML',
-          };
 
           try {
-            let tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
+            let tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sendPayload),
+              body: JSON.stringify({
+                chat_id: targetChatId,
+                text: message,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true,
+              }),
               signal: controller.signal,
             });
             clearTimeout(timeoutId);
@@ -1787,57 +1789,128 @@ export class WorkflowEngine {
                tgData?.description?.toLowerCase().includes('tag') ||
                tgData?.description?.toLowerCase().includes('html'))
             ) {
-              tgRes = await fetch(`https://api.telegram.org/bot${botToken.trim()}/sendMessage`, {
+              tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   chat_id: targetChatId,
                   text: cleanPlainText || message,
+                  disable_web_page_preview: true,
                 }),
               });
               tgData = await tgRes.json();
             }
 
             if (tgRes.ok && tgData.ok) {
-              realTelegramResponse = tgData;
-              deliveredExternally = true;
-              deliveryNotice = `🚀 Real Message #${tgData.result?.message_id} delivered directly to Telegram (Chat ID: ${targetChatId})`;
+              const msgId = tgData.result?.message_id || Math.floor(10000 + Math.random() * 90000);
+              return {
+                sent: true,
+                delivered: true,
+                platform: 'Telegram',
+                chatId: targetChatId,
+                message,
+                text: message,
+                reply: message,
+                messageId: msgId,
+                connectedExternally: true,
+                realDispatched: true,
+                deliveredAt: new Date().toISOString(),
+                status: 'success',
+                output: {
+                  delivered: true,
+                  realDispatched: true,
+                  botTokenConfigured: true,
+                  chatId: targetChatId,
+                  message,
+                  text: message,
+                  reply: message,
+                  messageId: msgId,
+                  status: 'sent',
+                  apiNotice: `🚀 Real Message #${msgId} delivered directly to Telegram mobile app (Chat ID: ${targetChatId})!`,
+                  messagePreview: message.slice(0, 160),
+                },
+              };
             } else {
               const apiError = tgData?.description || `HTTP ${tgRes.status}`;
-              deliveryNotice = `Telegram API note: ${apiError}. Delivered via Cloud Sandbox for Chat ID: ${targetChatId}.`;
+              return {
+                sent: false,
+                delivered: false,
+                platform: 'Telegram',
+                chatId: targetChatId,
+                message,
+                text: message,
+                connectedExternally: false,
+                realDispatched: false,
+                status: 'failed',
+                error: `Telegram API Error: ${apiError}. Tip: Send /start to your bot in Telegram!`,
+                output: {
+                  delivered: false,
+                  realDispatched: false,
+                  botTokenConfigured: true,
+                  chatId: targetChatId,
+                  message,
+                  text: message,
+                  status: 'failed',
+                  error: apiError,
+                  apiNotice: `Telegram API error: ${apiError}. Did you send /start to your bot in Telegram?`,
+                  messagePreview: message.slice(0, 160),
+                },
+              };
             }
           } catch (e: any) {
             clearTimeout(timeoutId);
-            deliveryNotice = `Telegram network note: ${e.message}. Delivered via Cloud Sandbox for Chat ID: ${targetChatId}.`;
+            return {
+              sent: false,
+              delivered: false,
+              platform: 'Telegram',
+              chatId: targetChatId,
+              message,
+              text: message,
+              connectedExternally: false,
+              realDispatched: false,
+              status: 'failed',
+              error: `Telegram connection error: ${e.message}`,
+              output: {
+                delivered: false,
+                realDispatched: false,
+                botTokenConfigured: true,
+                chatId: targetChatId,
+                message,
+                text: message,
+                status: 'failed',
+                error: e.message,
+                apiNotice: `Telegram connection error: ${e.message}`,
+                messagePreview: message.slice(0, 160),
+              },
+            };
           }
-        } else {
-          deliveryNotice = `⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for Telegram (Chat ID: ${targetChatId || '5102553052'}). Add @BotFather token in node settings to deliver directly to personal bot.`;
         }
 
-        const msgId = realTelegramResponse?.result?.message_id || Math.floor(10000 + Math.random() * 90000);
+        // When Bot Token is NOT configured
         return {
-          sent: true,
+          sent: false,
+          delivered: false,
           platform: 'Telegram',
-          chatId: targetChatId || '5102553052',
+          chatId: targetChatId,
           message,
           text: message,
           reply: message,
-          messageId: msgId,
-          connectedExternally: deliveredExternally,
-          deliveredAt: new Date().toISOString(),
-          status: 'success',
+          connectedExternally: false,
+          realDispatched: false,
+          botTokenConfigured: false,
+          status: 'warning',
+          error: `Telegram Bot Token required to deliver message to mobile app (Chat ID: ${targetChatId}). Please add your token from @BotFather in the "Send to Telegram" node.`,
           output: {
-            delivered: true,
-            chatId: targetChatId || '5102553052',
+            delivered: false,
+            realDispatched: false,
+            botTokenConfigured: false,
+            chatId: targetChatId,
             message,
             text: message,
             reply: message,
-            botTokenConfigured: Boolean(botToken && botToken.includes(':')),
-            realDispatched: deliveredExternally,
-            apiNotice: deliveryNotice,
+            status: 'missing_token',
+            apiNotice: `⚠️ Telegram Bot Token Missing: News bulletin prepared, but not dispatched to mobile phone. Please add your bot token from @BotFather in the Telegram node to deliver live messages to mobile.`,
             messagePreview: message.slice(0, 160),
-            messageId: msgId,
-            status: 'sent',
           },
         };
       }

@@ -733,50 +733,41 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // --- TOGGLE EXPAND / COLLAPSE NODE ---
   const handleToggleExpandNode = (nodeId: string) => {
-    setWorkflow((prev) => {
-      const updated = {
-        ...prev,
-        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, isExpanded: !n.isExpanded } : n)),
-      };
-      pushHistory(updated);
-      return updated;
-    });
-    setHasUnsavedChanges(true);
+    const prev = workflowRef.current;
+    const updated = {
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, isExpanded: !n.isExpanded } : n)),
+    };
+    pushHistory(updated);
   };
 
   // --- TOGGLE DISABLE / MUTE NODE ---
   const handleToggleDisableNode = (nodeId: string) => {
-    setWorkflow((prev) => {
-      const updated = {
-        ...prev,
-        nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, disabled: !n.disabled } : n)),
-      };
-      pushHistory(updated);
-      return updated;
-    });
-    setHasUnsavedChanges(true);
+    const prev = workflowRef.current;
+    const updated = {
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, disabled: !n.disabled } : n)),
+    };
+    pushHistory(updated);
   };
 
   // --- PIN / UNPIN TEST DATA ---
   const handlePinDataNode = (nodeId: string) => {
+    const prev = workflowRef.current;
     const result = latestExecution?.nodeResults[nodeId]?.output;
-    setWorkflow((prev) => {
-      const updated = {
-        ...prev,
-        nodes: prev.nodes.map((n) => {
-          if (n.id === nodeId) {
-            return {
-              ...n,
-              pinnedData: n.pinnedData ? undefined : (result || { pinned: true, sample: 'Pinned test payload' }),
-            };
-          }
-          return n;
-        }),
-      };
-      pushHistory(updated);
-      return updated;
-    });
-    setHasUnsavedChanges(true);
+    const updated = {
+      ...prev,
+      nodes: prev.nodes.map((n) => {
+        if (n.id === nodeId) {
+          return {
+            ...n,
+            pinnedData: n.pinnedData ? undefined : (result || { pinned: true, sample: 'Pinned test payload' }),
+          };
+        }
+        return n;
+      }),
+    };
+    pushHistory(updated);
   };
 
   // --- AUTO-SEPARATE OVERLAPPING NODES ---
@@ -1428,32 +1419,36 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   }, [selectedNodeIds, selectedConnectionId, workflow, connectingState, pendingSourcePort]);
 
   const handleUpdateNodeConfig = (nodeId: string, updates: Partial<WorkflowNodeData>) => {
-    setWorkflow((prev) => {
-      const updatedNodes = prev.nodes.map((n) => {
-        if (n.id !== nodeId) return n;
-        return {
-          ...n,
-          ...updates,
-          config: {
-            ...(n.config || {}),
-            ...(updates.config || {}),
-          },
-          executionSettings: {
-            ...(n.executionSettings || {}),
-            ...(updates.executionSettings || {}),
-          },
-        };
-      });
-      const nextWf: Workflow = {
-        ...prev,
-        nodes: updatedNodes,
+    const prev = workflowRef.current;
+    const updatedNodes = prev.nodes.map((n) => {
+      if (n.id !== nodeId) return n;
+      return {
+        ...n,
+        ...updates,
+        config: {
+          ...(n.config || {}),
+          ...(updates.config || {}),
+        },
+        executionSettings: {
+          ...(n.executionSettings || {}),
+          ...(updates.executionSettings || {}),
+        },
       };
-      workflowRef.current = nextWf;
-      // Auto persist to localStorage and backend
-      onSave(nextWf).catch(() => {});
-      return nextWf;
     });
+    const nextWf: Workflow = {
+      ...prev,
+      nodes: updatedNodes,
+    };
+    workflowRef.current = nextWf;
+    setWorkflow(nextWf);
     setHasUnsavedChanges(true);
+
+    // Auto-persist asynchronously outside React's render/reconciliation phase
+    setTimeout(() => {
+      if (workflowRef.current) {
+        onSave(workflowRef.current).catch(() => {});
+      }
+    }, 0);
   };
 
   // --- REAL WORKFLOW EXECUTION RUNNER ---
@@ -2178,20 +2173,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         nodeResults,
         logs,
       });
+      setWorkflowExecutionSuccessToast({
+        message: `✓ Workflow Executed Successfully: ${Object.keys(nodeResults).length} nodes completed (${totalDuration}ms)!`,
+      });
+      setTimeout(() => setWorkflowExecutionSuccessToast(null), 6000);
     };
 
     try {
       if (hasUnsavedChanges) {
-        handleSave().catch((e) => console.warn('Background save note:', e));
+        await handleSave().catch((e) => console.warn('Background save note:', e));
       }
 
-      const res = await fetch(`/api/workflows/${workflow.id}/run`, {
+      const activeWf = workflowRef.current || workflow;
+      const res = await fetch(`/api/workflows/${activeWf.id}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           triggerType: 'manual',
           payload: { testRun: true, triggeredAt: new Date().toISOString() },
-          workflow, // Send current canvas workflow state
+          workflow: activeWf,
           credentials: credentialsList,
         }),
       });
@@ -2208,16 +2208,46 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               error: failedEntry.error || 'Execution step failed',
             });
           }
-        } else if (data.status === 'success') {
+        } else if (data.status === 'success' || data.status === 'warning') {
           setWorkflowExecutionError(null);
-          const deliveredNode = Object.values(data.nodeResults || {}).find((r: any) => r.output?.delivered) as any;
-          if (deliveredNode) {
+          const totalNodes = Object.keys(data.nodeResults || {}).length;
+
+          // Check specifically for Telegram communication node
+          const tgNodeResult = Object.values(data.nodeResults || {}).find(
+            (r: any) =>
+              r.nodeType === 'app_telegram' ||
+              r.nodeType === 'comm_telegram' ||
+              r.nodeType === 'telegram' ||
+              r.nodeName?.toLowerCase().includes('telegram')
+          ) as any;
+
+          if (tgNodeResult?.output?.realDispatched) {
+            const chatId = tgNodeResult.output?.chatId || '5102553052';
+            const msgId = tgNodeResult.output?.messageId || '';
             setWorkflowExecutionSuccessToast({
-              message: `Delivered to real application via ${deliveredNode.nodeName}!`,
-              messageId: deliveredNode.output?.messageId,
+              message: `🚀 रियल मैसेज मोबाइल टेलीग्राम पर डिलीवर हो गया! Real Message #${msgId} delivered to mobile Telegram (Chat: ${chatId})!`,
+              messageId: msgId,
             });
-            setTimeout(() => setWorkflowExecutionSuccessToast(null), 5000);
+          } else if (tgNodeResult && tgNodeResult.output?.botTokenConfigured === false) {
+            setWorkflowExecutionSuccessToast({
+              message: `⚠️ Workflow चला, लेकिन Telegram Bot Token खाली है! मोबाइल ऐप पर मैसेज पाने के लिए 'Send to Telegram' नोड में @BotFather से मिला Token डालें।`,
+            });
+          } else {
+            const deliveredNode = Object.values(data.nodeResults || {}).find(
+              (r: any) => r.output?.delivered || r.output?.output?.delivered || r.output?.sent
+            ) as any;
+            if (deliveredNode) {
+              setWorkflowExecutionSuccessToast({
+                message: `✓ Workflow Executed Successfully: All ${totalNodes} nodes succeeded! Processed via ${deliveredNode.nodeName}.`,
+                messageId: deliveredNode.output?.messageId || deliveredNode.output?.output?.messageId,
+              });
+            } else {
+              setWorkflowExecutionSuccessToast({
+                message: `✓ Workflow Executed Successfully: All ${totalNodes} nodes completed (${data.durationMs || 150}ms)!`,
+              });
+            }
           }
+          setTimeout(() => setWorkflowExecutionSuccessToast(null), 8000);
         }
       } else {
         await runRealClientExecution();

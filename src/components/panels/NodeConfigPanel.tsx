@@ -41,13 +41,47 @@ import {
   Save,
   Download,
   ArrowDownLeft,
-  Radio
+  Radio,
+  Clock
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { Workflow, WorkflowNodeData, Credential, ExecutionNodeResult } from '../../types/workflow';
 import { NodeDataInspector } from '../common/NodeDataInspector';
 import { evaluateExpressionInContext, getDefaultSampleOutputForNodeType } from '../../utils/workflowDataFlow';
 import { NODE_LIBRARY, getNodePackageMeta } from '../../constants/nodeLibrary';
+
+export function parseClientExactTimeToCron(timeStr: string): string | null {
+  if (!timeStr) return null;
+  const tokens = timeStr.split(',').map((t) => t.trim()).filter(Boolean);
+  const items: Array<{ h: number; m: number }> = [];
+  for (const t of tokens) {
+    const isPM = /PM/i.test(t);
+    const isAM = /AM/i.test(t);
+    const clean = t.replace(/AM|PM/gi, '').trim();
+    if (clean.includes(':')) {
+      const [hPart, mPart] = clean.split(':');
+      let h = parseInt(hPart.trim(), 10);
+      let m = parseInt(mPart.trim(), 10) || 0;
+      if (isNaN(h)) continue;
+      if (isPM && h < 12) h += 12;
+      if (isAM && h === 12) h = 0;
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) items.push({ h, m });
+    } else {
+      let h = parseInt(clean, 10);
+      if (!isNaN(h)) {
+        if (isPM && h < 12) h += 12;
+        if (isAM && h === 12) h = 0;
+        if (h >= 0 && h <= 23) items.push({ h, m: 0 });
+      }
+    }
+  }
+  if (items.length > 0) {
+    const min = items[0].m;
+    const hours = Array.from(new Set(items.map((it) => it.h))).sort((a, b) => a - b);
+    return `${min} ${hours.join(',')} * * *`;
+  }
+  return null;
+}
 
 interface NodeConfigPanelProps {
   node: WorkflowNodeData | null;
@@ -190,6 +224,40 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
     chatId: string | number;
     date: string;
   } | null>(null);
+
+  // Live Scheduler Status (Time-based execution & IST clock)
+  const [schedulerStatus, setSchedulerStatus] = useState<{
+    running: boolean;
+    serverTimeIst: string;
+    serverTimeUtc?: string;
+    scheduledList: Array<{
+      workflowId: string;
+      workflowName: string;
+      active: boolean;
+      cron: string;
+      description: string;
+      nextRun: string;
+      readableTimeIst: string;
+    }>;
+  } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchScheduler = () => {
+      fetch('/api/scheduler/status')
+        .then((r) => r.json())
+        .then((d) => {
+          if (mounted) setSchedulerStatus(d);
+        })
+        .catch(() => {});
+    };
+    fetchScheduler();
+    const timer = setInterval(fetchScheduler, 4000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const handleFetchMobileMessages = async () => {
     const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
@@ -1426,6 +1494,26 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </div>
                       )}
 
+                      {/* Prominent Hindi/English Mobile Delivery Guide if Token is Missing */}
+                      {!(config.botToken || config.token || selectedCredential?.data?.botToken) && (
+                        <div className="p-3 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs space-y-2 animate-in fade-in">
+                          <div className="flex items-center gap-2 font-bold text-amber-300">
+                            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span>मोबाइल टेलीग्राम पर मैसेज पाने के लिए Bot Token डालें (Mobile Delivery Setup)</span>
+                          </div>
+                          <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                            इंटरनेट से सीधे आपके मोबाइल ऐप पर मैसेज डिलीवर करने के लिए टेलीग्राम बॉट टोकन ज़रूरी है:
+                          </p>
+                          <ol className="text-[11px] list-decimal list-inside space-y-1.5 text-slate-200 bg-slate-900/90 p-2.5 rounded-lg border border-amber-900/60 font-mono">
+                            <li>मोबाइल में Telegram ऐप खोलें और सर्च करें: <strong className="text-cyan-300">@BotFather</strong></li>
+                            <li>चैट में <span className="text-emerald-400 font-bold">/newbot</span> भेजें और कोई भी नाम दें (उदा. MyNewsBot)</li>
+                            <li>@BotFather से मिला <strong className="text-cyan-300">HTTP API Token</strong> नीचे बॉक्स में पेस्ट करें</li>
+                            <li>अपने नए बॉट को Telegram में खोलकर <span className="text-emerald-400 font-bold">START</span> दबाएं</li>
+                            <li>'Execute Step' दबाएं — तुरंत आपके मोबाइल पर मैसेज डिलीवर होगा!</li>
+                          </ol>
+                        </div>
+                      )}
+
                       {/* Telegram Bot Token (Direct Field & Verification) */}
                       <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
                         <div className="flex items-center justify-between">
@@ -1440,7 +1528,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             type={showBotToken ? 'text' : 'password'}
                             value={config.botToken || config.token || (selectedCredential?.data?.botToken || '')}
                             onChange={(e) => {
-                              handleConfigBatch({ botToken: e.target.value, token: e.target.value });
+                              const val = e.target.value.trim();
+                              handleConfigBatch({ botToken: val, token: val });
                             }}
                             placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
                             className="w-full bg-slate-900 border border-slate-800 rounded-l-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
@@ -1525,7 +1614,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-[10px] font-semibold text-slate-300 flex items-center gap-1.5">
                             <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-                            Chat ID (Recipient Mobile Phone / Group)
+                            Chat ID (Recipient Mobile Phone / User ID)
                           </label>
                           <button
                             type="button"
@@ -1544,26 +1633,17 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </span>
                           <input
                             type="text"
-                            value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
+                            value={String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).replace(/^=+/, '')}
                             onChange={(e) => {
-                              let val = e.target.value;
-                              // Auto-strip leading '=' if user typed '=5102553052' (common in Excel/n8n formulas)
-                              if (val.startsWith('=') && !val.includes('{{') && !val.includes('$')) {
-                                val = val.replace(/^=+/, '').trim();
-                              }
+                              let val = e.target.value.trim().replace(/^=+/, '');
                               handleConfigBatch({ chatId: val, chat_id: val });
                             }}
                             placeholder="e.g. 5102553052 or @mychannel or {{$json.chatId}}"
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none"
                           />
                         </div>
-                        {String(config.chatId || config.chat_id || '').startsWith('=') && (
-                          <div className="text-[9.5px] text-amber-300 font-mono mt-1 flex items-center gap-1">
-                            <span>Note: Leading '=' will be automatically stripped for Telegram delivery ({String(config.chatId || config.chat_id).replace(/^=+/, '')})</span>
-                          </div>
-                        )}
                         <div className="text-[9.5px] text-slate-400 mt-1 flex items-center justify-between">
-                          <span>Tip: Send /start to your bot, then click <strong className="text-cyan-300">Auto-Detect My Chat ID</strong></span>
+                          <span>Tip: Send /start to your bot in Telegram, then click <strong className="text-cyan-300">Auto-Detect My Chat ID</strong></span>
                         </div>
                         {renderExpressionEvaluator(config.chatId || config.chat_id)}
                       </div>
@@ -1688,10 +1768,10 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="button"
                           onClick={async () => {
                             const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
-                            const cid = (config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).toString().trim();
+                            const cid = String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '5102553052')).trim().replace(/^=+/, '');
                             if (!token) {
-                              setTgTestErrorToast('Missing Bot Token! Please enter your Telegram Bot Token above or create a Telegram Credential.');
-                              setTimeout(() => setTgTestErrorToast(null), 4500);
+                              setTgTestErrorToast('Missing Bot Token! मोबाइल ऐप पर मैसेज पाने के लिए ऊपर @BotFather से मिला Bot Token दर्ज करें।');
+                              setTimeout(() => setTgTestErrorToast(null), 5500);
                               return;
                             }
                             if (!cid) {
@@ -1703,7 +1783,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             setTgTestErrorToast(null);
                             setTgTestSuccessToast(null);
                             try {
-                              const testText = (config.text || config.message || '🚀 <b>Workflow Connection Verified!</b>\n\n✅ <b>Status:</b> Success\n🌐 <i>Dispatched via Telegram Bot API</i>').trim();
+                              const testText = (config.text || config.message || '🚀 <b>EIE Workflow Cloud Connection Verified!</b>\n\n✅ <b>Status:</b> Message delivered to mobile Telegram app.\n⚡ <i>Real-time Cloud Automation Active</i>').trim();
                               const res = await fetch('/api/integrations/telegram/send-test', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1711,9 +1791,14 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               });
                               const data = await res.json();
                               if (data.ok && data.delivered) {
-                                setTgTestSuccessToast(`✓ Real Message Delivered to Telegram Chat ${cid}! (Msg ID #${data.messageId || '1'})`);
+                                setTgTestSuccessToast(`🚀 रियल मैसेज मोबाइल टेलीग्राम पर पहुँच गया! Real Message #${data.messageId || '1'} delivered to Chat ${cid}!`);
                               } else {
-                                setTgTestErrorToast(`Delivery Failed: ${data.error || 'Check Chat ID & Token. Did you send /start to your bot?'}`);
+                                const errDesc = data.error || 'Failed';
+                                if (errDesc.toLowerCase().includes('chat not found')) {
+                                  setTgTestErrorToast('Delivery Failed: Chat not found. कृपया Telegram ऐप में अपने बॉट को खोलकर START (या /start) भेजें ताकि बॉट आपको मैसेज भेज सके!');
+                                } else {
+                                  setTgTestErrorToast(`Delivery Failed: ${errDesc}`);
+                                }
                               }
                             } catch (err: any) {
                               setTgTestErrorToast(`Send error: ${err.message || 'Network connection failed'}`);
@@ -2178,25 +2263,47 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                     node.type === 'schedule' ||
                     node.packageIdentifier === 'eie-nodes-base.scheduleTrigger') && (
                     <div className="space-y-3.5">
-                      {/* Active Status Banner */}
-                      <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 text-emerald-300">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                          <span className="font-semibold">Automatic Scheduler Active</span>
+                      {/* Active Status Banner & Live Clock */}
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-950/60 to-slate-900 border border-emerald-500/40 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-emerald-300">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+                            <span className="font-bold">24/7 Background Scheduler Active</span>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/80 text-emerald-200 font-mono border border-emerald-700/50">
+                            Running on Server
+                          </span>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-200 font-mono">
-                          Live on Server
-                        </span>
+                        <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                          <span className="text-slate-400">Server Clock (IST):</span>
+                          <strong className="text-amber-300 font-semibold">
+                            {schedulerStatus?.serverTimeIst || new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                          </strong>
+                        </div>
+                        {(() => {
+                          const schedInfo = schedulerStatus?.scheduledList?.find((s) => s.workflowId === workflow?.id);
+                          if (schedInfo?.readableTimeIst) {
+                            return (
+                              <div className="flex items-center justify-between text-[10.5px] text-slate-300 font-mono bg-emerald-950/30 p-2 rounded-lg border border-emerald-600/30">
+                                <span className="text-emerald-400 font-semibold">Next Scheduled Run:</span>
+                                <span className="text-white font-bold">{schedInfo.readableTimeIst}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Schedule Mode</label>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Trigger Schedule Interval / Mode</label>
                         <select
                           value={
                             config.triggerInterval ||
                             (config.cron === '0 9,21 * * *' || config.cron === '0 0 9,21 * * *' ? 'twice_daily' :
                              config.cron === '* * * * *' ? 'minute' :
+                             config.cron === '*/2 * * * *' ? 'minutes_2' :
                              config.cron === '*/5 * * * *' ? 'minutes_5' :
+                             config.cron === '*/10 * * * *' ? 'minutes_10' :
                              config.cron === '*/15 * * * *' ? 'minutes_15' :
                              config.cron === '0 * * * *' ? 'hours' :
                              config.exactTime ? 'daily_time' : 'cron')
@@ -2206,7 +2313,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             let newCron = config.cron || '0 9,21 * * *';
                             let newExact = config.exactTime || '09:00, 21:00';
                             if (val === 'minute') { newCron = '* * * * *'; newExact = ''; }
+                            else if (val === 'minutes_2') { newCron = '*/2 * * * *'; newExact = ''; }
                             else if (val === 'minutes_5') { newCron = '*/5 * * * *'; newExact = ''; }
+                            else if (val === 'minutes_10') { newCron = '*/10 * * * *'; newExact = ''; }
                             else if (val === 'minutes_15') { newCron = '*/15 * * * *'; newExact = ''; }
                             else if (val === 'hours') { newCron = '0 * * * *'; newExact = ''; }
                             else if (val === 'twice_daily') { newCron = '0 9,21 * * *'; newExact = '09:00, 21:00'; }
@@ -2216,13 +2325,15 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             else if (val === 'months') { newCron = '0 9 1 * *'; newExact = '09:00'; }
                             handleConfigBatch({ triggerInterval: val, cron: newCron, exactTime: newExact });
                           }}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs focus:border-orange-500 focus:outline-none"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-medium focus:border-orange-500 focus:outline-none"
                         >
                           <option value="twice_daily">Twice Daily at 9:00 AM & 9:00 PM (09:00, 21:00 IST)</option>
                           <option value="minute">Every 1 Minute (Instant Testing & Live Sync)</option>
+                          <option value="minutes_2">Every 2 Minutes (Fast Testing)</option>
                           <option value="minutes_5">Every 5 Minutes</option>
+                          <option value="minutes_10">Every 10 Minutes</option>
                           <option value="minutes_15">Every 15 Minutes</option>
-                          <option value="hours">Every Hour</option>
+                          <option value="hours">Every Hour at Minute 0</option>
                           <option value="daily_time">Daily at Specific Time (HH:MM)</option>
                           <option value="days">Every Day at 9:00 AM</option>
                           <option value="weeks">Every Monday at 9:00 AM</option>
@@ -2233,22 +2344,20 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
 
                       {(config.triggerInterval === 'daily_time' || config.triggerInterval === 'twice_daily') && (
                         <div>
-                          <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                            Exact Time of Day (24-Hour, comma-separated for multiple)
-                          </label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-slate-300">
+                              Exact Time of Day in 24-Hour (e.g. <code>16:00</code> or <code>09:00, 21:00</code>)
+                            </label>
+                            <span className="text-[10px] text-orange-400 font-mono">IST (Asia/Kolkata)</span>
+                          </div>
                           <input
                             type="text"
                             value={config.exactTime || (config.triggerInterval === 'twice_daily' ? '09:00, 21:00' : '09:00')}
                             onChange={(e) => {
                               const timeVal = e.target.value;
-                              if (timeVal.includes(',')) {
-                                const hours = timeVal.split(',').map((t) => t.trim().split(':')[0]).filter(Boolean);
-                                const newCron = `0 ${hours.join(',')} * * *`;
-                                handleConfigBatch({ exactTime: timeVal, cron: newCron });
-                              } else if (timeVal.includes(':')) {
-                                const [h, m] = timeVal.split(':');
-                                const newCron = `${parseInt(m, 10) || 0} ${parseInt(h, 10) || 0} * * *`;
-                                handleConfigBatch({ exactTime: timeVal, cron: newCron });
+                              const parsedCron = parseClientExactTimeToCron(timeVal);
+                              if (parsedCron) {
+                                handleConfigBatch({ exactTime: timeVal, cron: parsedCron });
                               } else {
                                 handleConfigChange('exactTime', timeVal);
                               }
@@ -2256,18 +2365,34 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             placeholder="09:00, 21:00"
                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                           />
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            Enter single time (e.g. <code>09:00</code>) or multiple times (e.g. <code>09:00, 21:00</code>).
-                          </p>
+                          <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                            <span>Supports 24h (<code>16:45</code>) or 12h (<code>4:45 PM</code>) or multiple (<code>09:00, 21:00</code>).</span>
+                          </div>
                         </div>
                       )}
 
+                      {/* Quick 1-minute test shortcut for instant scheduler verification */}
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-orange-950/30 border border-orange-500/30 text-[11px]">
+                        <span className="text-orange-200">Want to test background execution right now?</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleConfigBatch({ triggerInterval: 'minute', cron: '* * * * *', exactTime: '' });
+                            setTgTestSuccessToast('⚡ Schedule set to Every 1 Minute! The server worker will trigger automatically every 60 seconds.');
+                            setTimeout(() => setTgTestSuccessToast(null), 5000);
+                          }}
+                          className="px-2 py-1 rounded bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-[10px] cursor-pointer transition shadow"
+                        >
+                          Set to 1 Minute
+                        </button>
+                      </div>
+
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression</label>
+                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">Cron Expression (Active)</label>
                         <input
                           type="text"
                           value={config.cron || '0 9,21 * * *'}
-                          onChange={(e) => handleConfigChange('cron', e.target.value)}
+                          onChange={(e) => handleConfigBatch({ cron: e.target.value, triggerInterval: 'cron' })}
                           placeholder="0 9,21 * * *"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                         />
@@ -2276,8 +2401,12 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           <strong className="text-emerald-400 font-medium">
                             {config.cron === '* * * * *'
                               ? 'Every 1 minute (Continuously)'
+                              : config.cron === '*/2 * * * *'
+                              ? 'Every 2 minutes'
                               : config.cron === '*/5 * * * *'
                               ? 'Every 5 minutes'
+                              : config.cron === '*/10 * * * *'
+                              ? 'Every 10 minutes'
                               : config.cron === '*/15 * * * *'
                               ? 'Every 15 minutes'
                               : config.cron === '0 * * * *'
@@ -2285,7 +2414,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               : config.cron === '0 9,21 * * *' || config.cron === '0 0 9,21 * * *'
                               ? 'Every day at 9:00 AM & 9:00 PM (09:00, 21:00 IST)'
                               : config.exactTime
-                              ? `Every day at ${config.exactTime}`
+                              ? `Daily at ${config.exactTime} (IST)`
                               : config.cron === '0 9 * * *'
                               ? 'Every day at 09:00 AM'
                               : config.cron === '0 9 * * 1'
@@ -2311,37 +2440,90 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         </select>
                       </div>
 
-                      {/* Instant Test Schedule Trigger Button */}
-                      <div className="pt-2 border-t border-slate-800">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              setTgTestSuccessToast('⚡ Simulating scheduled trigger execution...');
-                              const res = await fetch('/api/scheduler/trigger-now', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ workflowId: workflow?.id, nodeId: node.id }),
-                              });
-                              const data = await res.json();
-                              if (data.ok) {
-                                setTgTestSuccessToast(`✓ Scheduled trigger fired successfully! (Exec ID: ${data.executionId})`);
-                              } else {
-                                setTgTestSuccessToast(`Error: ${data.error || 'Failed'}`);
+                      {/* Instant Test Schedule Trigger Buttons */}
+                      <div className="pt-2 border-t border-slate-800 space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                setIsTesting(true);
+                                setTgTestSuccessToast('⚡ Executing full workflow starting from schedule trigger...');
+                                const res = await fetch(`/api/workflows/${workflow?.id}/run`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    triggerType: 'schedule',
+                                    payload: {
+                                      scheduledTime: new Date().toISOString(),
+                                      cron: config.cron || '0 9,21 * * *',
+                                      triggerNodeId: node.id,
+                                      triggerNodeName: node.name,
+                                      reason: 'Manual simulate scheduled trigger from studio panel',
+                                    },
+                                    workflow,
+                                    credentials,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (data.status === 'success') {
+                                  const nodesCount = Object.keys(data.nodeResults || {}).length;
+                                  setTestResult(data.nodeResults?.[node.id]?.output || data);
+                                  setTgTestSuccessToast(`✓ Full Workflow Executed! All ${nodesCount} nodes succeeded in ${data.durationMs}ms.`);
+                                } else {
+                                  setTgTestSuccessToast(`Workflow completed with status: ${data.status || 'unknown'}`);
+                                }
+                              } catch (e: any) {
+                                setTgTestSuccessToast(`Error: ${e.message}`);
+                              } finally {
+                                setIsTesting(false);
+                                setTimeout(() => setTgTestSuccessToast(null), 6000);
                               }
-                            } catch (e: any) {
-                              setTgTestSuccessToast(`Error: ${e.message}`);
-                            } finally {
-                              setTimeout(() => setTgTestSuccessToast(null), 5000);
-                            }
-                          }}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/40 text-xs font-semibold cursor-pointer transition active:scale-98"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Simulate Scheduled Trigger (Run Full Workflow)</span>
-                        </button>
-                        <p className="text-[10px] text-slate-400 text-center mt-1.5">
-                          The background worker runs 24/7 on the server and will execute this entire workflow automatically when the scheduled time arrives.
+                            }}
+                            disabled={isTesting}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold cursor-pointer transition active:scale-98 disabled:opacity-50 shadow"
+                          >
+                            {isTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                            <span>{isTesting ? 'Running...' : 'Run Full Workflow Now'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                setIsTesting(true);
+                                setTgTestSuccessToast('⏰ Triggering server scheduler tick now...');
+                                const res = await fetch('/api/scheduler/trigger-now', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    workflowId: workflow?.id,
+                                    nodeId: node.id,
+                                    workflow,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  setTgTestSuccessToast(`✓ Scheduler Tick Triggered! Workflow "${data.workflow}" executed.`);
+                                } else {
+                                  setTgTestSuccessToast(`Scheduler notice: ${data.error || 'Failed'}`);
+                                }
+                              } catch (e: any) {
+                                setTgTestSuccessToast(`Error: ${e.message}`);
+                              } finally {
+                                setIsTesting(false);
+                                setTimeout(() => setTgTestSuccessToast(null), 6000);
+                              }
+                            }}
+                            disabled={isTesting}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold cursor-pointer transition active:scale-98 disabled:opacity-50"
+                          >
+                            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Force Scheduler Tick</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 text-center leading-normal">
+                          The server worker runs 24/7 in background and triggers this workflow automatically at the set time in Asia/Kolkata timezone.
                         </p>
                       </div>
                     </div>

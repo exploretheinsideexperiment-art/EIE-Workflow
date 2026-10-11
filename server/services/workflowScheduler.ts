@@ -3,7 +3,7 @@ import { WorkflowEngine } from '../engine/workflowEngine';
 
 // Normalize any cron (5-part, 6-part with seconds, or 7-part quartz) into standard 5-part cron
 export function normalizeCron(cron: string): string {
-  if (!cron || typeof cron !== 'string') return '0 9 * * *';
+  if (!cron || typeof cron !== 'string') return '0 9,21 * * *';
   const parts = cron.trim().split(/\s+/);
   if (parts.length === 6) {
     // 6-part cron: [second, minute, hour, dayOfMonth, month, dayOfWeek]
@@ -20,15 +20,74 @@ export function normalizeCron(cron: string): string {
   return cron.trim();
 }
 
+// Parse any user-entered time expression (24h, 12h AM/PM, comma-separated, single numbers) into canonical cron
+export function parseExactTimeToCron(exactTimeStr: string, timezone: string = 'Asia/Kolkata'): { cron: string; timezone: string; description: string } | null {
+  if (!exactTimeStr || typeof exactTimeStr !== 'string') return null;
+  const raw = exactTimeStr.trim();
+  if (!raw) return null;
+
+  const tokens = raw.split(',').map((t) => t.trim()).filter(Boolean);
+  const parsedItems: Array<{ hour: number; minute: number }> = [];
+
+  for (const token of tokens) {
+    const isPM = /PM/i.test(token);
+    const isAM = /AM/i.test(token);
+    const cleanToken = token.replace(/AM|PM/gi, '').trim();
+
+    if (cleanToken.includes(':')) {
+      const [hStr, mStr] = cleanToken.split(':');
+      let h = parseInt(hStr.trim(), 10);
+      let m = parseInt(mStr.trim(), 10);
+      if (isNaN(h)) continue;
+      if (isNaN(m)) m = 0;
+      if (isPM && h < 12) h += 12;
+      if (isAM && h === 12) h = 0;
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        parsedItems.push({ hour: h, minute: m });
+      }
+    } else {
+      let h = parseInt(cleanToken, 10);
+      if (!isNaN(h)) {
+        if (isPM && h < 12) h += 12;
+        if (isAM && h === 12) h = 0;
+        if (h >= 0 && h <= 23) {
+          parsedItems.push({ hour: h, minute: 0 });
+        }
+      }
+    }
+  }
+
+  if (parsedItems.length > 0) {
+    const min = parsedItems[0].minute;
+    const hours = parsedItems.map((p) => p.hour);
+    const uniqueHours = Array.from(new Set(hours)).sort((a, b) => a - b);
+    return {
+      cron: `${min} ${uniqueHours.join(',')} * * *`,
+      timezone,
+      description: `Daily at ${raw} (${timezone})`,
+    };
+  }
+  return null;
+}
+
 // Convert node configuration into canonical 5-part cron syntax
 export function resolveScheduleFromNode(node: WorkflowNodeData): { cron: string; timezone: string; description: string } {
   const config = node.config || {};
   const timezone = config.timezone || 'Asia/Kolkata';
 
-  // 1. Explicit trigger interval mode
-  const intervalMode = config.triggerInterval || config.interval;
-  if (intervalMode === 'minute' || intervalMode === 'every_minute') {
-    return { cron: '* * * * *', timezone, description: 'Every 1 minute (Continuously)' };
+  // 1. If explicit Custom Cron expression is selected
+  if (config.triggerInterval === 'cron' && config.cron && typeof config.cron === 'string') {
+    const normalized = normalizeCron(config.cron);
+    return { cron: normalized, timezone, description: `Custom cron schedule (${normalized})` };
+  }
+
+  // 2. High-priority minute/hour intervals
+  const intervalMode = config.triggerInterval;
+  if (intervalMode === 'minute' || intervalMode === 'every_minute' || intervalMode === 'minutes_1') {
+    return { cron: '* * * * *', timezone, description: 'Every 1 minute (Instant Live Trigger)' };
+  }
+  if (intervalMode === 'minutes_2') {
+    return { cron: '*/2 * * * *', timezone, description: 'Every 2 minutes' };
   }
   if (intervalMode === 'minutes_5') {
     return { cron: '*/5 * * * *', timezone, description: 'Every 5 minutes' };
@@ -45,56 +104,30 @@ export function resolveScheduleFromNode(node: WorkflowNodeData): { cron: string;
   if (intervalMode === 'hours' || intervalMode === 'hourly') {
     return { cron: '0 * * * *', timezone, description: 'Every hour at minute 0' };
   }
-  if (intervalMode === 'twice_daily') {
-    return { cron: '0 9,21 * * *', timezone, description: 'Every day at 9:00 AM & 9:00 PM' };
+
+  // 3. Exact user time string (e.g. "09:00, 21:00" or "09:00" or "16:45" or "4:30 PM")
+  const exactTimeStr = (config.exactTime || config.time || config.dailyTime || '').toString().trim();
+  if (exactTimeStr) {
+    const parsed = parseExactTimeToCron(exactTimeStr, timezone);
+    if (parsed) return parsed;
   }
 
-  // 2. Exact time string (e.g. "09:00, 21:00" or "09:00" or "14:30")
-  const exactTimeStr = config.exactTime || config.time || config.dailyTime;
-  if (exactTimeStr && typeof exactTimeStr === 'string' && exactTimeStr.includes(':')) {
-    if (exactTimeStr.includes(',')) {
-      // Multiple times e.g. "09:00, 21:00" or "9:00, 21:00"
-      const times = exactTimeStr.split(',').map((t) => t.trim()).filter((t) => t.includes(':'));
-      const hours = times.map((t) => parseInt(t.split(':')[0], 10)).filter((h) => !isNaN(h));
-      const firstMin = parseInt(times[0].split(':')[1], 10) || 0;
-      if (hours.length > 0) {
-        return {
-          cron: `${firstMin} ${hours.join(',')} * * *`,
-          timezone,
-          description: `Daily at ${exactTimeStr} (${timezone})`,
-        };
-      }
-    } else {
-      const [h, m] = exactTimeStr.split(':');
-      const hour = parseInt(h, 10);
-      const min = parseInt(m, 10);
-      if (!isNaN(hour) && !isNaN(min)) {
-        return {
-          cron: `${min} ${hour} * * *`,
-          timezone,
-          description: `Daily at ${exactTimeStr} (${timezone})`,
-        };
-      }
-    }
+  // 4. Fallback interval presets
+  const generalInterval = config.triggerInterval || config.interval;
+  if (generalInterval === 'twice_daily') {
+    return { cron: '0 9,21 * * *', timezone, description: 'Every day at 9:00 AM & 9:00 PM (IST)' };
+  }
+  if (generalInterval === 'daily_time' || generalInterval === 'days') {
+    return { cron: '0 9 * * *', timezone, description: 'Every day at 9:00 AM' };
+  }
+  if (generalInterval === 'weeks') {
+    return { cron: '0 9 * * 1', timezone, description: 'Every Monday at 9:00 AM' };
+  }
+  if (generalInterval === 'months') {
+    return { cron: '0 9 1 * *', timezone, description: '1st of Every Month at 9:00 AM' };
   }
 
-  // 3. n8n style rule interval: rule.interval: [{ field: 'minutes', minutesInterval: 30 }]
-  if (config.rule?.interval && Array.isArray(config.rule.interval) && config.rule.interval.length > 0) {
-    const r = config.rule.interval[0];
-    if (r.field === 'minutes' && r.minutesInterval) {
-      return { cron: `*/${r.minutesInterval} * * * *`, timezone, description: `Every ${r.minutesInterval} minutes` };
-    }
-    if (r.field === 'hours' && r.hoursInterval) {
-      return { cron: `0 */${r.hoursInterval} * * *`, timezone, description: `Every ${r.hoursInterval} hours` };
-    }
-    if (r.field === 'days') {
-      const h = r.triggerAtHour ?? 9;
-      const m = r.triggerAtMinute ?? 0;
-      return { cron: `${m} ${h} * * *`, timezone, description: `Every day at ${h}:${m < 10 ? '0' + m : m}` };
-    }
-  }
-
-  // 4. Raw cron or cronExpression provided
+  // 5. Raw cron or cronExpression provided
   const rawCron = config.cron || config.cronExpression;
   if (rawCron && typeof rawCron === 'string') {
     const normalized = normalizeCron(rawCron);
@@ -102,13 +135,63 @@ export function resolveScheduleFromNode(node: WorkflowNodeData): { cron: string;
     if (normalized === '0 9,21 * * *') desc = 'Every day at 9:00 AM & 9:00 PM';
     else if (normalized === '0 9 * * *') desc = 'Every day at 09:00 AM';
     else if (normalized === '* * * * *') desc = 'Every 1 minute (Continuously)';
+    else if (normalized === '*/2 * * * *') desc = 'Every 2 minutes';
     else if (normalized === '*/5 * * * *') desc = 'Every 5 minutes';
     else if (normalized === '0 * * * *') desc = 'Every hour at minute 0';
     return { cron: normalized, timezone, description: desc };
   }
 
-  // 5. Default fallback
+  // 6. Default fallback
   return { cron: '0 9,21 * * *', timezone, description: 'Every day at 9:00 AM & 9:00 PM' };
+}
+
+// Extract exact calendar fields in target timezone using Intl standard formatters
+export function getTimePartsInZone(date: Date, timezone: string = 'Asia/Kolkata') {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const getVal = (type: string) => {
+      const item = parts.find((p) => p.type === type);
+      return item ? parseInt(item.value, 10) : 0;
+    };
+
+    const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' });
+    const dayStr = dayFormatter.format(date);
+    const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const dow = dayMap[dayStr] ?? date.getDay();
+
+    let hour = getVal('hour');
+    if (hour === 24) hour = 0; // standard 24h normalization
+
+    return {
+      year: getVal('year'),
+      month: getVal('month'), // 1-12
+      dayOfMonth: getVal('day'),
+      hour,
+      minute: getVal('minute'),
+      second: getVal('second'),
+      dayOfWeek: dow, // 0-6
+    };
+  } catch {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      dayOfMonth: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      second: date.getSeconds(),
+      dayOfWeek: date.getDay(),
+    };
+  }
 }
 
 // Helper to evaluate 5-part cron syntax against a given Date:
@@ -119,20 +202,7 @@ export function matchesCron(rawCron: string, date: Date, timezone: string = 'Asi
   const parts = cron.trim().split(/\s+/);
   if (parts.length < 5) return false;
 
-  // Convert date into target timezone
-  let targetDate = date;
-  try {
-    const tzString = date.toLocaleString('en-US', { timeZone: timezone });
-    targetDate = new Date(tzString);
-  } catch (e) {
-    targetDate = date;
-  }
-
-  const minute = targetDate.getMinutes();
-  const hour = targetDate.getHours();
-  const dayOfMonth = targetDate.getDate();
-  const month = targetDate.getMonth() + 1; // 1-12
-  const dayOfWeek = targetDate.getDay(); // 0-6 (0 is Sunday)
+  const { minute, hour, dayOfMonth, month, dayOfWeek } = getTimePartsInZone(date, timezone);
 
   const matchField = (field: string, val: number, isDow: boolean = false): boolean => {
     if (field === '*' || field === '?') return true;
@@ -154,7 +224,7 @@ export function matchesCron(rawCron: string, date: Date, timezone: string = 'Asi
       return false;
     }
 
-    // List: 1,3,5 or 9,21
+    // List: 1,3,5 or 9,21 or 09,21
     if (field.includes(',')) {
       return field.split(',').some((sub) => matchField(sub.trim(), val, isDow));
     }
@@ -167,7 +237,7 @@ export function matchesCron(rawCron: string, date: Date, timezone: string = 'Asi
       return val >= start && val <= end;
     }
 
-    // Exact number
+    // Exact number (support leading zeroes like "09")
     const exact = parseInt(field, 10);
     if (isDow && field === '7') {
       return val === 0; // 7 can represent Sunday
@@ -246,7 +316,7 @@ export class WorkflowScheduler {
 
       // Find all schedule trigger nodes in the workflow (supporting standard & custom aliases)
       const scheduleNodes = (wf.nodes || []).filter(
-        (n: WorkflowNodeData) =>
+        (n: any) =>
           (n.type === 'trigger_schedule' ||
            n.type === 'scheduleTrigger' ||
            n.type === 'eie-nodes-base.scheduleTrigger' ||
@@ -264,12 +334,8 @@ export class WorkflowScheduler {
         // Evaluate if current time matches schedule in the target timezone
         if (matchesCron(cron, now, timezone)) {
           // Construct unique minute key using target timezone values to avoid duplicate firings in same minute
-          let tzDateStr = now.toISOString();
-          try {
-            tzDateStr = now.toLocaleString('en-US', { timeZone: timezone });
-          } catch {}
-          const d = new Date(tzDateStr);
-          const minuteKey = `${wf.id}_${node.id}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}-${d.getMinutes()}`;
+          const parts = getTimePartsInZone(now, timezone);
+          const minuteKey = `${wf.id}_${node.id}_${parts.year}-${parts.month}-${parts.dayOfMonth}-${parts.hour}-${parts.minute}`;
 
           if (this.lastExecutedKeys.has(minuteKey)) {
             continue; // Already triggered this minute
@@ -315,7 +381,7 @@ export class WorkflowScheduler {
 
     for (const wf of workflows) {
       const scheduleNodes = (wf.nodes || []).filter(
-        (n: WorkflowNodeData) =>
+        (n: any) =>
           (n.type === 'trigger_schedule' ||
            n.type === 'scheduleTrigger' ||
            n.type === 'eie-nodes-base.scheduleTrigger' ||

@@ -30,9 +30,17 @@ router.get('/scheduler/status', (req: Request, res: Response) => {
 });
 
 router.post('/scheduler/trigger-now', async (req: Request, res: Response) => {
-  const { workflowId, nodeId } = req.body;
+  const { workflowId, nodeId, workflow: clientWf } = req.body;
+  if (clientWf && clientWf.id) {
+    db.mutate((d) => {
+      const idx = d.workflows.findIndex((w) => w.id === clientWf.id);
+      if (idx !== -1) d.workflows[idx] = clientWf;
+      else d.workflows.unshift(clientWf);
+    });
+  }
+
   const workflows = db.get('workflows');
-  let targetWf = workflowId ? workflows.find((w) => w.id === workflowId) : null;
+  let targetWf = workflowId ? workflows.find((w) => w.id === workflowId) : (clientWf || null);
   if (!targetWf && workflows.length > 0) {
     targetWf = workflows[0];
   }
@@ -42,7 +50,7 @@ router.post('/scheduler/trigger-now', async (req: Request, res: Response) => {
 
   try {
     const node = targetWf.nodes.find(
-      (n) =>
+      (n: any) =>
         n.id === nodeId ||
         n.type === 'trigger_schedule' ||
         n.type === 'scheduleTrigger' ||
@@ -58,7 +66,7 @@ router.post('/scheduler/trigger-now', async (req: Request, res: Response) => {
       manualTestTrigger: true,
       reason: 'Manual Trigger Now test from Studio',
     });
-    return res.json({ ok: true, executionId: execution.id, status: execution.status, workflow: targetWf.name });
+    return res.json({ ok: true, executionId: execution.id, status: execution.status, workflow: targetWf.name, execution });
   } catch (err: any) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -400,7 +408,15 @@ router.post('/workflows/:id/run', async (req: Request, res: Response) => {
         if (!c || !c.id) continue;
         const cIdx = d.credentials.findIndex((existing) => existing.id === c.id);
         if (cIdx !== -1) {
-          d.credentials[cIdx] = { ...d.credentials[cIdx], ...c, data: { ...d.credentials[cIdx].data, ...c.data } };
+          const mergedData = { ...d.credentials[cIdx].data };
+          for (const [key, val] of Object.entries(c.data || {})) {
+            // Never overwrite real stored secrets with masked asterisks
+            if (typeof val === 'string' && val.includes('****')) {
+              continue;
+            }
+            mergedData[key] = String(val);
+          }
+          d.credentials[cIdx] = { ...d.credentials[cIdx], ...c, data: mergedData };
         } else {
           d.credentials.push(c);
         }
