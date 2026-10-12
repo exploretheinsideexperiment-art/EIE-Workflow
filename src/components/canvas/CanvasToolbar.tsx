@@ -25,7 +25,9 @@ import {
   Check,
   CloudLightning,
   Download,
-  Upload
+  Upload,
+  Send,
+  GitBranch
 } from 'lucide-react';
 
 interface CanvasToolbarProps {
@@ -68,6 +70,9 @@ interface CanvasToolbarProps {
   onToggleActive: () => void;
   onOpenCloudModal?: () => void;
   onOpenEiDoctor?: () => void;
+  onOpenTelegramConnect?: () => void;
+  onOpenGitHubDeploy?: () => void;
+  isTelegramConnected?: boolean;
   canConnectSelected?: boolean;
   onConnectSelectedNodes?: () => void;
 }
@@ -112,6 +117,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onToggleActive,
   onOpenCloudModal,
   onOpenEiDoctor,
+  onOpenTelegramConnect,
+  onOpenGitHubDeploy,
+  isTelegramConnected,
   canConnectSelected,
   onConnectSelectedNodes,
 }) => {
@@ -340,6 +348,41 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
         {/* Right Section: Cloud API & Active Toggle & Save Workflow */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Telegram Mobile Delivery Connector */}
+          {onOpenTelegramConnect && (
+            <button
+              onClick={onOpenTelegramConnect}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0 group ${
+                isTelegramConnected
+                  ? 'border-emerald-500/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300'
+                  : 'border-blue-500/40 bg-blue-950/40 hover:bg-blue-900/60 text-blue-300'
+              }`}
+              title="Telegram Mobile Delivery Setup (Connect Bot & Deliver to Phone)"
+            >
+              <Send className={`w-3.5 h-3.5 ${isTelegramConnected ? 'text-emerald-400' : 'text-cyan-400'}`} />
+              <span className="font-bold hidden sm:inline">Telegram Mobile</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                isTelegramConnected
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                {isTelegramConnected ? 'CONNECTED' : 'CONNECT'}
+              </span>
+            </button>
+          )}
+
+          {/* GitHub Repository Push & Live Sync */}
+          {onOpenGitHubDeploy && (
+            <button
+              onClick={onOpenGitHubDeploy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
+              title="GitHub Push & Live Website Auto-Update Guide"
+            >
+              <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden lg:inline">GitHub Sync</span>
+            </button>
+          )}
+
           {/* Cloud API & Webhook details button for external apps */}
           {onOpenCloudModal && (
             <button

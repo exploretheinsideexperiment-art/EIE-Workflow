@@ -19,6 +19,8 @@ import { ExecutionDrawer } from '../panels/ExecutionDrawer';
 import { AiFixerDrawer } from '../panels/AiFixerDrawer';
 import { WorkflowLiveChatDrawer } from '../panels/WorkflowLiveChatDrawer';
 import { CloudConnectivityModal } from '../modals/CloudConnectivityModal';
+import { TelegramMobileModal } from '../modals/TelegramMobileModal';
+import { GitHubDeployModal } from '../modals/GitHubDeployModal';
 import { NODE_LIBRARY } from '../../constants/nodeLibrary';
 import { resolveNodeInputData, evaluateExpressionInContext } from '../../utils/workflowDataFlow';
 import { diagnoseWorkflow, autoRepairWorkflow } from '../../utils/workflowDoctor';
@@ -150,6 +152,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [eiDoctorOpen, setEiDoctorOpen] = useState(false);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -212,6 +216,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [workflowExecutionSuccessToast, setWorkflowExecutionSuccessToast] = useState<{
     message: string;
     messageId?: number | string;
+    action?: () => void;
+    actionLabel?: string;
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1545,19 +1551,38 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         }
 
         // Gather resolved input from upstreams
-        let stepInput: any = {};
-        for (const ic of incomingConns) {
-          if (nodeResults[ic.fromNodeId]?.output) {
-            const up = nodeResults[ic.fromNodeId].output;
-            stepInput = { ...stepInput, ...up };
-            if (up.rows) stepInput.rows = up.rows;
-            if (up.data) stepInput.data = up.data;
-            if (up.text) stepInput.text = up.text;
-            if (up.message) stepInput.message = up.message;
-            if (up.reply) stepInput.reply = up.reply;
-            if (up.query) stepInput.query = up.query;
-            if (up.chatId) stepInput.chatId = up.chatId;
+        let stepInput: any = null;
+        if (incomingConns.length === 1) {
+          stepInput = nodeResults[incomingConns[0].fromNodeId]?.output ?? {};
+        } else if (incomingConns.length > 1) {
+          let hasArray = false;
+          const mergedArr: any[] = [];
+          let mergedObj: Record<string, any> = {};
+          for (const ic of incomingConns) {
+            const up = nodeResults[ic.fromNodeId]?.output;
+            if (up === undefined || up === null) continue;
+            if (Array.isArray(up)) {
+              hasArray = true;
+              mergedArr.push(...up);
+            } else if (up && typeof up === 'object' && Array.isArray(up.rows)) {
+              hasArray = true;
+              mergedArr.push(...up.rows);
+            } else if (hasArray) {
+              mergedArr.push(up);
+            } else if (typeof up === 'object') {
+              mergedObj = { ...mergedObj, ...up };
+              if (up.rows) mergedObj.rows = up.rows;
+              if (up.data) mergedObj.data = up.data;
+              if (up.text) mergedObj.text = up.text;
+              if (up.message) mergedObj.message = up.message;
+              if (up.reply) mergedObj.reply = up.reply;
+              if (up.query) mergedObj.query = up.query;
+              if (up.chatId) mergedObj.chatId = up.chatId;
+            }
           }
+          stepInput = hasArray ? mergedArr : mergedObj;
+        } else {
+          stepInput = {};
         }
 
         // 1. Visually mark current node as running and animate incoming wires
@@ -1723,9 +1748,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           const dollarNode = (nodeName: string) => {
             const targetNode = workflow.nodes.find((n) => n.name === nodeName || n.id === nodeName);
             const prevOutput = targetNode ? nodeResults[targetNode.id]?.output : null;
-            const items = Array.isArray(prevOutput)
-              ? prevOutput
-              : (prevOutput ? [{ json: prevOutput }] : []);
+            let items: any[] = [];
+            if (Array.isArray(prevOutput)) {
+              items = prevOutput.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
+            } else if (prevOutput && typeof prevOutput === 'object' && Array.isArray(prevOutput.rows)) {
+              items = prevOutput.rows.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
+            } else if (prevOutput && typeof prevOutput === 'object' && Array.isArray(prevOutput.data)) {
+              items = prevOutput.data.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
+            } else if (prevOutput !== null && prevOutput !== undefined) {
+              items = [{ json: prevOutput?.json || prevOutput }];
+            } else {
+              items = [];
+            }
             return {
               all: () => items,
               first: () => items[0] || { json: {} },
@@ -2036,6 +2070,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             realNotice = `⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for mobile recipient (Chat ID: ${targetChat || '5102553052'}). (Add @BotFather bot token in settings for personal bot delivery)`;
           }
 
+          const isRealDispatched = Boolean(token && token.includes(':') && targetChat && realNotice.includes('Real Message'));
+
           stepOutput = {
             sent: true,
             platform: 'External Chat / Telegram',
@@ -2045,10 +2081,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             reply: msg,
             messageId: realMsgId,
             connectedExternally: deliveredSuccess,
+            realDispatched: isRealDispatched,
+            botTokenConfigured: Boolean(token && token.includes(':')),
             deliveredAt: new Date().toISOString(),
             status: 'success',
             output: {
               delivered: deliveredSuccess,
+              realDispatched: isRealDispatched,
+              botTokenConfigured: Boolean(token && token.includes(':')),
               chatId: targetChat || undefined,
               message: msg,
               text: msg,
@@ -2230,7 +2270,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             });
           } else if (tgNodeResult && tgNodeResult.output?.botTokenConfigured === false) {
             setWorkflowExecutionSuccessToast({
-              message: `⚠️ Workflow चला, लेकिन Telegram Bot Token खाली है! मोबाइल ऐप पर मैसेज पाने के लिए 'Send to Telegram' नोड में @BotFather से मिला Token डालें।`,
+              message: `⚠️ Workflow चला, लेकिन Telegram Bot Token खाली है! मोबाइल ऐप पर लाइव मैसेज पाने के लिए @BotFather टोकन जोड़ें।`,
+              action: () => setIsTelegramModalOpen(true),
+              actionLabel: 'Connect Token',
             });
           } else {
             const deliveredNode = Object.values(data.nodeResults || {}).find(
@@ -2497,6 +2539,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     reader.readAsText(file);
   };
 
+  const tgNodeInWf = workflow.nodes.find(
+    (n) => n.type === 'app_telegram' || n.type === 'comm_telegram' || n.name.toLowerCase().includes('telegram')
+  );
+  const isTelegramConnected = Boolean(
+    tgNodeInWf?.config?.botToken &&
+    typeof tgNodeInWf.config.botToken === 'string' &&
+    tgNodeInWf.config.botToken.includes(':')
+  );
+
   return (
     <div className="relative w-full h-full flex flex-col bg-[#070b14] overflow-hidden select-none">
       {/* Top Dedicated Action Subheader Strip - Completely Non-Overlapping */}
@@ -2544,6 +2595,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onExportWorkflow={handleExportWorkflow}
         onImportWorkflow={handleImportFile}
         onOpenEiDoctor={() => setEiDoctorOpen(true)}
+        onOpenTelegramConnect={() => setIsTelegramModalOpen(true)}
+        onOpenGitHubDeploy={() => setIsGitHubModalOpen(true)}
+        isTelegramConnected={isTelegramConnected}
         canConnectSelected={selectedNodeIds.length === 2}
         onConnectSelectedNodes={handleConnectSelectedNodes}
         onOpenCloudModal={() => setIsCloudModalOpen(true)}
@@ -3101,6 +3155,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         workflow={workflow}
       />
 
+      {/* Telegram Mobile Delivery Connector Modal */}
+      <TelegramMobileModal
+        isOpen={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
+        workflow={workflow}
+        onUpdateWorkflowNode={handleUpdateNodeConfig}
+        onSaveWorkflow={handleSave}
+      />
+
+      {/* GitHub Repository Push & Live Sync Modal */}
+      <GitHubDeployModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
+      />
+
       {/* Real Execution Error Alert Banner (prominently shown when any step fails) */}
       {workflowExecutionError && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xl w-[92vw] sm:w-full px-4 animate-in slide-in-from-top-4 duration-300">
@@ -3155,9 +3224,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold text-white">Delivered to Real Application</div>
-              <div className="text-[11px] text-emerald-300 truncate">
+              <div className="text-[11px] text-emerald-300">
                 {workflowExecutionSuccessToast.message}
               </div>
+              {workflowExecutionSuccessToast.action && (
+                <button
+                  onClick={() => {
+                    workflowExecutionSuccessToast.action?.();
+                    setWorkflowExecutionSuccessToast(null);
+                  }}
+                  className="mt-1 px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] cursor-pointer transition shadow"
+                >
+                  {workflowExecutionSuccessToast.actionLabel || 'Fix Now'}
+                </button>
+              )}
             </div>
             {workflowExecutionSuccessToast.messageId && (
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300">

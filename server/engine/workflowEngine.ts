@@ -245,6 +245,30 @@ function getNestedProperty(obj: any, path: string): any {
   return curr;
 }
 
+export function sanitizeTelegramHtml(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let str = raw
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ');
+
+  // Strip dangerous or unsupported tags entirely including content
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+
+  // Normalize <a> tags, keeping only href attribute
+  str = str.replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>/gi, '<a href="$1">');
+
+  // Strip all other disallowed HTML tags, keeping inner text
+  str = str.replace(/<\/?(?!b|strong|i|em|u|ins|s|strike|del|code|pre|a\b)[a-z0-9_-]+(?:\s+[^>]*)?>/gi, '');
+
+  // Trim and limit to Telegram message limit (4096 chars, use 3900 safety margin)
+  if (str.length > 3900) {
+    str = str.slice(0, 3800) + '...\n\n<i>[सन्देश टेलीग्राम सीमा के अनुसार संक्षिप्त किया गया]</i>';
+  }
+  return str.trim();
+}
+
 export class WorkflowEngine {
   public static async executeWorkflow(
     workflow: Workflow,
@@ -422,32 +446,41 @@ export class WorkflowEngine {
 
       // Merge inputs from all incoming connections
       let resolvedInput: any = currentItem.incomingData;
-      if (!resolvedInput && incomingConns.length > 0) {
-        resolvedInput = nodeOutputs[incomingConns[0].fromNodeId];
-      }
-      for (const ic of incomingConns) {
-        const upOutput = nodeOutputs[ic.fromNodeId];
-        if (upOutput !== undefined && upOutput !== null) {
+      if (incomingConns.length === 1) {
+        const singleUp = nodeOutputs[incomingConns[0].fromNodeId];
+        resolvedInput = singleUp !== undefined ? singleUp : currentItem.incomingData;
+      } else if (incomingConns.length > 1) {
+        let hasArray = false;
+        const mergedItems: any[] = [];
+        let mergedObj: Record<string, any> = {};
+
+        for (const ic of incomingConns) {
+          const upOutput = nodeOutputs[ic.fromNodeId];
+          if (upOutput === undefined || upOutput === null) continue;
+
           if (Array.isArray(upOutput)) {
-            if (!resolvedInput || !Array.isArray(resolvedInput)) {
-              resolvedInput = upOutput;
-            }
+            hasArray = true;
+            mergedItems.push(...upOutput);
+          } else if (upOutput && typeof upOutput === 'object' && Array.isArray(upOutput.rows)) {
+            hasArray = true;
+            mergedItems.push(...upOutput.rows);
+          } else if (hasArray) {
+            mergedItems.push(upOutput);
           } else if (typeof upOutput === 'object') {
-            if (!resolvedInput || Array.isArray(resolvedInput)) {
-              resolvedInput = { ...upOutput };
-            } else {
-              resolvedInput = { ...resolvedInput, ...upOutput };
-            }
-            if (upOutput.json) resolvedInput.json = upOutput.json;
-            if (upOutput.output) resolvedInput.output = upOutput.output;
-            if (upOutput.data) resolvedInput.data = upOutput.data;
-            if (upOutput.text) resolvedInput.text = upOutput.text;
-            if (upOutput.message) resolvedInput.message = upOutput.message;
-            if (upOutput.reply) resolvedInput.reply = upOutput.reply;
-            if (upOutput.query) resolvedInput.query = upOutput.query;
-            if (upOutput.chatId) resolvedInput.chatId = upOutput.chatId;
+            mergedObj = { ...mergedObj, ...upOutput };
+            if (upOutput.json) mergedObj.json = upOutput.json;
+            if (upOutput.output) mergedObj.output = upOutput.output;
+            if (upOutput.data) mergedObj.data = upOutput.data;
+            if (upOutput.text) mergedObj.text = upOutput.text;
+            if (upOutput.message) mergedObj.message = upOutput.message;
+            if (upOutput.reply) mergedObj.reply = upOutput.reply;
+            if (upOutput.query) mergedObj.query = upOutput.query;
+            if (upOutput.chatId) mergedObj.chatId = upOutput.chatId;
           }
         }
+        resolvedInput = hasArray ? mergedItems : (Object.keys(mergedObj).length > 0 ? mergedObj : currentItem.incomingData);
+      } else if (!resolvedInput && incomingConns.length > 0) {
+        resolvedInput = nodeOutputs[incomingConns[0].fromNodeId];
       }
 
       // Mark running
@@ -555,8 +588,13 @@ export class WorkflowEngine {
 
         const cleanOut = extractCleanJson(outputData);
         nodeOutputs[currentNode.id] = outputData;
-        nodeOutputsByName[currentNode.name] = { json: cleanOut, ...cleanOut, ...outputData };
-        nodeOutputsByName[currentNode.id] = { json: cleanOut, ...cleanOut, ...outputData };
+        if (Array.isArray(outputData)) {
+          nodeOutputsByName[currentNode.name] = outputData;
+          nodeOutputsByName[currentNode.id] = outputData;
+        } else {
+          nodeOutputsByName[currentNode.name] = { json: cleanOut, ...cleanOut, ...outputData };
+          nodeOutputsByName[currentNode.id] = nodeOutputsByName[currentNode.name];
+        }
         executedNodeIds.add(currentNode.id);
 
         execution.logs.push({
@@ -1563,10 +1601,14 @@ export class WorkflowEngine {
           let targetItems: any[] = [];
           if (Array.isArray(target)) {
             targetItems = target.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
+          } else if (target && typeof target === 'object' && Array.isArray(target.json)) {
+            targetItems = target.json.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
           } else if (target && typeof target === 'object' && Array.isArray(target.data)) {
             targetItems = target.data.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
           } else if (target && typeof target === 'object' && Array.isArray(target.output)) {
             targetItems = target.output.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
+          } else if (target && typeof target === 'object' && Array.isArray(target.rows)) {
+            targetItems = target.rows.map((x: any) => (x && typeof x === 'object' && 'json' in x ? x : { json: x }));
           } else {
             targetItems = [{ json: target?.json || target || {} }];
           }
@@ -1637,21 +1679,21 @@ export class WorkflowEngine {
       case 'comm_telegram':
       case 'eie-nodes-base.telegram':
       case 'telegram': {
-        const anyTgCred = db.get('credentials').find((c) => c.type === 'telegram' && c.data?.botToken);
-        const botToken = (
+        const anyTgCred = db.get('credentials').find((c) => c.type === 'telegram' && c.data?.botToken && !c.data.botToken.includes('****'));
+        const rawToken = (
           config.botToken ||
           config.accessToken ||
           config.token ||
           config.apiKey ||
-          credential?.data?.botToken ||
-          credential?.data?.accessToken ||
-          credential?.data?.token ||
-          credential?.data?.apiKey ||
-          anyTgCred?.data?.botToken ||
+          (credential?.data?.botToken && !credential.data.botToken.includes('****') ? credential.data.botToken : '') ||
+          (credential?.data?.accessToken && !credential.data.accessToken.includes('****') ? credential.data.accessToken : '') ||
+          (credential?.data?.token && !credential.data.token.includes('****') ? credential.data.token : '') ||
+          (anyTgCred?.data?.botToken || '') ||
           config.tokenId ||
           process.env.TELEGRAM_BOT_TOKEN ||
           ''
         ).toString().trim().replace(/^['"]|['"]$/g, '');
+        const botToken = rawToken.replace(/^bot/i, '').replace(/^=+/, '').trim();
 
         const rawChatId = evaluateExpressions(
           config.chatId ||
@@ -1755,16 +1797,14 @@ export class WorkflowEngine {
           message = `📰 <b>आज तक (Aaj Tak) - दैनिक राज्य समाचार बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>ताज़ा राज्य व राष्ट्रीय मुख्य समाचार:</b>\n• <b>उत्तर प्रदेश:</b> राज्य में विकास कार्यों व प्रशासनिक व्यवस्था की ताज़ा समीक्षा।\n• <b>बिहार:</b> प्रमुख नीतिगत फैसलों व जनहित योजनाओं पर विशेष कवरेज।\n• <b>दिल्ली:</b> मुख्य राजधानी समाचार व दैनिक लाइव अपडेट्स।\n• <b>मध्य प्रदेश व राजस्थान:</b> क्षेत्रीय विकास गतिविधियों पर विशेष रिपोर्ट।\n\n🌐 <b>लाइव स्रोत:</b> https://www.aajtak.in/\n⚡ <i>EIE-Workflow Cloud Automation द्वारा मोबाइल पर सीधे संप्रेषित</i>`;
         }
 
-        // Clean unclosed HTML tags if message is truncated
-        if (message.length > 3900) {
-          message = message.slice(0, 3800) + '...\n\n[सन्देश टेलीग्राम सीमा के अनुसार संक्षिप्त किया गया]';
-        }
+        // Sanitize HTML and prepare plain text fallback
+        const cleanHtml = sanitizeTelegramHtml(message);
+        const cleanPlainText = message.replace(/<[^>]*>/g, '').trim();
 
         // Check if Bot Token is configured
         if (botToken && botToken.includes(':') && targetChatId) {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 12000);
-          const cleanPlainText = message.replace(/<[^>]*>/g, '');
 
           try {
             let tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -1772,7 +1812,7 @@ export class WorkflowEngine {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 chat_id: targetChatId,
-                text: message,
+                text: cleanHtml || message,
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,
               }),
@@ -1781,24 +1821,20 @@ export class WorkflowEngine {
             clearTimeout(timeoutId);
             let tgData = await tgRes.json();
 
-            // If parse_mode caused entity parse failure, retry automatically as clean plain text
-            if (
-              !tgRes.ok &&
-              (tgData?.description?.toLowerCase().includes('parse') ||
-               tgData?.description?.toLowerCase().includes('entity') ||
-               tgData?.description?.toLowerCase().includes('tag') ||
-               tgData?.description?.toLowerCase().includes('html'))
-            ) {
-              tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: targetChatId,
-                  text: cleanPlainText || message,
-                  disable_web_page_preview: true,
-                }),
-              });
-              tgData = await tgRes.json();
+            // If HTML mode failed for any parse or entity reason, retry immediately as clean plain text
+            if (!tgRes.ok) {
+              try {
+                tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chat_id: targetChatId,
+                    text: cleanPlainText || message,
+                    disable_web_page_preview: true,
+                  }),
+                });
+                tgData = await tgRes.json();
+              } catch {}
             }
 
             if (tgRes.ok && tgData.ok) {
@@ -3738,8 +3774,21 @@ export class WorkflowEngine {
       for (const n of workflow.nodes) {
         if (n.pinnedData) {
           const cj = extractCleanJson(n.pinnedData);
-          context.nodes[n.name] = { json: cj, ...cj, ...n.pinnedData };
+          context.nodes[n.name] = Array.isArray(n.pinnedData) ? n.pinnedData : { json: cj, ...cj, ...n.pinnedData };
           context.nodes[n.id] = context.nodes[n.name];
+        } else if (n.id !== node.id) {
+          // Auto-resolve code generator nodes (like State Pages List) so downstream node references resolve
+          if ((n.type === 'core_code' || n.type === 'data_code' || n.type === 'code') && (n.config?.jsCode || n.config?.code)) {
+            try {
+              const code = n.config?.jsCode || n.config?.code;
+              const run = new Function('item', '$json', '$input', '$', code);
+              const out = run({}, {}, { all: () => [] }, () => ({ all: () => [] }));
+              if (out) {
+                context.nodes[n.name] = out;
+                context.nodes[n.id] = out;
+              }
+            } catch {}
+          }
         }
       }
     }

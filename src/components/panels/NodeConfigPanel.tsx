@@ -1505,7 +1505,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             इंटरनेट से सीधे आपके मोबाइल ऐप पर मैसेज डिलीवर करने के लिए टेलीग्राम बॉट टोकन ज़रूरी है:
                           </p>
                           <ol className="text-[11px] list-decimal list-inside space-y-1.5 text-slate-200 bg-slate-900/90 p-2.5 rounded-lg border border-amber-900/60 font-mono">
-                            <li>मोबाइल में Telegram ऐप खोलें और सर्च करें: <strong className="text-cyan-300">@BotFather</strong></li>
+                            <li>मोबाइल में Telegram ऐप में खोलें: <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-cyan-300 font-bold underline hover:text-cyan-200">@BotFather (क्लिक करें)</a></li>
                             <li>चैट में <span className="text-emerald-400 font-bold">/newbot</span> भेजें और कोई भी नाम दें (उदा. MyNewsBot)</li>
                             <li>@BotFather से मिला <strong className="text-cyan-300">HTTP API Token</strong> नीचे बॉक्स में पेस्ट करें</li>
                             <li>अपने नए बॉट को Telegram में खोलकर <span className="text-emerald-400 font-bold">START</span> दबाएं</li>
@@ -1521,14 +1521,21 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
                             Telegram Bot Token
                           </label>
-                          <span className="text-[9.5px] text-cyan-400 font-mono">From @BotFather</span>
+                          <a
+                            href="https://t.me/BotFather"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[9.5px] text-cyan-400 hover:underline font-mono"
+                          >
+                            Get Token from @BotFather ↗
+                          </a>
                         </div>
                         <div className="relative flex items-stretch">
                           <input
                             type={showBotToken ? 'text' : 'password'}
-                            value={config.botToken || config.token || (selectedCredential?.data?.botToken || '')}
+                            value={String(config.botToken || config.token || (selectedCredential?.data?.botToken || '')).replace(/^bot/i, '').replace(/^=+/, '')}
                             onChange={(e) => {
-                              const val = e.target.value.trim();
+                              const val = e.target.value.replace(/^bot/i, '').replace(/^=+/, '').trim();
                               handleConfigBatch({ botToken: val, token: val });
                             }}
                             placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"

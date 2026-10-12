@@ -1371,11 +1371,20 @@ router.post('/credentials', (req: Request, res: Response) => {
   db.mutate((d) => {
     const existingIdx = d.credentials.findIndex((c) => c.id === finalId);
     if (existingIdx >= 0) {
+      const existingData = d.credentials[existingIdx].data || {};
+      const cleanData: Record<string, any> = { ...existingData };
+      for (const [k, v] of Object.entries((data as Record<string, any>) || {})) {
+        if (typeof v === 'string' && v.includes('****')) {
+          // Keep existing real value
+        } else {
+          cleanData[k] = v;
+        }
+      }
       d.credentials[existingIdx] = {
         ...d.credentials[existingIdx],
         name,
         type,
-        data: { ...d.credentials[existingIdx].data, ...(data || {}) },
+        data: cleanData,
         updatedAt: new Date().toISOString(),
       };
       savedCred = d.credentials[existingIdx];

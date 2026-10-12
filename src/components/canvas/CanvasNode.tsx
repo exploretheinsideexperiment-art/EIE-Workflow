@@ -225,7 +225,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       return 'Google Gemini AI Reasoning';
     }
     if (t.includes('telegram')) {
-      return cfg.chatId ? `Chat: ${cfg.chatId}` : 'Telegram Mobile & Bot API';
+      const hasToken = Boolean(cfg.botToken && String(cfg.botToken).includes(':'));
+      const cid = String(cfg.chatId || cfg.chat_id || '5102553052').replace(/^=+/, '');
+      return hasToken ? `Telegram: ${cid} (Live Connected)` : `Telegram: ${cid} (⚠️ Token Required)`;
     }
     if (t === 'http_request') {
       const u = cfg.url || 'API';
