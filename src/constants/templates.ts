@@ -11,14 +11,14 @@ export interface WorkflowTemplate {
 
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
-    id: 'tpl_aajtak_telegram_broadcast',
-    name: 'Aaj Tak Hindi State News → Telegram Live Broadcast',
-    description: 'Enterprise 7-step pipeline: Schedules automated runs, fetches 18 state pages from Aaj Tak (https://www.aajtak.in/), extracts structured JSON-LD headlines, removes duplicate stories, formats rich Hindi news bulletins, and delivers directly to Telegram (Chat ID: 5102553052).',
+    id: 'tpl_content_telegram_broadcast',
+    name: 'Multi-Source Content Crawler → Telegram Live Broadcast',
+    description: 'Enterprise 7-step pipeline: Schedules automated runs, fetches configured web portals, extracts structured article headlines, removes duplicate entries, formats rich bulletins, and delivers directly to Telegram.',
     category: 'Communication',
-    tags: ['Aaj Tak News', 'Telegram Bot', 'Cloud Delivery', 'Web Scraper', 'Deduplication', 'Hindi News'],
+    tags: ['Web Crawler', 'Telegram Bot', 'Cloud Delivery', 'Deduplication', 'Content Parser'],
     workflow: {
-      name: 'Aaj Tak State News to Telegram',
-      description: 'Automated news pipeline that crawls Aaj Tak state portals, extracts headlines, deduplicates, and broadcasts formatted bulletins to Telegram.',
+      name: 'Content Crawler & Telegram Dispatcher',
+      description: 'Automated pipeline that crawls configured portal sources, extracts headlines, deduplicates, and broadcasts formatted bulletins to Telegram.',
       active: true,
       viewport: { x: 50, y: 100, zoom: 0.85 },
       nodes: [
@@ -40,24 +40,24 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         {
           id: 'node_state_list',
           type: 'core_code',
-          name: 'State Pages List',
+          name: 'Target Sources List',
           category: 'Data',
           icon: 'Code',
           position: { x: 380, y: 240 },
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Trigger In' }],
-          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'State URLs' }],
+          outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Source URLs' }],
           config: {
-            jsCode: "const base = 'https://www.aajtak.in/';\nconst list = [\n  ['उत्तर प्रदेश', 'uttar-pradesh'],\n  ['बिहार', 'bihar'],\n  ['मध्य प्रदेश', 'madhya-pradesh'],\n  ['राजस्थान', 'rajasthan'],\n  ['ओडिशा', 'odisha'],\n  ['पश्चिम बंगाल', 'west-bengal'],\n  ['कर्नाटक', 'karnataka'],\n  ['छत्तीसगढ़', 'india/chhattisgarh'],\n  ['दिल्ली', 'india/delhi'],\n  ['गुजरात', 'india/gujarat'],\n  ['हरियाणा', 'india/haryana'],\n  ['हिमाचल प्रदेश', 'india/himachal-pradesh'],\n  ['जम्मू-कश्मीर', 'india/jammu-kashmir'],\n  ['झारखंड', 'india/jharkhand'],\n  ['महाराष्ट्र', 'india/maharashtra'],\n  ['पंजाब', 'india/punjab'],\n  ['तेलंगाना', 'india/telangana'],\n  ['उत्तराखंड', 'india/uttarakhand'],\n];\nreturn list.map(([state, slug]) => ({ json: { state, url: base + slug } }));"
+            jsCode: "// Dynamically read target sources from upstream data or provide your configured list\nconst inputItem = $input.first()?.json || {};\nconst baseUrl = inputItem.baseUrl || inputItem.url || '';\nconst categories = ['Technology', 'Business', 'Regional', 'Science', 'World'];\nreturn categories.map((category) => ({\n  json: {\n    category,\n    url: baseUrl ? `${baseUrl}/${category.toLowerCase()}` : inputItem.url || ''\n  }\n}));"
           }
         },
         {
           id: 'node_fetch_states',
           type: 'core_http',
-          name: 'Fetch State Page',
+          name: 'Fetch Source Content',
           category: 'HTTP',
           icon: 'Globe',
           position: { x: 700, y: 240 },
-          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'State In' }],
+          inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Source In' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'HTML Data' }],
           config: {
             method: 'GET',
@@ -75,7 +75,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'HTML In' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Headlines' }],
           config: {
-            jsCode: "const MAX_PER_STATE = 5;\nconst stateItems = $('State Pages List').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const state = stateItems[i] ? stateItems[i].json.state : 'राज्य';\n  const html = String(item.json.data || '');\n  const re = /<script type=\"application\\/ld\\+json\">([\\s\\S]*?)<\\/script>/g;\n  let m;\n  while ((m = re.exec(html)) !== null) {\n    if (m[1].indexOf('\"ItemList\"') === -1) continue;\n    try {\n      const data = JSON.parse(m[1]);\n      const list = (data.itemListElement || []).slice(0, MAX_PER_STATE);\n      for (const el of list) {\n        if (el && el.url && el.name) out.push({ json: { state, title: el.name, link: el.url } });\n      }\n    } catch (e) {}\n    break;\n  }\n});\nreturn out;"
+            jsCode: "const MAX_PER_CATEGORY = 5;\nconst sourceItems = $('Target Sources List').all();\nconst out = [];\n$input.all().forEach((item, i) => {\n  const category = sourceItems[i]?.json?.category || 'General';\n  const html = String(item.json?.data || item.json?.body || '');\n  const re = /<script type=\"application\\/ld\\+json\">([\\s\\S]*?)<\\/script>/g;\n  let m;\n  let found = false;\n  while ((m = re.exec(html)) !== null) {\n    try {\n      const data = JSON.parse(m[1]);\n      const list = (data.itemListElement || []).slice(0, MAX_PER_CATEGORY);\n      for (const el of list) {\n        if (el && el.url && el.name) {\n          out.push({ json: { category, title: el.name, link: el.url } });\n          found = true;\n        }\n      }\n    } catch (e) {}\n    if (found) break;\n  }\n  if (!found && item.json?.title) {\n    out.push({ json: { category, title: item.json.title, link: item.json.url || '#' } });\n  }\n});\nreturn out;"
           }
         },
         {
@@ -94,14 +94,14 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         {
           id: 'node_build_msgs',
           type: 'core_code',
-          name: 'Build State Messages',
+          name: 'Build Digest Messages',
           category: 'Data',
           icon: 'MessageSquare',
           position: { x: 1660, y: 240 },
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Unique News' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Bulletins' }],
           config: {
-            jsCode: "const dec = (s) => String(s).replace(/&#0?39;/g, \"'\").replace(/&quot;/g, '\"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();\nconst esc = (s) => dec(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst byState = {};\nconst order = [];\nfor (const it of $input.all()) {\n  const s = it.json.state;\n  if (!byState[s]) { byState[s] = []; order.push(s); }\n  byState[s].push(it.json);\n}\nreturn order.map((s) => {\n  const lines = byState[s].map((n, idx) => (idx + 1) + '. <a href=\"' + n.link + '\">' + esc(n.title) + '</a>');\n  return { json: { state: s, text: '<b>' + esc(s) + ' की ताज़ा खबरें</b>\\n\\n' + lines.join('\\n\\n') } };\n});"
+            jsCode: "const dec = (s) => String(s).replace(/&#0?39;/g, \"'\").replace(/&quot;/g, '\"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();\nconst esc = (s) => dec(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst byCat = {};\nconst order = [];\nfor (const it of $input.all()) {\n  const c = it.json.category || 'General';\n  if (!byCat[c]) { byCat[c] = []; order.push(c); }\n  byCat[c].push(it.json);\n}\nreturn order.map((c) => {\n  const lines = byCat[c].map((n, idx) => (idx + 1) + '. <a href=\"' + (n.link || '#') + '\">' + esc(n.title || 'Update') + '</a>');\n  return { json: { category: c, text: '<b>' + esc(c) + ' Latest Updates</b>\\n\\n' + lines.join('\\n\\n') } };\n});"
           }
         },
         {
@@ -116,8 +116,8 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dispatched' }],
           config: {
             botToken: '',
-            chatId: '5102553052',
-            chat_id: '5102553052',
+            chatId: '',
+            chat_id: '',
             parseMode: 'HTML',
             text: '{{$json.text || $json.message}}'
           }

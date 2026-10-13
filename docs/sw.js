@@ -1,1 +1,123 @@
-if(!self.define){let e,i={};const s=(s,r)=>(s=new URL(s+".js",r).href,i[s]||new Promise(i=>{if("document"in self){const e=document.createElement("script");e.src=s,e.onload=i,document.head.appendChild(e)}else e=s,importScripts(s),i()}).then(()=>{let e=i[s];if(!e)throw new Error(`Module ${s} didn’t register its module`);return e}));self.define=(r,n)=>{const t=e||("document"in self?document.currentScript.src:"")||location.href;if(i[t])return;let o={};const c=e=>s(e,t),a={module:{uri:t},exports:o,require:c};i[t]=Promise.all(r.map(e=>a[e]||c(e))).then(e=>(n(...e),o))}}define(["./workbox-9c191d2f"],function(e){"use strict";self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"registerSW.js",revision:"402b66900e731ca748771b6fc5e7a068"},{url:"manifest.webmanifest",revision:"04643c31ec2e7a2989c84d2113927f17"},{url:"index.html",revision:"9df961734c3b74600c92216822000827"},{url:"icon.svg",revision:"24d7c3151a97b1be39886e9e9e66636e"},{url:"avatar.svg",revision:"0a608811caa9df2007d5280ecfe79449"},{url:"avatar.png",revision:"b19b981332aef638950d3d9b52e98ce5"},{url:"assets/index-SAes1acd.css",revision:null},{url:"assets/index-BmMtjzH5.js",revision:null},{url:"avatar.png",revision:"b19b981332aef638950d3d9b52e98ce5"},{url:"avatar.svg",revision:"0a608811caa9df2007d5280ecfe79449"},{url:"icon.svg",revision:"24d7c3151a97b1be39886e9e9e66636e"},{url:"manifest.webmanifest",revision:"04643c31ec2e7a2989c84d2113927f17"}],{}),e.cleanupOutdatedCaches(),e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html")))});
+/**
+ * Copyright 2018 Google Inc. All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// If the loader is already loaded, just stop.
+if (!self.define) {
+  let registry = {};
+
+  // Used for `eval` and `importScripts` where we can't get script URL by other means.
+  // In both cases, it's safe to use a global var because those functions are synchronous.
+  let nextDefineUri;
+
+  const singleRequire = (uri, parentUri) => {
+    uri = new URL(uri + ".js", parentUri).href;
+    return registry[uri] || (
+      
+        new Promise(resolve => {
+          if ("document" in self) {
+            const script = document.createElement("script");
+            script.src = uri;
+            script.onload = resolve;
+            document.head.appendChild(script);
+          } else {
+            nextDefineUri = uri;
+            importScripts(uri);
+            resolve();
+          }
+        })
+      
+      .then(() => {
+        let promise = registry[uri];
+        if (!promise) {
+          throw new Error(`Module ${uri} didn’t register its module`);
+        }
+        return promise;
+      })
+    );
+  };
+
+  self.define = (depsNames, factory) => {
+    const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
+    if (registry[uri]) {
+      // Module is already loading or loaded.
+      return;
+    }
+    let exports = {};
+    const require = depUri => singleRequire(depUri, uri);
+    const specialDeps = {
+      module: { uri },
+      exports,
+      require
+    };
+    registry[uri] = Promise.all(depsNames.map(
+      depName => specialDeps[depName] || require(depName)
+    )).then(deps => {
+      factory(...deps);
+      return exports;
+    });
+  };
+}
+define(['./workbox-a24bf94b'], (function (workbox) { 'use strict';
+
+  self.skipWaiting();
+  workbox.clientsClaim();
+  /**
+   * The precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  workbox.precacheAndRoute([{
+    "url": "registerSW.js",
+    "revision": "402b66900e731ca748771b6fc5e7a068"
+  }, {
+    "url": "manifest.webmanifest",
+    "revision": "04643c31ec2e7a2989c84d2113927f17"
+  }, {
+    "url": "icon.svg",
+    "revision": "24d7c3151a97b1be39886e9e9e66636e"
+  }, {
+    "url": "avatar.svg",
+    "revision": "0a608811caa9df2007d5280ecfe79449"
+  }, {
+    "url": "avatar.png",
+    "revision": "b19b981332aef638950d3d9b52e98ce5"
+  }, {
+    "url": "assets/index-C4EDfwVA.css",
+    "revision": null
+  }, {
+    "url": "assets/index-B56f0h6r.js",
+    "revision": null
+  }, {
+    "url": "avatar.png",
+    "revision": "b19b981332aef638950d3d9b52e98ce5"
+  }, {
+    "url": "avatar.svg",
+    "revision": "0a608811caa9df2007d5280ecfe79449"
+  }, {
+    "url": "icon.svg",
+    "revision": "24d7c3151a97b1be39886e9e9e66636e"
+  }, {
+    "url": "manifest.webmanifest",
+    "revision": "04643c31ec2e7a2989c84d2113927f17"
+  }], {});
+  workbox.cleanupOutdatedCaches();
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
+  workbox.registerRoute(({
+    request
+  }) => request.mode === "navigate", new workbox.NetworkFirst({
+    "cacheName": "pages-cache",
+    "networkTimeoutSeconds": 3,
+    plugins: []
+  }), 'GET');
+
+}));

@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Website
+    name: Build & Prepare Deployment
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -45,21 +45,7 @@ jobs:
           test -f docs/index.html || (echo "docs/index.html missing!" && exit 1)
           echo "Build verification passed: dist/ and docs/ are ready."
 
-      # Auto-sync docs/ directory in repository for GitHub Pages 'main/docs' source
-      - name: Sync docs folder to repository
-        continue-on-error: true
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add -f docs/ .nojekyll
-          if ! git diff-index --quiet HEAD -- docs/ .nojekyll; then
-            git commit -m "Auto-update docs/ for GitHub Pages [skip ci]"
-            git push origin ${{ github.ref_name }} || echo "Auto-push to branch skipped (insufficient token write permission)"
-          else
-            echo "docs/ folder is already up to date with latest build."
-          fi
-
-      # Deploy to gh-pages branch for GitHub Pages 'gh-pages' source
+      # Method 1: Deploy to gh-pages branch (for GitHub Pages 'Deploy from a branch -> gh-pages')
       - name: Deploy to gh-pages branch
         continue-on-error: true
         uses: peaceiris/actions-gh-pages@v4
@@ -69,13 +55,25 @@ jobs:
           publish_branch: gh-pages
           force_orphan: true
 
-      # Prepare artifact for official GitHub Actions Pages deployer
-      - name: Setup Pages
+      # Method 2: Auto-sync docs/ directory in repository (for GitHub Pages 'main /docs')
+      - name: Sync docs folder to repository
         continue-on-error: true
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -f docs/ .nojekyll
+          if ! git diff-index --quiet HEAD -- docs/ .nojekyll; then
+            git commit -m "Auto-update docs/ for GitHub Pages [skip ci]"
+            git push origin ${{ github.ref_name }} || echo "Auto-push skipped (check repository Actions Read & Write permissions)"
+          else
+            echo "docs/ folder is already up to date with latest build."
+          fi
+
+      # Method 3: Prepare artifact for official GitHub Actions Pages deployer
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
@@ -84,13 +82,11 @@ jobs:
     name: Deploy to GitHub Pages (Actions Source)
     needs: build
     runs-on: ubuntu-latest
-    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        continue-on-error: true
         uses: actions/deploy-pages@v4
 

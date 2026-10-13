@@ -227,7 +227,7 @@ export function evaluateExpressionInContext(
 ): any {
   if (typeof exprStr !== 'string') return exprStr;
   
-  // Clean leading '=' if n8n formula style like '={{ $json.text }}' or '=5102553052'
+  // Clean leading '=' if formula style like '={{ $json.text }}' or '=5102553052'
   const trimmed = exprStr.trim();
   const cleanExpr = trimmed.startsWith('=') ? trimmed.replace(/^=+/, '').trim() : trimmed;
   if (!cleanExpr) return '';

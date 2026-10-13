@@ -48,9 +48,9 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           inputs: [],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Inbound Data' }],
           config: {
-            webhookPath: 'inbound-leads',
+            webhookPath: 'inbound-webhook',
             method: 'POST',
-            samplePayload: '{\n  "leadName": "Elena Vance",\n  "company": "Apex Dynamics",\n  "revenue": "$45,000"\n}'
+            samplePayload: ''
           }
         },
         {
@@ -70,8 +70,8 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           config: {
             agentType: 'tools_agent',
             model: 'gemini-2.5-flash',
-            systemPrompt: 'You are an intelligent qualification AI Agent. Evaluate lead urgency and recommend action.',
-            userPromptTemplate: 'Evaluate lead: {{$json}}',
+            systemPrompt: 'You are an intelligent AI workflow assistant. Process input data and return structured results.',
+            userPromptTemplate: '',
             temperature: 0.2
           }
         },
@@ -85,8 +85,8 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Result' }],
           config: {
-            channel: '#alerts',
-            text: '🚀 High-Priority Lead Processed: {{$json.customer || $json.leadName}}'
+            channel: '',
+            text: ''
           }
         }
       ];
@@ -117,7 +117,7 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           position: { x: 440, y: 180 },
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sheet Data' }],
-          config: { operation: 'Read Rows', sheetName: 'Sheet1' }
+          config: { operation: 'Read Rows', sheetName: '' }
         },
         {
           id: 'n_tg_1',
@@ -128,7 +128,7 @@ export const CreateWorkflowModal: React.FC<CreateWorkflowModalProps> = ({
           position: { x: 780, y: 180 },
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivered' }],
-          config: { chatId: '@operations_alerts', text: 'Daily Morning Audit: {{$json.text || "Report completed"}}' }
+          config: { chatId: '', text: '' }
         }
       ];
 

@@ -43,9 +43,9 @@ export const TelegramMobileModal: React.FC<TelegramMobileModalProps> = ({
   );
 
   const [botToken, setBotToken] = useState<string>('');
-  const [chatId, setChatId] = useState<string>('5102553052');
+  const [chatId, setChatId] = useState<string>('');
   const [testMessage, setTestMessage] = useState<string>(
-    '📰 <b>आज तक (Aaj Tak) - मोबाइल लाइव टेस्ट बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n✅ <b>कनेक्शन सत्यापित:</b> इंटरनेट से सीधे आपके मोबाइल टेलीग्राम ऐप पर मैसेज पहुँच गया है!\n⚡ <i>EIE-Workflow Cloud Automation Active</i>'
+    '🔔 <b>Workflow Live Test Alert</b>\n━━━━━━━━━━━━━━━━━━━━\n✅ <b>Connection verified:</b> Test message received successfully from EIE Cloud Automation.\n⚡ <i>Workflow Pipeline Active</i>'
   );
 
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -64,7 +64,7 @@ export const TelegramMobileModal: React.FC<TelegramMobileModalProps> = ({
   useEffect(() => {
     if (tgNode?.config) {
       const cfgToken = tgNode.config.botToken || tgNode.config.token || '';
-      const cfgChatId = tgNode.config.chatId || tgNode.config.chat_id || '5102553052';
+      const cfgChatId = tgNode.config.chatId || tgNode.config.chat_id || '';
       setBotToken(String(cfgToken).replace(/^bot/i, '').replace(/^=+/, '').trim());
       setChatId(String(cfgChatId).replace(/^=+/, '').trim());
     }

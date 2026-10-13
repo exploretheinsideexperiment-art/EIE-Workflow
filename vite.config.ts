@@ -21,7 +21,17 @@ export default defineConfig(() => {
           cleanupOutdatedCaches: true,
           skipWaiting: true,
           clientsClaim: true,
-          globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}']
+          globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest}'],
+          runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'pages-cache',
+                networkTimeoutSeconds: 3,
+              },
+            },
+          ],
         },
         manifest: {
           id: './',

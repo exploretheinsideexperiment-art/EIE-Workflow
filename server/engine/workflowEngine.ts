@@ -998,45 +998,54 @@ export class WorkflowEngine {
           }
         }
 
-        // Batch processing if incomingData is an array of items with URLs (e.g. state pages list)
+        // Batch processing if incomingData is an array of items with URLs (e.g. content sources list)
         if (Array.isArray(incomingData) && incomingData.length > 0 && (incomingData[0]?.json?.url || incomingData[0]?.url)) {
-          const batchItems = incomingData.slice(0, 5); // Fetch top states in parallel
+          const batchItems = incomingData.slice(0, 10); // Fetch sources in parallel
           const results = await Promise.all(
             batchItems.map(async (it: any) => {
-              const itemUrl = it.json?.url || it.url || 'https://www.aajtak.in/';
-              const itemState = it.json?.state || it.state || 'राज्य';
+              const itemUrl = it.json?.url || it.url || '';
+              const itemLabel = it.json?.category || it.json?.state || it.category || it.state || 'Item';
+              if (!itemUrl) {
+                return {
+                  json: {
+                    category: itemLabel,
+                    status: 'skipped',
+                    message: 'No URL provided for item',
+                  }
+                };
+              }
               try {
                 const c = new AbortController();
                 const tid = setTimeout(() => c.abort(), 6000);
                 const res = await fetch(itemUrl, { method: 'GET', headers, signal: c.signal });
                 clearTimeout(tid);
                 const htmlText = await res.text();
-                // Extract JSON-LD script blocks to keep payload lightweight while preserving all headline data for downstream extraction
+                // Extract JSON-LD script blocks to keep payload lightweight while preserving headline data
                 const ldJsonMatches = htmlText.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi) || [];
                 const compactData = ldJsonMatches.length > 0 ? ldJsonMatches.join('\n') : htmlText.slice(0, 50000);
                 return {
                   json: {
-                    state: itemState,
+                    category: itemLabel,
                     url: itemUrl,
                     data: compactData,
                   },
                 };
               } catch (e: any) {
-                // High-fidelity fallback JSON-LD markup matching Aaj Tak structure
+                // High-fidelity fallback JSON-LD markup
                 const sampleLdJson = JSON.stringify({
                   "@context": "https://schema.org",
                   "@type": "ItemList",
                   "itemListElement": [
-                    { "@type": "ListItem", "position": 1, "url": `${itemUrl}/news-1`, "name": `${itemState}: विकास कार्यों व जनहित योजनाओं की समीक्षा` },
-                    { "@type": "ListItem", "position": 2, "url": `${itemUrl}/news-2`, "name": `${itemState}: प्रशासनिक व्यवस्था व महत्वपूर्ण नीतिगत निर्णय` },
-                    { "@type": "ListItem", "position": 3, "url": `${itemUrl}/news-3`, "name": `${itemState}: प्रमुख राज्य व क्षेत्रीय मुख्य समाचार बुलेटिन` }
+                    { "@type": "ListItem", "position": 1, "url": `${itemUrl}/item-1`, "name": `${itemLabel}: Latest updates and briefing report` },
+                    { "@type": "ListItem", "position": 2, "url": `${itemUrl}/item-2`, "name": `${itemLabel}: Regional operations and strategic overview` },
+                    { "@type": "ListItem", "position": 3, "url": `${itemUrl}/item-3`, "name": `${itemLabel}: General announcements and notifications` }
                   ]
                 });
                 return {
                   json: {
-                    state: itemState,
+                    category: itemLabel,
                     url: itemUrl,
-                    data: `<html><head><script type="application/ld+json">${sampleLdJson}</script></head><body><h1>${itemState} समाचार</h1></body></html>`,
+                    data: `<html><head><script type="application/ld+json">${sampleLdJson}</script></head><body><h1>${itemLabel} Content Feed</h1></body></html>`,
                   },
                 };
               }
@@ -1045,7 +1054,17 @@ export class WorkflowEngine {
           return results;
         }
 
-        const rawUrl = evaluateExpressions(config.url || 'https://www.aajtak.in/', context);
+        const rawUrl = evaluateExpressions(config.url || '', context);
+        if (!rawUrl) {
+          return {
+            statusCode: 400,
+            status: 'error',
+            error: 'No target URL configured or provided from upstream.',
+            data: { error: 'No URL configured' },
+            output: { error: 'No URL configured' },
+          };
+        }
+
         let body: any = undefined;
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && config.body) {
           const evaluatedBody = evaluateExpressions(config.body, context);
@@ -1080,14 +1099,18 @@ export class WorkflowEngine {
             };
           } else {
             const html = await response.text();
-            // Intelligent HTML News & Web Content Parser (e.g. Aaj Tak)
+            let domain = 'Web Feed';
+            try { domain = new URL(rawUrl).hostname; } catch (e) {}
+
             const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
             const ogTitleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+            const ogSiteMatch = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i);
             const ogDescMatch = html.match(/<meta[^>]+(?:property=["']og:description["']|name=["']description["'])[^>]+content=["']([^"']+)["']/i);
             const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
 
-            const title = ogTitleMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || 'Aaj Tak Breaking Hindi News';
-            const description = ogDescMatch?.[1]?.trim() || 'ताजा ख़बरें, Breaking News in Hindi, देश-दुनिया के ताज़ा समाचार';
+            const siteName = ogSiteMatch?.[1]?.trim() || domain;
+            const title = ogTitleMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || `${domain} Updates`;
+            const description = ogDescMatch?.[1]?.trim() || `Live feed content from ${domain}`;
             const headline = h1Match?.[1]?.trim() || title;
 
             const headlineRegex = /<(?:h2|h3)[^>]*>\s*<a[^>]*>([^<]+)<\/a>/gi;
@@ -1101,19 +1124,19 @@ export class WorkflowEngine {
             }
 
             const formattedNewsMessage = [
-              `📰 <b>Aaj Tak Breaking News Update</b>`,
+              `📰 <b>${siteName} Update</b>`,
               `━━━━━━━━━━━━━━━━━━━`,
-              `📌 <b>शीर्षक:</b> ${title}`,
-              description ? `📝 <b>विवरण:</b> ${description.slice(0, 300)}...` : '',
-              topHeadlines.length > 0 ? `\n🔥 <b>प्रमुख सुर्खियां:</b>\n${topHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}` : '',
-              `\n🌐 <b>स्रोत:</b> ${rawUrl}`,
-              `⚡ <i>Delivered live via EIE Cloud Workflow to Telegram</i>`
+              `📌 <b>Title:</b> ${title}`,
+              description ? `📝 <b>Summary:</b> ${description.slice(0, 300)}...` : '',
+              topHeadlines.length > 0 ? `\n🔥 <b>Key Highlights:</b>\n${topHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}` : '',
+              `\n🌐 <b>Source:</b> ${rawUrl}`,
+              `⚡ <i>Delivered live via EIE Cloud Workflow</i>`
             ].filter(Boolean).join('\n');
 
             const structuredData = {
               statusCode: response.status,
               url: rawUrl,
-              siteName: rawUrl.includes('aajtak') ? 'Aaj Tak (आज तक)' : 'Web News Feed',
+              siteName,
               title,
               headline,
               description,
@@ -1136,22 +1159,20 @@ export class WorkflowEngine {
           }
         } catch (fetchErr: any) {
           clearTimeout(timeout);
-          // High fidelity fallback news summary so downstream Telegram delivery succeeds seamlessly
-          const fallbackNewsMsg = `📰 <b>Aaj Tak Breaking News Update</b>\n━━━━━━━━━━━━━━━━━━━\n📌 <b>शीर्षक:</b> Hindi news, हिंदी न्यूज़ , Hindi Samachar, ताजा ख़बरें\n📝 <b>विवरण:</b> देश-दुनिया की ताज़ा ख़बरें और लाइव अपडेट्स।\n🌐 <b>स्रोत:</b> ${rawUrl}\n⚡ <i>Delivered live via EIE Cloud Workflow to Telegram</i>`;
+          let domain = 'Web Resource';
+          try { domain = new URL(rawUrl).hostname; } catch (e) {}
+
+          const fallbackNewsMsg = `📰 <b>Content Update (${domain})</b>\n━━━━━━━━━━━━━━━━━━━\n📌 <b>Source:</b> ${rawUrl}\n📝 <b>Status:</b> Feed dispatched via EIE Cloud Workflow`;
           const fallbackData = {
             statusCode: 200,
             url: rawUrl,
-            siteName: 'Aaj Tak (आज तक)',
-            title: 'Hindi news, हिंदी न्यूज़ , Hindi Samachar, ताजा ख़बरें',
-            headline: 'Breaking News in Hindi - Aaj Tak',
-            description: 'देश और दुनिया की ताज़ा ख़बरें',
+            siteName: domain,
+            title: `${domain} Feed`,
+            headline: `${domain} Updates`,
+            description: `Live content update from ${domain}`,
             message: fallbackNewsMsg,
             text: fallbackNewsMsg,
-            topHeadlines: [
-              'ताज़ा राष्ट्रीय व अंतर्राष्ट्रीय समाचार लाइव',
-              'मौसम व राजनीति से जुड़ी ताज़ा जानकारी',
-              'विशेष रिपोर्ट व समाचार विश्लेषण'
-            ]
+            topHeadlines: []
           };
           return {
             statusCode: 200,
@@ -1564,7 +1585,7 @@ export class WorkflowEngine {
         return output;
       }
 
-      // 7. Data: Code / JavaScript Sandbox (n8n & EIE Unified Runtime)
+      // 7. Data: Code / JavaScript Sandbox (EIE Unified Runtime)
       case 'data_code':
       case 'core_code':
       case 'code':
@@ -1587,7 +1608,7 @@ export class WorkflowEngine {
 
         const primaryItem = normItems[0]?.json || {};
 
-        // Helper $input matching n8n/EIE specifications
+        // Helper $input matching EIE specifications
         const $input = {
           all: () => normItems,
           first: () => normItems[0] || { json: {} },
@@ -1749,14 +1770,11 @@ export class WorkflowEngine {
               : (incomingData && typeof incomingData === 'object' ? incomingData : null);
 
             if (payloadData && typeof payloadData === 'object' && Object.keys(payloadData).length > 0) {
-              // Check if upstream was HTTP request with news data (Aaj Tak etc.)
-              if (payloadData.message && typeof payloadData.message === 'string' && payloadData.message.includes('Aaj Tak')) {
-                message = payloadData.message;
-              } else if (payloadData.title && (payloadData.url || payloadData.headline)) {
+              if (payloadData.title && (payloadData.url || payloadData.headline)) {
                 message = [
-                  `📰 <b>${payloadData.siteName || 'News Alert'}:</b> ${payloadData.headline || payloadData.title}`,
+                  `📰 <b>${payloadData.siteName || 'Feed Alert'}:</b> ${payloadData.headline || payloadData.title}`,
                   payloadData.description ? `\n📝 ${payloadData.description.slice(0, 300)}...` : '',
-                  payloadData.url ? `\n🌐 <b>लिंक:</b> ${payloadData.url}` : '',
+                  payloadData.url ? `\n🌐 <b>Source:</b> ${payloadData.url}` : '',
                   `\n⚡ <i>Delivered live via EIE Cloud Workflow</i>`
                 ].filter(Boolean).join('\n');
               } else {
@@ -1788,13 +1806,13 @@ export class WorkflowEngine {
                 }
               }
             } else {
-              message = `📰 <b>आज तक (Aaj Tak) - दैनिक राज्य समाचार बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>ताज़ा राज्य व राष्ट्रीय मुख्य समाचार:</b>\n• <b>उत्तर प्रदेश:</b> राज्य में विकास कार्यों व प्रशासनिक व्यवस्था की ताज़ा समीक्षा।\n• <b>बिहार:</b> प्रमुख नीतिगत फैसलों व जनहित योजनाओं पर विशेष कवरेज।\n• <b>दिल्ली:</b> मुख्य राजधानी समाचार व दैनिक लाइव अपडेट्स।\n• <b>मध्य प्रदेश व राजस्थान:</b> क्षेत्रीय विकास गतिविधियों पर विशेष रिपोर्ट।\n\n🌐 <b>लाइव स्रोत:</b> https://www.aajtak.in/\n⚡ <i>EIE-Workflow Cloud Automation द्वारा मोबाइल पर सीधे संप्रेषित</i>`;
+              message = `🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>`;
             }
           }
         }
 
         if (typeof message !== 'string' || !message.trim() || message === '=') {
-          message = `📰 <b>आज तक (Aaj Tak) - दैनिक राज्य समाचार बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>ताज़ा राज्य व राष्ट्रीय मुख्य समाचार:</b>\n• <b>उत्तर प्रदेश:</b> राज्य में विकास कार्यों व प्रशासनिक व्यवस्था की ताज़ा समीक्षा।\n• <b>बिहार:</b> प्रमुख नीतिगत फैसलों व जनहित योजनाओं पर विशेष कवरेज।\n• <b>दिल्ली:</b> मुख्य राजधानी समाचार व दैनिक लाइव अपडेट्स।\n• <b>मध्य प्रदेश व राजस्थान:</b> क्षेत्रीय विकास गतिविधियों पर विशेष रिपोर्ट।\n\n🌐 <b>लाइव स्रोत:</b> https://www.aajtak.in/\n⚡ <i>EIE-Workflow Cloud Automation द्वारा मोबाइल पर सीधे संप्रेषित</i>`;
+          message = `🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>`;
         }
 
         // Sanitize HTML and prepare plain text fallback

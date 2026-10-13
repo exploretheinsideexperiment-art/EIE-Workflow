@@ -36,8 +36,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'appendRow',
       sheetId: '',
-      sheetName: 'Sheet1',
-      range: 'A:Z'
+      sheetName: '',
+      range: ''
     },
     requiresCredentials: true,
     credentialType: 'google_sheets'
@@ -53,9 +53,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Message Sent' }],
     defaultConfig: {
       operation: 'send',
-      to: 'recipient@domain.com',
-      subject: 'Automated Update: {{$json.event || "EIE Alert"}}',
-      body: '<p>Hello,</p><p>Workflow completed: {{$json}}</p>'
+      to: '',
+      subject: '',
+      body: ''
     },
     requiresCredentials: true,
     credentialType: 'gmail'
@@ -87,7 +87,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Calendar Event' }],
     defaultConfig: {
       operation: 'createEvent',
-      summary: 'Automated Client Strategy Session',
+      summary: '',
       durationMinutes: 30
     },
     requiresCredentials: true,
@@ -104,8 +104,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Slack Response' }],
     defaultConfig: {
       operation: 'postMessage',
-      channel: '#general',
-      text: '🚀 EIE-Workflow Notification: {{$json.summary || "Process finished"}}'
+      channel: '',
+      text: ''
     },
     requiresCredentials: true,
     credentialType: 'slack'
@@ -121,7 +121,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivered' }],
     defaultConfig: {
       operation: 'sendWebhook',
-      content: '⚡ EIE-Workflow: Event executed successfully.'
+      content: ''
     }
   },
   {
@@ -137,11 +137,11 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       operation: 'sendMessage',
       botToken: '',
       tokenId: '',
-      chatId: '@devops_channel',
-      text: '{{$json.message || $json.text || $json.data || $json}}',
+      chatId: '',
+      text: '',
       parseMode: 'HTML',
       enableExternalWebhook: true,
-      webhookPath: 'telegram'
+      webhookPath: ''
     },
     requiresCredentials: true,
     credentialType: 'telegram'
@@ -161,12 +161,12 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       accessToken: '',
       phoneNumberId: '',
       businessAccountId: '',
-      verifyToken: 'eie_whatsapp_verify_token',
-      templateName: 'order_status_update',
-      phoneNumber: '+10000000000',
-      message: '{{$json.message || $json.text || $json.data || $json}}',
+      verifyToken: '',
+      templateName: '',
+      phoneNumber: '',
+      message: '',
       enableExternalWebhook: true,
-      webhookPath: 'whatsapp'
+      webhookPath: ''
     },
     requiresCredentials: true,
     credentialType: 'whatsapp'
@@ -182,9 +182,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'SMS Receipt' }],
     defaultConfig: {
       operation: 'sendSms',
-      to: '+10000000000',
-      from: '+10000000001',
-      body: 'Your automated alert: {{$json.text || "Status OK"}}'
+      to: '',
+      from: '',
+      body: ''
     },
     requiresCredentials: true,
     credentialType: 'twilio'
@@ -201,7 +201,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createDatabasePage',
       databaseId: '',
-      title: 'Automated Workflow Task'
+      title: ''
     },
     requiresCredentials: true,
     credentialType: 'notion'
@@ -218,7 +218,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createRecord',
       baseId: '',
-      table: 'Leads'
+      table: ''
     },
     requiresCredentials: true,
     credentialType: 'airtable'
@@ -234,9 +234,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'GitHub Event' }],
     defaultConfig: {
       operation: 'createIssue',
-      owner: 'exploretheinsideexperiment-art',
-      repo: 'EIE-Workflow',
-      title: 'Automated CI/CD Issue'
+      owner: '',
+      repo: '',
+      title: ''
     },
     requiresCredentials: true,
     credentialType: 'github'
@@ -252,9 +252,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Jira Issue' }],
     defaultConfig: {
       operation: 'createIssue',
-      projectKey: 'AUTO',
+      projectKey: '',
       issueType: 'Task',
-      summary: 'Automated Ticket'
+      summary: ''
     },
     requiresCredentials: true,
     credentialType: 'jira'
@@ -270,8 +270,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Linear Issue' }],
     defaultConfig: {
       operation: 'createIssue',
-      teamKey: 'ENG',
-      title: 'Automated Task: {{$json.title || "New Request"}}'
+      teamKey: '',
+      title: ''
     },
     requiresCredentials: true,
     credentialType: 'linear'
@@ -288,7 +288,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createCard',
       listId: '',
-      name: 'New Kanban Item'
+      name: ''
     },
     requiresCredentials: true,
     credentialType: 'trello'
@@ -305,7 +305,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createTask',
       workspaceId: '',
-      name: 'Client Task'
+      name: ''
     },
     requiresCredentials: true,
     credentialType: 'asana'
@@ -322,7 +322,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createTask',
       listId: '',
-      name: 'High Priority Automation Task'
+      name: ''
     },
     requiresCredentials: true,
     credentialType: 'clickup'
@@ -338,8 +338,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Stripe Charge' }],
     defaultConfig: {
       operation: 'createCustomer',
-      email: 'customer@domain.com',
-      name: 'Enterprise Client'
+      email: '',
+      name: ''
     },
     requiresCredentials: true,
     credentialType: 'stripe'
@@ -372,9 +372,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'HubSpot Contact' }],
     defaultConfig: {
       operation: 'createContact',
-      email: 'lead@enterprise.com',
-      firstname: 'Elena',
-      lastname: 'Vance'
+      email: '',
+      firstname: '',
+      lastname: ''
     },
     requiresCredentials: true,
     credentialType: 'hubspot'
@@ -390,8 +390,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Salesforce Lead' }],
     defaultConfig: {
       operation: 'createLead',
-      company: 'Quantum Corp',
-      lastName: 'Vance'
+      company: '',
+      lastName: ''
     },
     requiresCredentials: true,
     credentialType: 'salesforce'
@@ -407,8 +407,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Ticket' }],
     defaultConfig: {
       operation: 'createTicket',
-      subject: 'Inquiry from Workflow: {{$json.subject || "Help Needed"}}',
-      comment: 'Ticket auto-created by EIE-Workflow.'
+      subject: '',
+      comment: ''
     },
     requiresCredentials: true,
     credentialType: 'zendesk'
@@ -425,7 +425,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'addMember',
       listId: '',
-      email: 'subscriber@domain.com',
+      email: '',
       status: 'subscribed'
     },
     requiresCredentials: true,
@@ -442,7 +442,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Completion' }],
     defaultConfig: {
       model: 'gpt-4o',
-      prompt: 'Summarize the following payload: {{$json}}',
+      prompt: '',
       temperature: 0.7
     },
     requiresCredentials: true,
@@ -459,7 +459,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Claude Response' }],
     defaultConfig: {
       model: 'claude-3-5-sonnet',
-      prompt: 'Analyze and extract key parameters from {{$json}}'
+      prompt: ''
     },
     requiresCredentials: true,
     credentialType: 'anthropic'
@@ -475,8 +475,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Results' }],
     defaultConfig: {
       operation: 'select',
-      table: 'profiles',
-      selectQuery: '*'
+      table: '',
+      selectQuery: ''
     },
     requiresCredentials: true,
     credentialType: 'supabase'
@@ -492,8 +492,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'S3 Object' }],
     defaultConfig: {
       operation: 'uploadObject',
-      bucket: 'my-bucket',
-      key: 'uploads/file_{{Date.now()}}.json'
+      bucket: '',
+      key: ''
     },
     requiresCredentials: true,
     credentialType: 'aws_s3'
@@ -509,7 +509,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Meeting Link' }],
     defaultConfig: {
       operation: 'createMeeting',
-      topic: 'Automated Strategy Session',
+      topic: '',
       type: 2,
       duration: 45
     },
@@ -527,7 +527,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Form Submission' }],
     defaultConfig: {
       formId: '',
-      sampleResponse: '{\n  "name": "Alex Vance",\n  "score": 10\n}'
+      sampleResponse: ''
     },
     requiresCredentials: true,
     credentialType: 'typeform'
@@ -560,7 +560,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'AI Output' }],
     defaultConfig: {
       model: 'gemini-2.5-flash',
-      prompt: 'Summarize and extract key action items: {{$json}}',
+      prompt: '',
       temperature: 0.2
     },
     requiresCredentials: true,
@@ -577,8 +577,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Created Doc' }],
     defaultConfig: {
       operation: 'createDocument',
-      title: 'Automated Report: {{$json.title || "Weekly Summary"}}',
-      body: 'Document generated by EIE-Workflow.'
+      title: '',
+      body: ''
     },
     requiresCredentials: true,
     credentialType: 'google_docs'
@@ -610,10 +610,10 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Delivery Receipt' }],
     defaultConfig: {
       operation: 'sendEmail',
-      to: 'recipient@client.com',
-      from: 'noreply@eie-workflow.com',
-      subject: 'Transaction Notice',
-      content: '<p>Workflow processed successfully: {{$json}}</p>'
+      to: '',
+      from: '',
+      subject: '',
+      content: ''
     },
     requiresCredentials: true,
     credentialType: 'sendgrid'
@@ -629,9 +629,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'PayPal Order' }],
     defaultConfig: {
       operation: 'createInvoice',
-      amount: '99.00',
+      amount: '',
       currency: 'USD',
-      recipientEmail: 'client@company.com'
+      recipientEmail: ''
     },
     requiresCredentials: true,
     credentialType: 'paypal'
@@ -664,7 +664,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createIssue',
       projectId: '',
-      title: 'Automated Pipeline Issue'
+      title: ''
     },
     requiresCredentials: true,
     credentialType: 'gitlab'
@@ -681,7 +681,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'createItem',
       boardId: '',
-      itemName: 'New Workflow Lead'
+      itemName: ''
     },
     requiresCredentials: true,
     credentialType: 'monday'
@@ -698,7 +698,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'postMessage',
       channelId: '',
-      message: '🚨 EIE-Workflow Alert: {{$json.title || "Execution Successful"}}'
+      message: ''
     },
     requiresCredentials: true,
     credentialType: 'ms_teams'
@@ -714,9 +714,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Outlook Sent' }],
     defaultConfig: {
       operation: 'sendMail',
-      to: 'recipient@organization.com',
-      subject: 'Automated Status Notification',
-      body: 'Workflow notification delivered.'
+      to: '',
+      subject: '',
+      body: ''
     },
     requiresCredentials: true,
     credentialType: 'ms_outlook'
@@ -733,7 +733,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       operation: 'addRow',
       workbookId: '',
-      worksheetName: 'Sheet1'
+      worksheetName: ''
     },
     requiresCredentials: true,
     credentialType: 'ms_excel'
@@ -749,7 +749,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Rows' }],
     defaultConfig: {
       operation: 'executeQuery',
-      query: 'SELECT * FROM users WHERE active = true LIMIT 10;'
+      query: ''
     },
     requiresCredentials: true,
     credentialType: 'postgres'
@@ -765,7 +765,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'MySQL Rows' }],
     defaultConfig: {
       operation: 'executeQuery',
-      query: 'SELECT id, status, updated_at FROM orders ORDER BY id DESC LIMIT 20;'
+      query: ''
     },
     requiresCredentials: true,
     credentialType: 'mysql'
@@ -781,8 +781,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Mongo Result' }],
     defaultConfig: {
       operation: 'find',
-      collection: 'customers',
-      query: '{ "status": "active" }'
+      collection: '',
+      query: ''
     },
     requiresCredentials: true,
     credentialType: 'mongodb'
@@ -798,7 +798,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Redis Output' }],
     defaultConfig: {
       operation: 'set',
-      key: 'user:session:{{$json.id}}',
+      key: '',
       value: '{{JSON.stringify($json)}}',
       ttlSeconds: 3600
     },
@@ -816,7 +816,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Nearest Neighbors' }],
     defaultConfig: {
       operation: 'queryVectors',
-      indexName: 'enterprise-knowledge-base',
+      indexName: '',
       topK: 5
     },
     requiresCredentials: true,
@@ -833,7 +833,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dropbox File' }],
     defaultConfig: {
       operation: 'uploadFile',
-      path: '/backups/workflow_{{Date.now()}}.json'
+      path: ''
     },
     requiresCredentials: true,
     credentialType: 'dropbox'
@@ -849,7 +849,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Published Post' }],
     defaultConfig: {
       operation: 'createPost',
-      title: 'Automated Insight: {{$json.title || "Industry Update"}}',
+      title: '',
       status: 'publish'
     },
     requiresCredentials: true,
@@ -866,7 +866,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Tweet ID' }],
     defaultConfig: {
       operation: 'postTweet',
-      text: '🚀 Automated launch update: {{$json.text || "Workflow active on EIE-Workflow"}}'
+      text: ''
     },
     requiresCredentials: true,
     credentialType: 'twitter'
@@ -882,7 +882,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Share Result' }],
     defaultConfig: {
       operation: 'shareUpdate',
-      text: 'Excited to announce our automated workflow integration.'
+      text: ''
     },
     requiresCredentials: true,
     credentialType: 'linkedin'
@@ -901,7 +901,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Output' }],
     defaultConfig: {
-      samplePayload: '{\n  "test": true,\n  "initiatedBy": "Engineer"\n}'
+      samplePayload: ''
     }
   },
   {
@@ -917,7 +917,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       webhookPath: '',
       method: 'POST',
       responseCode: 200,
-      samplePayload: '{\n  "event": "order_created",\n  "amount": 250,\n  "customer": "Apex Ltd"\n}'
+      samplePayload: ''
     }
   },
   {
@@ -961,8 +961,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Response' }],
     defaultConfig: {
       method: 'GET',
-      url: 'https://httpbin.org/get',
-      headers: [{ key: 'Accept', value: 'application/json' }],
+      url: '',
+      headers: [],
       body: '',
       timeoutMs: 15000
     }
@@ -1109,7 +1109,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
     defaultConfig: {
       toolName: 'api_caller',
-      endpointUrl: 'https://api.example.com/data'
+      endpointUrl: ''
     }
   },
   {
@@ -1123,7 +1123,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_tool', name: 'tool', type: 'tool', label: 'Tool' }],
     defaultConfig: {
       toolName: 'custom_code_evaluator',
-      codeSnippet: 'return { result: input.number * 2 };'
+      codeSnippet: ''
     }
   },
   {
@@ -1150,8 +1150,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Text Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Category' }],
     defaultConfig: {
-      categories: ['Sales', 'Technical Support', 'Billing', 'Spam'],
-      fieldToClassify: 'message'
+      categories: [],
+      fieldToClassify: ''
     }
   },
 
@@ -1171,7 +1171,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       fieldPath: 'status',
       operator: '==',
-      value: 'active'
+      value: ''
     }
   },
   {
@@ -1214,7 +1214,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'List' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Filtered' }],
     defaultConfig: {
-      filterCondition: 'item.score > 50'
+      filterCondition: ''
     }
   },
   {
@@ -1231,7 +1231,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Merged Output' }],
     defaultConfig: {
       mode: 'append', // 'append' | 'merge_by_key' | 'choose_branch' | 'combine'
-      joinKey: 'id',
+      joinKey: '',
       chosenInput: 'input1'
     }
   },
@@ -1325,7 +1325,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Code Output' }],
     defaultConfig: {
-      code: '// $json is incoming object, $input is raw payload\nreturn {\n  ...$json,\n  computedHash: "id_" + Math.random().toString(36).substr(2, 9),\n  timestamp: new Date().toISOString()\n};'
+      code: ''
     }
   },
   {
@@ -1353,9 +1353,9 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent Result' }],
     defaultConfig: {
-      to: 'alerts@eie-workflow.internal',
-      subject: 'Notification: {{$json.event}}',
-      bodyHtml: '<p>Hello,</p><p>Workflow event received: {{$json}}</p>'
+      to: '',
+      subject: '',
+      bodyHtml: ''
     }
   },
   {
@@ -1370,10 +1370,10 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       botToken: '',
       tokenId: '',
-      chatId: '@devops_channel',
-      message: '🚨 EIE-Workflow Alert: {{$json.summary || "Trigger event detected"}}',
+      chatId: '',
+      message: '',
       enableExternalWebhook: true,
-      webhookPath: 'telegram'
+      webhookPath: ''
     }
   },
   {
@@ -1386,8 +1386,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent' }],
     defaultConfig: {
-      channel: '#general',
-      messageText: 'EIE-Workflow Notification: {{$json.title || "Execution Finished"}}'
+      channel: '',
+      messageText: ''
     }
   },
   {
@@ -1400,7 +1400,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent' }],
     defaultConfig: {
-      content: '⚡ EIE-Workflow: Process completed successfully.'
+      content: ''
     }
   },
 
@@ -1416,8 +1416,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Results' }],
     defaultConfig: {
       operation: 'SELECT',
-      table: 'leads',
-      query: 'SELECT * FROM leads WHERE status = \'unassigned\' LIMIT 10;'
+      table: '',
+      query: ''
     }
   },
   {
@@ -1431,8 +1431,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Query Results' }],
     defaultConfig: {
       operation: 'SELECT',
-      table: 'orders',
-      query: 'SELECT * FROM orders ORDER BY created_at DESC LIMIT 5;'
+      table: '',
+      query: ''
     }
   },
   {
@@ -1446,7 +1446,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Cache Output' }],
     defaultConfig: {
       command: 'SET',
-      key: 'user:session:{{$json.id}}',
+      key: '',
       ttlSeconds: 3600
     }
   },
@@ -1477,8 +1477,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Data' }],
     defaultConfig: {
-      endpoint: 'https://api.github.com/graphql',
-      query: 'query { viewer { login } }'
+      endpoint: '',
+      query: ''
     }
   },
 
@@ -1499,7 +1499,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       botToken: '',
       chatId: '',
-      welcomeMessage: 'Hello! How can I assist your workflow today?',
+      welcomeMessage: '',
       requireSession: true,
       streamingEnabled: true
     }
@@ -1518,7 +1518,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       botToken: '',
       chatId: '',
-      message: '{{$json.output || $json.reply || "Thank you for reaching out!"}}',
+      message: '',
       role: 'assistant',
       showTypingIndicator: true
     }
@@ -1640,7 +1640,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input' }],
     outputs: [{ id: 'out_error', name: 'error', type: 'error', label: 'Error' }],
     defaultConfig: {
-      errorMessage: 'Workflow halted: Validation failed or unauthorized action detected.',
+      errorMessage: '',
       statusCode: 400
     }
   },
@@ -1654,7 +1654,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Sub-Workflow Input' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sub-Workflow Output' }],
     defaultConfig: {
-      workflowName: 'Sub Automation Routine',
+      workflowName: '',
       passThrough: true
     }
   },
@@ -1686,7 +1686,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Hashed / Encoded' }],
     defaultConfig: {
       operation: 'sha256',
-      value: '{{$json.id || $json.email || "eie_secret"}}',
+      value: '',
       encoding: 'hex'
     }
   },
@@ -1700,7 +1700,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Input Items' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Code Result' }],
     defaultConfig: {
-      code: '// Process item data\nitem.processedAt = new Date().toISOString();\nitem.status = "SUCCESS";\nreturn item;'
+      code: ''
     }
   },
   {
@@ -1714,8 +1714,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Variable Output' }],
     defaultConfig: {
       action: 'set',
-      variableName: 'counter',
-      value: '1'
+      variableName: '',
+      value: ''
     }
   },
   {
@@ -1729,7 +1729,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Processed JSON' }],
     defaultConfig: {
       operation: 'parse',
-      field: 'raw_payload'
+      field: ''
     }
   },
 
@@ -1791,7 +1791,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     defaultConfig: {
       field: 'status',
       operator: '==',
-      value: 'active'
+      value: ''
     }
   },
   {
@@ -1824,7 +1824,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Merged Output' }],
     defaultConfig: {
       mode: 'combine',
-      joinKey: 'id'
+      joinKey: ''
     }
   },
   {
@@ -1860,7 +1860,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     ],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Chain Output' }],
     defaultConfig: {
-      promptTemplate: 'You are a senior data architect. Summarize the following payload into key actionable insights:\n\n{{$json}}'
+      promptTemplate: ''
     }
   },
   {
@@ -1877,7 +1877,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     ],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Grounded Answer' }],
     defaultConfig: {
-      query: '{{$json.query || $json.question || "How does the system work?"}}',
+      query: '',
       returnSourceDocuments: true
     }
   },
@@ -1928,8 +1928,8 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       { id: 'out_fallback', name: 'fallback', type: 'branch', label: 'General / Fallback' }
     ],
     defaultConfig: {
-      classificationPrompt: 'Classify the inquiry into: technical, sales, or general.',
-      routes: ['technical', 'sales', 'general']
+      classificationPrompt: '',
+      routes: []
     }
   },
   {
@@ -1942,7 +1942,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
     inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Unstructured Data' }],
     outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Clean JSON' }],
     defaultConfig: {
-      targetSchema: '{\n  "name": "string",\n  "email": "string",\n  "sentiment": "string"\n}'
+      targetSchema: ''
     }
   },
 
@@ -2007,7 +2007,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       { id: 'out_different', name: 'different', type: 'branch', label: 'Changed / New' }
     ],
     defaultConfig: {
-      matchKey: 'id',
+      matchKey: '',
       compareMode: 'deep'
     }
   },
@@ -2024,7 +2024,7 @@ export const NODE_LIBRARY: NodeDefinition[] = [
       { id: 'out_invalid', name: 'invalid', type: 'branch', label: 'Invalid / Errors' }
     ],
     defaultConfig: {
-      requiredFields: ['email', 'name'],
+      requiredFields: [],
       allowEmptyStrings: false
     }
   },

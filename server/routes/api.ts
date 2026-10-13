@@ -1029,16 +1029,20 @@ router.post('/integrations/telegram/receive-and-trigger', async (req: Request, r
   }
 });
 
-// Generic HTTP Proxy & News Parser for Aaj Tak and external URLs (bypasses browser CORS)
+// Generic HTTP Proxy & Content Parser (bypasses browser CORS)
 router.all('/proxy/fetch', async (req: Request, res: Response) => {
-  const targetUrl = (req.query.url || req.body?.url || 'https://www.aajtak.in/').toString();
+  const targetUrl = (req.query.url || req.body?.url || '').toString();
+  if (!targetUrl) {
+    return res.status(400).json({ error: 'Missing target url parameter' });
+  }
+
   const method = (req.method === 'POST' && req.body?.method ? req.body.method : (req.query.method || 'GET')).toString().toUpperCase();
 
   try {
     const fetchHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'hi,en-US,en;q=0.9',
+      'Accept-Language': 'en-US,en;q=0.9',
       'Cache-Control': 'no-cache'
     };
 
@@ -1066,14 +1070,18 @@ router.all('/proxy/fetch', async (req: Request, res: Response) => {
     }
 
     const html = await extRes.text();
-    // Parse meaningful news data from HTML
+    let domain = 'Web Feed';
+    try { domain = new URL(targetUrl).hostname; } catch (e) {}
+
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const ogTitleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+    const ogSiteMatch = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i);
     const ogDescMatch = html.match(/<meta[^>]+(?:property=["']og:description["']|name=["']description["'])[^>]+content=["']([^"']+)["']/i);
     const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
 
-    const title = ogTitleMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || 'Aaj Tak Breaking Hindi News';
-    const description = ogDescMatch?.[1]?.trim() || 'ताजा ख़बरें, Breaking News in Hindi, देश-दुनिया के ताज़ा समाचार';
+    const siteName = ogSiteMatch?.[1]?.trim() || domain;
+    const title = ogTitleMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || `${domain} Feed`;
+    const description = ogDescMatch?.[1]?.trim() || `Content parsed from ${domain}`;
     const mainHeadline = h1Match?.[1]?.trim() || title;
 
     // Extract top headline list
@@ -1087,20 +1095,20 @@ router.all('/proxy/fetch', async (req: Request, res: Response) => {
       }
     }
 
-    // Format clean Telegram-ready message
+    // Format clean message
     const formattedMessage = [
-      `📰 <b>Aaj Tak Breaking News Update</b>`,
+      `📰 <b>${siteName} Update</b>`,
       `━━━━━━━━━━━━━━━━━━━`,
-      `📌 <b>शीर्षक:</b> ${title}`,
-      description ? `📝 <b>विवरण:</b> ${description.slice(0, 300)}...` : '',
-      headlines.length > 0 ? `\n🔥 <b>प्रमुख सुर्खियां:</b>\n${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}` : '',
-      `\n🌐 <b>स्रोत:</b> ${targetUrl}`,
-      `⚡ <i>Delivered live via EIE Cloud Workflow to Telegram</i>`
+      `📌 <b>Title:</b> ${title}`,
+      description ? `📝 <b>Summary:</b> ${description.slice(0, 300)}...` : '',
+      headlines.length > 0 ? `\n🔥 <b>Key Highlights:</b>\n${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}` : '',
+      `\n🌐 <b>Source:</b> ${targetUrl}`,
+      `⚡ <i>Delivered live via EIE Cloud Workflow</i>`
     ].filter(Boolean).join('\n');
 
     const resultPayload = {
       statusCode: extRes.status,
-      siteName: 'Aaj Tak (आज तक)',
+      siteName,
       url: targetUrl,
       title,
       headline: mainHeadline,
@@ -1121,23 +1129,25 @@ router.all('/proxy/fetch', async (req: Request, res: Response) => {
       message: formattedMessage
     });
   } catch (err: any) {
-    // Return gracefully parsed fallback so workflow does not crash
-    const fallbackMessage = `📰 <b>Aaj Tak Breaking News</b>\n\n📌 <b>शीर्षक:</b> हिंदी समाचार व ताज़ा ख़बरें (Live Updates)\n🌐 <b>स्रोत:</b> ${targetUrl}\n⚡ <i>Delivered via EIE Workflow Pro</i>`;
+    let domain = 'Web Resource';
+    try { domain = new URL(targetUrl).hostname; } catch (e) {}
+
+    const fallbackMessage = `📰 <b>Content Update (${domain})</b>\n\n📌 <b>Source:</b> ${targetUrl}\n⚡ <i>Delivered via EIE Workflow Pro</i>`;
     return res.json({
       success: true,
       statusCode: 200,
       url: targetUrl,
       data: {
-        siteName: 'Aaj Tak',
+        siteName: domain,
         url: targetUrl,
-        title: 'Hindi news, हिंदी न्यूज़ , Aaj Tak News',
-        headline: 'ताज़ा ख़बरें - Aaj Tak Live News Feed',
-        description: 'देश और दुनिया की ताज़ा ख़बरें',
+        title: `${domain} Feed`,
+        headline: `${domain} Update`,
+        description: `Dispatched content from ${domain}`,
         message: fallbackMessage,
         text: fallbackMessage
       },
       output: {
-        title: 'Hindi news, हिंदी न्यूज़ , Aaj Tak News',
+        title: `${domain} Feed`,
         url: targetUrl,
         message: fallbackMessage,
         text: fallbackMessage

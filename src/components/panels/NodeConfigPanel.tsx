@@ -765,13 +765,13 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
             ? {
                 botToken: secretKey,
                 tokenId: secretKey,
-                chatId: data.chatId || node.config?.chatId || '@alerts_channel',
+                chatId: data.chatId || node.config?.chatId || '',
               }
             : {}),
           ...(defs.type === 'slack'
             ? {
                 webhookUrl: secretKey,
-                channel: data.channel || node.config?.channel || '#general',
+                channel: data.channel || node.config?.channel || '',
               }
             : {}),
           ...(defs.type === 'discord'
@@ -1665,7 +1665,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               setExpandedField({
                                 key: 'text',
                                 label: 'Telegram Text Message',
-                                value: config.text || config.message || '{{$json.message}}',
+                                value: config.text || config.message || '',
                               })
                             }
                             className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
@@ -1681,11 +1681,11 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </span>
                           <textarea
                             rows={4}
-                            value={config.text || config.message || '{{$json.message}}'}
+                            value={config.text || config.message || ''}
                             onChange={(e) => {
                               handleConfigBatch({ text: e.target.value, message: e.target.value });
                             }}
-                            placeholder="{{$json.message}}"
+                            placeholder="Enter message or expression: e.g. {{$json.text}} or custom text"
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none resize-y"
                           />
                         </div>
@@ -1775,7 +1775,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           type="button"
                           onClick={async () => {
                             const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
-                            const cid = String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '5102553052')).trim().replace(/^=+/, '');
+                            const cid = String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).trim().replace(/^=+/, '');
                             if (!token) {
                               setTgTestErrorToast('Missing Bot Token! मोबाइल ऐप पर मैसेज पाने के लिए ऊपर @BotFather से मिला Bot Token दर्ज करें।');
                               setTimeout(() => setTgTestErrorToast(null), 5500);
@@ -1881,41 +1881,6 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                   {/* 2. HTTP REQUEST */}
                   {node.type === 'http_request' && (
                     <div className="space-y-3.5">
-                      {/* Aaj Tak Preset Quick Selector */}
-                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-red-950/60 to-slate-950 border border-red-500/30 flex items-center justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                            <Globe className="w-3.5 h-3.5 text-red-400" />
-                            Aaj Tak News Feed Preset
-                          </span>
-                          <span className="text-[10px] text-slate-400 block">
-                            Direct news scraper & Hindi headlines feed
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleConfigBatch({
-                              url: 'https://www.aajtak.in/',
-                              method: 'GET',
-                              responseFormat: 'HTML News Extractor',
-                            });
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
-                        >
-                          Use Aaj Tak URL
-                        </button>
-                      </div>
-
-                      {(config.url === 'https://www.aajtak.in/' || config.url?.includes('aajtak')) && (
-                        <div className="p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>
-                            <strong>Aaj Tak News Parser Active:</strong> Extracts live Hindi news headlines, title, description, and source link so downstream Telegram delivers clean news alerts without character limit errors.
-                          </span>
-                        </div>
-                      )}
-
                       {/* Method & Authentication */}
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1960,7 +1925,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               setExpandedField({
                                 key: 'url',
                                 label: 'HTTP Request URL',
-                                value: config.url || 'https://www.aajtak.in/',
+                                value: config.url || '',
                               })
                             }
                             className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
@@ -1977,7 +1942,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             type="text"
                             value={config.url || ''}
                             onChange={(e) => handleConfigChange('url', e.target.value)}
-                            placeholder="https://www.aajtak.in/"
+                            placeholder="https://api.example.com/data or {{$json.url}}"
                             className="w-full bg-slate-950 border border-slate-800 rounded-r-lg p-2 text-slate-200 font-mono text-xs focus:border-orange-500 focus:outline-none"
                           />
                         </div>
@@ -2030,14 +1995,14 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           <div className="space-y-1.5 pt-1">
                             <input
                               type="text"
-                              value={config.headerName || 'User-Agent'}
+                              value={config.headerName || ''}
                               onChange={(e) => handleConfigChange('headerName', e.target.value)}
-                              placeholder="Header Name"
+                              placeholder="Header Name (e.g. Authorization, User-Agent)"
                               className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
                             />
                             <input
                               type="text"
-                              value={config.headerValue || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                              value={config.headerValue || ''}
                               onChange={(e) => handleConfigChange('headerValue', e.target.value)}
                               placeholder="Header Value"
                               className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-slate-200 font-mono"
@@ -2626,7 +2591,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                                     body: JSON.stringify({
                                       botToken: token,
                                       chatId: chat,
-                                      message: config.message || config.text || '👋 Live message from EIE-Workflow Chat Node to your mobile app!',
+                                      message: config.message || config.text || 'Workflow live message verification',
                                     }),
                                   });
                                   const data = await res.json();
@@ -2701,7 +2666,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                                   setExpandedField({
                                     key: 'message',
                                     label: 'Chat Response Text',
-                                    value: config.message || config.text || '{{$json.output || $json.reply || "Thank you for reaching out!"}}',
+                                    value: config.message || config.text || '',
                                   })
                                 }
                                 className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
@@ -3464,10 +3429,11 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">SQL Query / Table</label>
                         <textarea
                           rows={4}
-                          value={config.query || config.table || 'SELECT * FROM users WHERE active = true LIMIT 50;'}
+                          value={config.query || config.table || ''}
                           onChange={(e) => {
                             handleConfigBatch({ query: e.target.value, table: e.target.value });
                           }}
+                          placeholder="SELECT * FROM table_name WHERE condition;"
                           className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-blue-500 focus:outline-none resize-y"
                         />
                       </div>

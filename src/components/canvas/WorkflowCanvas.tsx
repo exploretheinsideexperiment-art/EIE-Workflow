@@ -1784,60 +1784,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           }
 
           if (!codeResult || (Array.isArray(codeResult) && codeResult.length === 0)) {
-            if (curr.name.toLowerCase().includes('state pages') || userCode.includes('uttar-pradesh')) {
-              const base = 'https://www.aajtak.in/';
-              const list = [
-                ['उत्तर प्रदेश', 'uttar-pradesh'],
-                ['बिहार', 'bihar'],
-                ['मध्य प्रदेश', 'madhya-pradesh'],
-                ['राजस्थान', 'rajasthan'],
-                ['दिल्ली', 'india/delhi'],
-                ['महाराष्ट्र', 'india/maharashtra'],
-                ['पंजाब', 'india/punjab'],
-                ['हरियाणा', 'india/haryana'],
-              ];
-              codeResult = list.map(([state, slug]) => ({ json: { state, url: base + slug } }));
-            } else if (curr.name.toLowerCase().includes('build state messages') || curr.name.toLowerCase().includes('message')) {
+            if (curr.name.toLowerCase().includes('build state messages') || curr.name.toLowerCase().includes('message')) {
               const byState: Record<string, any[]> = {};
               const order: string[] = [];
               for (const it of incomingItems) {
-                const s = it.json?.state || it.state || 'उत्तर प्रदेश';
+                const s = it.json?.state || it.state || 'General';
                 if (!byState[s]) { byState[s] = []; order.push(s); }
                 byState[s].push(it.json || it);
               }
-              if (order.length === 0) {
-                order.push('उत्तर प्रदेश', 'बिहार', 'दिल्ली');
-                byState['उत्तर प्रदेश'] = [
-                  { title: 'उत्तर प्रदेश: मुख्यमंत्री द्वारा नई विकास योजनाओं व औद्योगिक नीतियों की समीक्षा', link: 'https://www.aajtak.in/uttar-pradesh' },
-                  { title: 'लखनऊ-वाराणसी एक्सप्रेसवे व स्थानीय यातायात पर नई गाइडलाइन जारी', link: 'https://www.aajtak.in/uttar-pradesh' },
-                ];
-                byState['बिहार'] = [
-                  { title: 'बिहार: रोजगार व परीक्षा परिणामों को लेकर विभाग का बड़ा निर्णय', link: 'https://www.aajtak.in/bihar' },
-                  { title: 'पटना में मेट्रो परियोजना व शहरी बुनियादी ढांचे के काम में तेजी', link: 'https://www.aajtak.in/bihar' },
-                ];
-                byState['दिल्ली'] = [
-                  { title: 'दिल्ली: मौसम व वायु गुणवत्ता पर ताज़ा रिपोर्ट जारी', link: 'https://www.aajtak.in/india/delhi' },
-                ];
-              }
               codeResult = order.map((s) => {
-                const lines = byState[s].slice(0, 3).map((n, idx) => `${idx + 1}. <a href="${n.link || 'https://www.aajtak.in/'}">${n.title || n.headline || 'ताजा खबर'}</a>`);
-                return { json: { state: s, text: `📰 <b>${s} की ताज़ा खबरें</b>\n\n${lines.join('\n\n')}` } };
+                const lines = byState[s].slice(0, 5).map((n, idx) => `${idx + 1}. <a href="${n.link || n.url || '#'}">${n.title || n.headline || 'Item update'}</a>`);
+                return { json: { state: s, text: `📰 <b>${s} Updates</b>\n\n${lines.join('\n\n')}` } };
               });
             } else if (curr.name.toLowerCase().includes('extract') || curr.name.toLowerCase().includes('headline')) {
-              const stateItems = dollarNode('State Pages List').all();
               const out: any[] = [];
-              const sourceItems = incomingItems.length > 0 ? incomingItems : stateItems;
-              (sourceItems.length > 0 ? sourceItems : [{ json: { state: 'उत्तर प्रदेश', url: 'https://www.aajtak.in/uttar-pradesh' } }]).slice(0, 5).forEach((item: any, i: number) => {
-                const state = item.json?.state || stateItems[i]?.json?.state || 'उत्तर प्रदेश';
-                const u = item.json?.url || 'https://www.aajtak.in/';
-                out.push(
-                  { json: { state, title: `${state}: नई विकास योजनाओं व प्रशासनिक निर्णयों की ताज़ा समीक्षा`, link: u } },
-                  { json: { state, title: `${state}: जनहित नीतियों व रोजगार पर विशेष लाइव रिपोर्ट`, link: u } }
-                );
+              incomingItems.forEach((item: any) => {
+                const state = item.json?.state || item.state || 'General';
+                const u = item.json?.url || item.url || '';
+                const title = item.json?.title || item.title || item.json?.headline || '';
+                if (title) {
+                  out.push({ json: { state, title, link: u } });
+                }
               });
-              codeResult = out;
+              codeResult = out.length > 0 ? out : incomingItems;
             } else {
-              codeResult = incomingItems.length > 0 ? incomingItems : { processed: true, name: curr.name };
+              codeResult = incomingItems.length > 0 ? incomingItems : [{ json: { processed: true, name: curr.name } }];
             }
           }
 
@@ -1848,37 +1819,53 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         ) {
           duration = 180;
           const incomingItems = Array.isArray(stepInput) ? stepInput : (stepInput ? [{ json: stepInput }] : []);
-          const rawUrlTemplate = curr.config?.url || 'https://www.aajtak.in/';
+          const rawUrlTemplate = curr.config?.url || '';
           const results: any[] = [];
-          const itemsToProcess = incomingItems.length > 0 ? incomingItems.slice(0, 6) : [{ json: { state: 'उत्तर प्रदेश', url: 'https://www.aajtak.in/uttar-pradesh' } }];
+          const itemsToProcess = incomingItems.length > 0
+            ? incomingItems.slice(0, 10)
+            : (rawUrlTemplate ? [{ json: { url: rawUrlTemplate } }] : []);
+
+          if (itemsToProcess.length === 0) {
+            results.push({
+              json: {
+                status: 'idle',
+                message: 'No incoming data items or URL configured for HTTP request node.',
+              }
+            });
+          }
 
           for (const item of itemsToProcess) {
             const itemJson = item.json || item;
             let targetUrl = evaluateExpressionInContext(rawUrlTemplate.replace(/^=+/, ''), itemJson, workflow);
             if (!targetUrl || !targetUrl.startsWith('http')) {
-              targetUrl = itemJson.url || 'https://www.aajtak.in/';
+              targetUrl = itemJson.url || '';
             }
-            const state = itemJson.state || 'उत्तर प्रदेश';
+            if (!targetUrl) continue;
+
+            let domain = 'web-source';
+            try { domain = new URL(targetUrl).hostname; } catch (e) {}
+            const label = itemJson.category || itemJson.state || itemJson.title || domain;
+
             const simulatedLdJson = {
               '@context': 'https://schema.org',
               '@type': 'ItemList',
               itemListElement: [
-                { '@type': 'ListItem', position: 1, name: `${state} में नई प्रशासनिक योजनाएं और विकास कार्य शुरू`, url: targetUrl },
-                { '@type': 'ListItem', position: 2, name: `${state}: मौसम व क्षेत्रीय जनहित से जुड़ी ताज़ा रिपोर्ट`, url: targetUrl },
-                { '@type': 'ListItem', position: 3, name: `${state}: रोजगार और औद्योगिक विकास पर कैबिनेट का बड़ा फैसला`, url: targetUrl },
+                { '@type': 'ListItem', position: 1, name: `${label} - Primary update and key headlines`, url: targetUrl },
+                { '@type': 'ListItem', position: 2, name: `${label} - Regional reports and detailed briefing`, url: targetUrl },
+                { '@type': 'ListItem', position: 3, name: `${label} - Announcements and scheduled notices`, url: targetUrl },
               ]
             };
-            const htmlWithLdJson = `<!DOCTYPE html><html><head><title>${state} News - Aaj Tak</title><script type="application/ld+json">${JSON.stringify(simulatedLdJson)}</script></head><body><h1>${state} Breaking News</h1></body></html>`;
+            const htmlWithLdJson = `<!DOCTYPE html><html><head><title>${label} - Updates</title><script type="application/ld+json">${JSON.stringify(simulatedLdJson)}</script></head><body><h1>${label} Content Feed</h1></body></html>`;
             results.push({
               json: {
-                state,
+                category: label,
                 url: targetUrl,
                 data: htmlWithLdJson,
                 statusCode: 200,
               }
             });
           }
-          stepOutput = results;
+          stepOutput = results.length > 0 ? results : [{ json: { status: 'empty', message: 'No URLs available to fetch' } }];
         } else if (
           curr.type === 'eie-nodes-base.removeDuplicates' ||
           curr.type === 'removeDuplicates'
@@ -1898,49 +1885,51 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           stepOutput = uniqueItems.length > 0 ? uniqueItems : incomingItems;
         } else if (curr.type === 'http_request') {
           duration = 160;
-          const targetUrl = curr.config?.url || 'https://www.aajtak.in/';
-          let newsPayload: any = null;
+          const targetUrl = curr.config?.url || '';
+          let payload: any = null;
 
-          try {
-            const proxyRes = await fetch(`/api/proxy/fetch?url=${encodeURIComponent(targetUrl)}`);
-            if (proxyRes.ok) {
-              const resJson = await proxyRes.json();
-              newsPayload = resJson.data || resJson;
+          if (targetUrl) {
+            try {
+              const proxyRes = await fetch(`/api/proxy/fetch?url=${encodeURIComponent(targetUrl)}`);
+              if (proxyRes.ok) {
+                const resJson = await proxyRes.json();
+                payload = resJson.data || resJson;
+              }
+            } catch (e) {
+              // offline or fallback
             }
-          } catch (e) {
-            // offline or fallback
           }
 
-          if (!newsPayload || !newsPayload.title) {
-            const fallbackMsg = `📰 <b>Aaj Tak Breaking News Update</b>\n━━━━━━━━━━━━━━━━━━━\n📌 <b>शीर्षक:</b> Hindi news, हिंदी न्यूज़ , Hindi Samachar, ताजा ख़बरें\n📝 <b>विवरण:</b> देश और दुनिया की ताज़ा ख़बरें और लाइव अपडेट्स।\n🌐 <b>स्रोत:</b> ${targetUrl}\n⚡ <i>Delivered live via EIE Cloud Workflow to Telegram</i>`;
-            newsPayload = {
-              title: 'Hindi news, हिंदी न्यूज़ , Hindi Samachar, ताजा ख़बरें',
-              headline: 'Breaking News in Hindi - Aaj Tak Live News',
-              description: 'देश और दुनिया की ताज़ा ख़बरें',
+          if (!payload || !payload.title) {
+            let domain = 'Web Endpoint';
+            if (targetUrl) {
+              try { domain = new URL(targetUrl).hostname; } catch (e) {}
+            }
+            const fallbackMsg = `📰 <b>Content Update (${domain})</b>\n━━━━━━━━━━━━━━━━━━━\n📌 <b>Endpoint:</b> ${targetUrl || 'Not configured'}\n⚡ <i>Delivered live via EIE Cloud Workflow</i>`;
+            payload = {
+              title: `${domain} Feed`,
+              headline: `${domain} Data Received`,
+              description: `Automated content fetched from ${domain}`,
               url: targetUrl,
-              siteName: 'Aaj Tak (आज तक)',
+              siteName: domain,
               message: fallbackMsg,
               text: fallbackMsg,
-              topHeadlines: [
-                'ताज़ा राष्ट्रीय व अंतर्राष्ट्रीय समाचार लाइव',
-                'मौसम व राजनीति से जुड़ी ताज़ा जानकारी',
-                'विशेष रिपोर्ट व समाचार विश्लेषण'
-              ]
+              topHeadlines: []
             };
           }
 
           stepOutput = {
             statusCode: 200,
             url: targetUrl,
-            siteName: newsPayload.siteName || 'Aaj Tak (आज तक)',
-            title: newsPayload.title,
-            headline: newsPayload.headline || newsPayload.title,
-            description: newsPayload.description,
-            topHeadlines: newsPayload.topHeadlines || [],
-            message: newsPayload.message || newsPayload.text,
-            text: newsPayload.text || newsPayload.message,
-            data: newsPayload,
-            output: newsPayload,
+            siteName: payload.siteName || 'Web Resource',
+            title: payload.title,
+            headline: payload.headline || payload.title,
+            description: payload.description,
+            topHeadlines: payload.topHeadlines || [],
+            message: payload.message || payload.text,
+            text: payload.text || payload.message,
+            data: payload,
+            output: payload,
             status: 'success',
           };
         } else if (
@@ -1977,7 +1966,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             anyTgCred?.data?.chatId ||
             stepInput?.chatId ||
             stepInput?.chat_id ||
-            '5102553052'
+            ''
           ).toString().trim().replace(/^=+/, '');
 
           const rawCandidate =
@@ -2002,10 +1991,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               msg = stateMsgs.join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
             } else if (items.length > 0 && (items[0]?.json?.title || items[0]?.title)) {
               const headlineLines = items.slice(0, 5).map((it: any, idx: number) => {
-                const s = it.json?.state ? `[${it.json.state}] ` : '';
-                return `${idx + 1}. <a href="${it.json?.link || it.link || 'https://www.aajtak.in/'}">${s}${it.json?.title || it.title}</a>`;
+                const s = it.json?.category || it.json?.state ? `[${it.json?.category || it.json?.state}] ` : '';
+                return `${idx + 1}. <a href="${it.json?.link || it.link || '#'}">${s}${it.json?.title || it.title}</a>`;
               });
-              msg = `📰 <b>आज तक (Aaj Tak) - प्रमुख राज्य समाचार</b>\n\n${headlineLines.join('\n\n')}`;
+              msg = `📰 <b>Latest Updates & Bulletins</b>\n\n${headlineLines.join('\n\n')}`;
             } else if (stepInput?.message || stepInput?.text || stepInput?.headline) {
               msg = stepInput.message || stepInput.text || stepInput.headline;
             }
@@ -2013,7 +2002,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
           // Absolute guarantee: message MUST NEVER be empty string for Telegram API
           if (!msg || typeof msg !== 'string' || !msg.trim() || msg === '=') {
-            msg = `📰 <b>आज तक (Aaj Tak) - दैनिक राज्य समाचार बुलेटिन</b>\n━━━━━━━━━━━━━━━━━━━━\n📌 <b>ताज़ा राज्य व राष्ट्रीय मुख्य समाचार:</b>\n• <b>उत्तर प्रदेश:</b> राज्य में विकास कार्यों व प्रशासनिक व्यवस्था की ताज़ा समीक्षा।\n• <b>बिहार:</b> प्रमुख नीतिगत फैसलों व जनहित योजनाओं पर विशेष कवरेज।\n• <b>दिल्ली:</b> मुख्य राजधानी समाचार व दैनिक लाइव अपडेट्स।\n• <b>मध्य प्रदेश व राजस्थान:</b> क्षेत्रीय विकास गतिविधियों पर विशेष रिपोर्ट।\n\n🌐 <b>लाइव स्रोत:</b> https://www.aajtak.in/\n⚡ <i>EIE-Workflow Cloud Automation द्वारा मोबाइल पर सीधे संप्रेषित</i>`;
+            msg = `🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for node: ${curr.name}\n⚡ <i>EIE-Workflow Cloud Automation</i>`;
           }
 
           if (msg.length > 3900) {
