@@ -32,6 +32,7 @@ import { LandingView } from './components/views/LandingView';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { CreateWorkflowModal } from './components/modals/CreateWorkflowModal';
+import { UpdateNotificationModal } from './components/modals/UpdateNotificationModal';
 import { normalizeImportedWorkflow } from './utils/workflowImport';
 
 const DEFAULT_USER: User = {
@@ -176,6 +177,7 @@ export default function App() {
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [isGlobalCreateModalOpen, setIsGlobalCreateModalOpen] = useState(false);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('eie_sidebar_open');
@@ -699,6 +701,7 @@ export default function App() {
         onOpenGlobalSearch={() => setSearchModalOpen(true)}
         onLogout={() => setUser(null)}
         onUpdateUser={(updated) => setUser(updated)}
+        onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
       />
 
       {/* Main Area: Sidebar + Active View */}
@@ -849,6 +852,12 @@ export default function App() {
           handleCreateNewWorkflow(name, description, starterNodes, starterConnections);
           setIsGlobalCreateModalOpen(false);
         }}
+      />
+
+      {/* GitHub Deployment & PWA Update Pop-up Modal */}
+      <UpdateNotificationModal
+        forceOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
       />
 
       {/* PWA Offline Indicator */}

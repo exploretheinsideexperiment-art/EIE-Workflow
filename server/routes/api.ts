@@ -24,6 +24,16 @@ router.get('/health', (req: Request, res: Response) => {
   });
 });
 
+// --- CURRENT VERSION INFO ---
+router.get('/version', (req: Request, res: Response) => {
+  return res.json({
+    version: '1.0.0',
+    buildTime: Date.now(),
+    builtAt: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development',
+  });
+});
+
 // --- WORKFLOW SCHEDULER (TIME-BASED EXECUTION) ---
 router.get('/scheduler/status', (req: Request, res: Response) => {
   return res.json(WorkflowScheduler.getStatus());

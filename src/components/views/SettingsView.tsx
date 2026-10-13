@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Settings, User, Building, Shield, Bell, Check, Key, Camera, Upload, AlertCircle } from 'lucide-react';
+import { Settings, User, Building, Shield, Bell, Check, Key, Camera, Upload, AlertCircle, RefreshCw, Sparkles, GitBranch } from 'lucide-react';
 import { User as UserType, Workspace } from '../../types/workflow';
 import { compressImageForAvatar } from '../../utils/imageUtils';
+import { useAppUpdate } from '../../hooks/useAppUpdate';
 
 interface SettingsViewProps {
   user: UserType | null;
@@ -11,17 +12,20 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ user, workspace, onUpdateProfile, onUpdateAvatar }) => {
-  const [activeTab, setActiveTab] = useState<'account' | 'workspace' | 'security' | 'notifications'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'workspace' | 'security' | 'notifications' | 'updates'>('account');
   const [name, setName] = useState(user?.name || 'Automation Engineer');
   const [email, setEmail] = useState(user?.email || 'admin@eie-workflow.com');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [failureAlerts, setFailureAlerts] = useState(true);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [checkNotice, setCheckNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { localBuildTime, checkForUpdate, isChecking, simulateUpdate, applyUpdate } = useAppUpdate();
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,6 +136,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, workspace, onU
         >
           <Bell className="w-3.5 h-3.5" />
           <span>Notifications</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('updates')}
+          className={`py-2 font-medium border-b-2 transition flex items-center gap-1.5 ${
+            activeTab === 'updates' ? 'border-cyan-400 text-cyan-300 font-bold' : 'border-transparent text-slate-400 hover:text-white'
+          }`}
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Updates & Deployment</span>
         </button>
       </div>
 
@@ -331,6 +344,86 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, workspace, onU
                 onChange={(e) => setEmailAlerts(e.target.checked)}
                 className="w-4 h-4 accent-cyan-400 cursor-pointer"
               />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'updates' && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-white text-sm block">GitHub Push & Web Auto-Update</span>
+                  <span className="text-[11px] text-slate-400">
+                    जब भी आप रिपॉजिटरी में बदलाव करके GitHub पर पुश करेंगे, वेब पेज पर अपडेट पॉप-अप दिखेगा।
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                  Active (Auto-Sync)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 text-[11px]">
+                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">App Version</span>
+                  <span className="font-mono text-cyan-300 font-semibold">1.0.0</span>
+                </div>
+                <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">Current Build Time</span>
+                  <span className="font-mono text-slate-300">
+                    {new Date(localBuildTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Test & Check Actions */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <h3 className="font-bold text-white text-xs">Update Controls & Testing</h3>
+              <p className="text-[11px] text-slate-400">
+                You can manually check for live deployed updates or simulate the update pop-up right now:
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const hasUpdate = await checkForUpdate();
+                    if (!hasUpdate) {
+                      setCheckNotice('नवीनतम वर्शन पहले से चालू है! कोई नया अपडेट नहीं मिला।');
+                      setTimeout(() => setCheckNotice(null), 3500);
+                    }
+                  }}
+                  disabled={isChecking}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+                  <span>{isChecking ? 'Checking...' : 'Check For Updates Now (अपडेट जांचें)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => simulateUpdate()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-cyan-200 border border-cyan-400/50 text-xs font-bold transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Test Update Pop-up (पॉप-अप टेस्ट करें)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyUpdate()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
+                >
+                  <span>Hard Reload & Clear Cache</span>
+                </button>
+              </div>
+
+              {checkNotice && (
+                <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 mt-2">
+                  <Check className="w-3.5 h-3.5" /> {checkNotice}
+                </p>
+              )}
             </div>
           </div>
         )}

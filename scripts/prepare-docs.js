@@ -54,6 +54,23 @@ if (fs.existsSync(distDir)) {
     fs.copyFileSync(path.join(docsDir, 'index.html'), path.join(docsDir, '404.html'));
     console.log('[prepare-docs] Created 404.html in dist and docs');
   }
+
+  // Create version.json for client update detection
+  const buildTimestamp = Date.now();
+  const versionData = JSON.stringify({
+    version: '1.0.0',
+    buildTime: buildTimestamp,
+    builtAt: new Date(buildTimestamp).toISOString(),
+    buildId: `bld_${buildTimestamp}`
+  }, null, 2);
+
+  fs.writeFileSync(path.join(distDir, 'version.json'), versionData);
+  fs.writeFileSync(path.join(docsDir, 'version.json'), versionData);
+  const publicDir = path.resolve(process.cwd(), 'public');
+  if (fs.existsSync(publicDir)) {
+    fs.writeFileSync(path.join(publicDir, 'version.json'), versionData);
+  }
+  console.log(`[prepare-docs] Created version.json with buildTime: ${buildTimestamp}`);
 } else {
   console.error('[prepare-docs] dist directory not found! Run vite build first.');
 }

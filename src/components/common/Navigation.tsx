@@ -21,11 +21,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sun,
-  Moon
+  Moon,
+  RefreshCw
 } from 'lucide-react';
 import { User, Workspace } from '../../types/workflow';
 import { PWAInstallButton } from './PWAInstallButton';
 import { compressImageForAvatar } from '../../utils/imageUtils';
+import { useAppUpdate } from '../../hooks/useAppUpdate';
 
 interface NavigationProps {
   currentView: string;
@@ -41,6 +43,7 @@ interface NavigationProps {
   onOpenGlobalSearch: () => void;
   onLogout: () => void;
   onUpdateUser?: (updated: User) => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -57,7 +60,9 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenGlobalSearch,
   onLogout,
   onUpdateUser,
+  onOpenUpdateModal,
 }) => {
+  const { isUpdateAvailable } = useAppUpdate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -263,6 +268,19 @@ export const Navigation: React.FC<NavigationProps> = ({
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-mono text-[11px]">Cloud: Live</span>
         </div>
+
+        {/* Dynamic GitHub Push Update Button */}
+        {isUpdateAvailable && (
+          <button
+            onClick={onOpenUpdateModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-indigo-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold hover:bg-cyan-500/30 transition shadow-lg shadow-cyan-500/20 cursor-pointer animate-pulse"
+            title="GitHub Update Pushed! Click here to update"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-cyan-300 animate-spin" />
+            <span className="hidden sm:inline">Click here to update</span>
+            <span className="sm:hidden">Update</span>
+          </button>
+        )}
 
         {/* PWA Install Button */}
         <PWAInstallButton />

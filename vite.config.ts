@@ -11,18 +11,26 @@ const __dirname = path.dirname(__filename);
 export default defineConfig(() => {
   return {
     base: './',
+    define: {
+      __APP_BUILD_TIME__: Date.now(),
+      __APP_VERSION__: JSON.stringify('1.0.0'),
+    },
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'avatar.svg', 'avatar.png'],
+        registerType: 'prompt',
+        includeAssets: ['icon.svg', 'avatar.svg', 'avatar.png', 'version.json'],
         workbox: {
           cleanupOutdatedCaches: true,
-          skipWaiting: true,
+          skipWaiting: false,
           clientsClaim: true,
-          globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest}'],
+          globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest,json}'],
           runtimeCaching: [
+            {
+              urlPattern: /version\.json/,
+              handler: 'NetworkOnly',
+            },
             {
               urlPattern: ({ request }) => request.mode === 'navigate',
               handler: 'NetworkFirst',
