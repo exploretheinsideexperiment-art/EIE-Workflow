@@ -3,22 +3,32 @@
  * Detects when a new commit/build has been pushed and deployed to GitHub.
  * Displays a Pop-up modal with "Click here to update" so the user can easily
  * refresh and load the latest updates.
+ * Prevents loops: once updated or if current version is identical, no pop-up is shown.
  */
 
-// Global build time injected at build time by Vite, fallback to app start time
 export const LOCAL_BUILD_TIME: number =
   typeof __APP_BUILD_TIME__ !== 'undefined'
     ? __APP_BUILD_TIME__
     : Date.now();
+
+export const LOCAL_BUILD_ID: string =
+  typeof __APP_BUILD_ID__ !== 'undefined'
+    ? __APP_BUILD_ID__
+    : `bld_${LOCAL_BUILD_TIME}`;
 
 export interface VersionInfo {
   version: string;
   buildTime: number;
   builtAt?: string;
   buildId?: string;
+  commit?: string;
 }
 
 type UpdateListener = (available: boolean, info: VersionInfo | null) => void;
+
+const APPLIED_BUILD_ID_KEY = 'eie_applied_build_id';
+const APPLIED_BUILD_TIME_KEY = 'eie_applied_build_time';
+const DISMISSED_BUILD_ID_KEY = 'eie_dismissed_build_id';
 
 class AppUpdateService {
   private updateAvailable = false;
@@ -52,26 +62,31 @@ class AppUpdateService {
         .catch(() => {});
     }
 
-    // 2. Initial version.json check after 3 seconds
-    setTimeout(() => {
-      this.checkForUpdate();
-    }, 3000);
-
-    // 3. Periodic check every 25 seconds
-    this.checkIntervalId = setInterval(() => {
-      this.checkForUpdate();
-    }, 25 * 1000);
-
-    // 4. Check when user tabs back into the browser window
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
+    // Only enable periodic checks in production mode (e.g. GitHub Pages deploy),
+    // to avoid disturbing local development with false alarms.
+    const isDev = Boolean(import.meta.env?.DEV);
+    if (!isDev) {
+      // Initial check 5 seconds after page load
+      setTimeout(() => {
         this.checkForUpdate();
-      }
-    });
+      }, 5000);
 
-    window.addEventListener('focus', () => {
-      this.checkForUpdate();
-    });
+      // Periodic check every 45 seconds for new GitHub pushes
+      this.checkIntervalId = setInterval(() => {
+        this.checkForUpdate();
+      }, 45 * 1000);
+
+      // Check when user returns to the tab
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.checkForUpdate();
+        }
+      });
+
+      window.addEventListener('focus', () => {
+        this.checkForUpdate();
+      });
+    }
   }
 
   private handleRegistration(registration: ServiceWorkerRegistration) {
@@ -79,12 +94,17 @@ class AppUpdateService {
 
     // Check if a worker is already waiting
     if (registration.waiting) {
-      this.waitingWorker = registration.waiting;
-      this.triggerUpdateAvailable({
-        version: '1.0.0',
-        buildTime: Date.now(),
-        builtAt: new Date().toISOString(),
-      });
+      const alreadyApplied = this.isAlreadyApplied(null);
+      if (alreadyApplied) {
+        // User already updated; silently tell waiting worker to activate
+        try {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        } catch {}
+      } else {
+        this.waitingWorker = registration.waiting;
+        // Verify with version.json before showing popup to avoid false alerts
+        this.checkForUpdate();
+      }
     }
 
     // Listen for incoming new worker installs
@@ -95,13 +115,8 @@ class AppUpdateService {
       installingWorker.addEventListener('statechange', () => {
         if (installingWorker.state === 'installed') {
           if (navigator.serviceWorker.controller) {
-            // New worker is ready and waiting for activation
             this.waitingWorker = installingWorker;
-            this.triggerUpdateAvailable({
-              version: '1.0.0',
-              buildTime: Date.now(),
-              builtAt: new Date().toISOString(),
-            });
+            this.checkForUpdate();
           }
         }
       });
@@ -112,6 +127,28 @@ class AppUpdateService {
   }
 
   /**
+   * Check if a build was already applied by user
+   */
+  private isAlreadyApplied(remoteInfo: VersionInfo | null): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const appliedId = localStorage.getItem(APPLIED_BUILD_ID_KEY);
+      const appliedTimeStr = localStorage.getItem(APPLIED_BUILD_TIME_KEY);
+      const appliedTime = appliedTimeStr ? Number(appliedTimeStr) : 0;
+
+      if (remoteInfo) {
+        if (remoteInfo.buildId && appliedId === remoteInfo.buildId) {
+          return true;
+        }
+        if (appliedTime > 0 && remoteInfo.buildTime <= appliedTime) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  /**
    * Check if a newer version has been deployed via version.json
    */
   public async checkForUpdate(): Promise<boolean> {
@@ -119,7 +156,7 @@ class AppUpdateService {
     this.isChecking = true;
 
     try {
-      // Also request service worker check if supported
+      // Trigger service worker check if supported
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then((reg) => {
           reg?.update().catch(() => {});
@@ -148,8 +185,31 @@ class AppUpdateService {
           if (res.ok) {
             const data: VersionInfo = await res.json();
             if (data && typeof data.buildTime === 'number') {
-              // If remote build is newer than local build by more than 2 seconds
-              if (data.buildTime > LOCAL_BUILD_TIME + 2000) {
+              // 1. Is this exact build already the current local build?
+              const isCurrentBuild =
+                (data.buildId && data.buildId === LOCAL_BUILD_ID) ||
+                (data.buildTime <= LOCAL_BUILD_TIME);
+
+              if (isCurrentBuild) {
+                // We are already running the latest deployed version!
+                this.updateAvailable = false;
+                this.versionInfo = data;
+                this.notifyListeners();
+                this.isChecking = false;
+                return false;
+              }
+
+              // 2. Has the user already clicked update for this specific build?
+              if (this.isAlreadyApplied(data)) {
+                this.updateAvailable = false;
+                this.versionInfo = data;
+                this.notifyListeners();
+                this.isChecking = false;
+                return false;
+              }
+
+              // 3. New build confirmed!
+              if (data.buildTime > LOCAL_BUILD_TIME || (data.buildId && data.buildId !== LOCAL_BUILD_ID)) {
                 this.triggerUpdateAvailable(data);
                 this.isChecking = false;
                 return true;
@@ -172,7 +232,7 @@ class AppUpdateService {
   private triggerUpdateAvailable(info: VersionInfo) {
     this.updateAvailable = true;
     this.versionInfo = info;
-    console.log('[EIE-Workflow] New version detected! Remote buildTime:', info.buildTime, 'Local buildTime:', LOCAL_BUILD_TIME);
+    console.log('[EIE-Workflow] New version detected! Remote:', info.buildId, 'Local:', LOCAL_BUILD_ID);
     this.notifyListeners();
   }
 
@@ -201,7 +261,23 @@ class AppUpdateService {
   public async applyUpdate(): Promise<void> {
     console.log('[EIE-Workflow] Applying update requested by user...');
 
-    // 1. Tell waiting ServiceWorker to take over immediately
+    // 1. Mark this build as applied in localStorage so it NEVER shows pop-up again
+    if (typeof window !== 'undefined') {
+      try {
+        if (this.versionInfo?.buildId) {
+          localStorage.setItem(APPLIED_BUILD_ID_KEY, this.versionInfo.buildId);
+        }
+        if (this.versionInfo?.buildTime) {
+          localStorage.setItem(APPLIED_BUILD_TIME_KEY, String(this.versionInfo.buildTime));
+        }
+      } catch {}
+    }
+
+    // Immediately reset state so UI removes the popup/banner
+    this.updateAvailable = false;
+    this.notifyListeners();
+
+    // 2. Tell waiting ServiceWorker to take over immediately
     if (this.waitingWorker) {
       try {
         this.waitingWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -210,7 +286,18 @@ class AppUpdateService {
       }
     }
 
-    // 2. Invalidate and purge browser CacheStorage to discard cached assets
+    // Also tell all active/waiting service workers to skip waiting
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
+          reg.update().catch(() => {});
+        }
+      } catch {}
+    }
+
+    // 3. Invalidate and purge browser CacheStorage to discard cached assets
     if (typeof window !== 'undefined' && 'caches' in window) {
       try {
         const cacheNames = await window.caches.keys();
@@ -223,14 +310,13 @@ class AppUpdateService {
       }
     }
 
-    // 3. Clear transient navigation sessionStorage flags
+    // 4. Clear transient navigation flags
     try {
+      sessionStorage.removeItem(DISMISSED_BUILD_ID_KEY);
       sessionStorage.removeItem('eie_version_checked');
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // 4. Force hard reload with timestamp parameter to bypass browser disk cache
+    // 5. Force hard reload with timestamp parameter to bypass browser disk cache
     setTimeout(() => {
       try {
         const url = new URL(window.location.href);
@@ -239,25 +325,41 @@ class AppUpdateService {
       } catch {
         window.location.reload();
       }
-    }, 150);
+    }, 200);
   }
 
   /**
-   * Allows dismiss of the popup modal (can still be clicked from top bar badge)
+   * Dismiss the pop-up for the current session/build
    */
   public dismissModal() {
-    // Keep updateAvailable = true, but components can control modal visibility
+    if (typeof window !== 'undefined' && this.versionInfo?.buildId) {
+      try {
+        sessionStorage.setItem(DISMISSED_BUILD_ID_KEY, this.versionInfo.buildId);
+      } catch {}
+    }
+  }
+
+  public isDismissedForCurrentBuild(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const dismissed = sessionStorage.getItem(DISMISSED_BUILD_ID_KEY);
+      return Boolean(dismissed && dismissed === this.versionInfo?.buildId);
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Helper for manual testing in development or demonstration
    */
   public simulateUpdateForTesting() {
+    const testId = `bld_test_${Date.now()}`;
     this.triggerUpdateAvailable({
       version: '1.0.1 (New Push)',
       buildTime: Date.now() + 60000,
       builtAt: new Date().toISOString(),
-      buildId: `bld_test_${Date.now()}`
+      buildId: testId,
+      commit: 'test-push'
     });
   }
 
@@ -266,16 +368,13 @@ class AppUpdateService {
       updateAvailable: this.updateAvailable,
       versionInfo: this.versionInfo,
       localBuildTime: LOCAL_BUILD_TIME,
+      localBuildId: LOCAL_BUILD_ID,
     };
   }
 }
 
 export const appUpdateService = new AppUpdateService();
 
-/**
- * Legacy init function for compatibility
- */
 export function initServiceWorkerAutoUpdate() {
-  // appUpdateService initializes automatically
   return appUpdateService;
 }

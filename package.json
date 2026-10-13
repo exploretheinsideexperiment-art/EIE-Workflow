@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && node scripts/prepare-docs.js",
+    "build": "node scripts/generate-version.js && vite build && node scripts/prepare-docs.js",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist docs server.js",

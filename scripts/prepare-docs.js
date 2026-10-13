@@ -55,22 +55,28 @@ if (fs.existsSync(distDir)) {
     console.log('[prepare-docs] Created 404.html in dist and docs');
   }
 
-  // Create version.json for client update detection
-  const buildTimestamp = Date.now();
-  const versionData = JSON.stringify({
-    version: '1.0.0',
-    buildTime: buildTimestamp,
-    builtAt: new Date(buildTimestamp).toISOString(),
-    buildId: `bld_${buildTimestamp}`
-  }, null, 2);
+  // Ensure version.json is synchronized across dist, docs, and public with matching metadata
+  const publicVersionPath = path.resolve(process.cwd(), 'public', 'version.json');
+  const distVersionPath = path.join(distDir, 'version.json');
+  const docsVersionPath = path.join(docsDir, 'version.json');
 
-  fs.writeFileSync(path.join(distDir, 'version.json'), versionData);
-  fs.writeFileSync(path.join(docsDir, 'version.json'), versionData);
-  const publicDir = path.resolve(process.cwd(), 'public');
-  if (fs.existsSync(publicDir)) {
-    fs.writeFileSync(path.join(publicDir, 'version.json'), versionData);
+  let versionContent = '';
+  if (fs.existsSync(distVersionPath)) {
+    versionContent = fs.readFileSync(distVersionPath, 'utf-8');
+  } else if (fs.existsSync(publicVersionPath)) {
+    versionContent = fs.readFileSync(publicVersionPath, 'utf-8');
+    fs.writeFileSync(distVersionPath, versionContent);
   }
-  console.log(`[prepare-docs] Created version.json with buildTime: ${buildTimestamp}`);
+
+  if (versionContent) {
+    fs.writeFileSync(docsVersionPath, versionContent);
+    try {
+      const parsed = JSON.parse(versionContent);
+      console.log(`[prepare-docs] Synchronized version.json: ${parsed.buildId} (${parsed.builtAt})`);
+    } catch {
+      console.log('[prepare-docs] Synchronized version.json successfully');
+    }
+  }
 } else {
   console.error('[prepare-docs] dist directory not found! Run vite build first.');
 }

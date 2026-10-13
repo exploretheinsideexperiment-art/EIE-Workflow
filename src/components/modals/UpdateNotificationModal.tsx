@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, Sparkles, X, ArrowUpCircle, CheckCircle2, GitCommit, Bell } from 'lucide-react';
 import { useAppUpdate } from '../../hooks/useAppUpdate';
+import { appUpdateService } from '../../utils/swUpdate';
 
 interface UpdateNotificationModalProps {
   forceOpen?: boolean;
@@ -15,20 +16,30 @@ export const UpdateNotificationModal: React.FC<UpdateNotificationModalProps> = (
   const [isOpen, setIsOpen] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
-  // Open modal whenever a new update is detected, unless dismissed in this session
+  // Open modal only when a genuine new update is detected, unless dismissed for this build
   useEffect(() => {
-    if ((isUpdateAvailable && !isDismissed) || forceOpen) {
+    if (forceOpen) {
       setIsOpen(true);
+      return;
+    }
+
+    const alreadyDismissed = appUpdateService.isDismissedForCurrentBuild();
+    if (isUpdateAvailable && !isDismissed && !alreadyDismissed) {
+      setIsOpen(true);
+    } else if (!isUpdateAvailable) {
+      setIsOpen(false);
     }
   }, [isUpdateAvailable, isDismissed, forceOpen]);
 
   const handleDismiss = () => {
     setIsOpen(false);
     setIsDismissed(true);
+    appUpdateService.dismissModal();
     onClose?.();
   };
 
   const handleUpdateClick = async () => {
+    setIsOpen(false);
     await applyUpdate();
   };
 

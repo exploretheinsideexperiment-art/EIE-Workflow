@@ -1,3 +1,4 @@
+import fs from 'fs';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -9,10 +10,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig(() => {
+  let appBuildTime = Date.now();
+  let appBuildId = `bld_${appBuildTime}`;
+  try {
+    const versionPath = path.resolve(__dirname, 'public', 'version.json');
+    if (fs.existsSync(versionPath)) {
+      const vData = JSON.parse(fs.readFileSync(versionPath, 'utf-8'));
+      if (typeof vData.buildTime === 'number') appBuildTime = vData.buildTime;
+      if (typeof vData.buildId === 'string') appBuildId = vData.buildId;
+    }
+  } catch {
+    // fallback
+  }
+
   return {
     base: './',
     define: {
-      __APP_BUILD_TIME__: Date.now(),
+      __APP_BUILD_TIME__: appBuildTime,
+      __APP_BUILD_ID__: JSON.stringify(appBuildId),
       __APP_VERSION__: JSON.stringify('1.0.0'),
     },
     plugins: [

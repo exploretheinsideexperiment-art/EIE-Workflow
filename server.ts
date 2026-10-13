@@ -52,8 +52,15 @@ async function startServer() {
     app.use(vite.middlewares);
     console.log('[EIE-Workflow] Vite middleware attached for development.');
   } else {
-    // In production, serve the built dist directory
     const distPath = path.resolve(process.cwd(), 'dist');
+    // In production, serve version.json with no-cache headers to ensure instant update detection
+    app.get('/version.json', (req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.sendFile(path.join(distPath, 'version.json'));
+    });
+
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
