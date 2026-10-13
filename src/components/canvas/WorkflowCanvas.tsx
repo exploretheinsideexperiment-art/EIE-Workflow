@@ -1271,6 +1271,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     const targetX = autoConnectState?.targetPos ? autoConnectState.targetPos.x : snapVal(defaultX);
     const targetY = autoConnectState?.targetPos ? autoConnectState.targetPos.y : snapVal(defaultY);
 
+    // Initialize fresh, blank config clone with no pre-saved credentials or shared data
+    const initialConfig = JSON.parse(JSON.stringify(nodeDef.defaultConfig || {}));
+    if (nodeDef.type === 'app_telegram' || nodeDef.type === 'comm_telegram') {
+      initialConfig.botToken = '';
+      initialConfig.tokenId = '';
+      initialConfig.chatId = '';
+      initialConfig.chat_id = '';
+      initialConfig.text = '';
+      initialConfig.message = '';
+    }
+
     const newNode: WorkflowNodeData = {
       id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       type: nodeDef.type,
@@ -1280,7 +1291,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       position: { x: targetX, y: targetY },
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
-      config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
+      config: initialConfig,
+      credentialId: undefined, // Always completely blank and independent for every new node
       executionSettings: { continueOnError: false, timeoutMs: 15000 },
     };
 
@@ -1943,8 +1955,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           curr.type === 'telegram'
         ) {
           duration = 220;
-          const nodeCred = credentialsList.find((c: Credential) => c.id === curr.credentialId);
-          const anyTgCred = credentialsList.find((c: Credential) => c.type === 'telegram' && c.data?.botToken);
+          const nodeCred = curr.credentialId ? credentialsList.find((c: Credential) => c.id === curr.credentialId) : undefined;
 
           const token = (
             curr.config?.botToken ||
@@ -1954,7 +1965,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             nodeCred?.data?.botToken ||
             nodeCred?.data?.token ||
             nodeCred?.data?.accessToken ||
-            anyTgCred?.data?.botToken ||
             ''
           ).trim();
 
@@ -1963,7 +1973,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             curr.config?.chat_id ||
             nodeCred?.data?.chatId ||
             nodeCred?.data?.chat_id ||
-            anyTgCred?.data?.chatId ||
             stepInput?.chatId ||
             stepInput?.chat_id ||
             ''
@@ -2056,7 +2065,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               }
             }
           } else {
-            realNotice = `⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for mobile recipient (Chat ID: ${targetChat || '5102553052'}). (Add @BotFather bot token in settings for personal bot delivery)`;
+            realNotice = `⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for mobile recipient (Chat ID: ${targetChat || 'Not specified'}). (Add @BotFather bot token in settings for personal bot delivery)`;
           }
 
           const isRealDispatched = Boolean(token && token.includes(':') && targetChat && realNotice.includes('Real Message'));

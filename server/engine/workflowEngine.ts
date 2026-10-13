@@ -1700,7 +1700,6 @@ export class WorkflowEngine {
       case 'comm_telegram':
       case 'eie-nodes-base.telegram':
       case 'telegram': {
-        const anyTgCred = db.get('credentials').find((c) => c.type === 'telegram' && c.data?.botToken && !c.data.botToken.includes('****'));
         const rawToken = (
           config.botToken ||
           config.accessToken ||
@@ -1709,7 +1708,6 @@ export class WorkflowEngine {
           (credential?.data?.botToken && !credential.data.botToken.includes('****') ? credential.data.botToken : '') ||
           (credential?.data?.accessToken && !credential.data.accessToken.includes('****') ? credential.data.accessToken : '') ||
           (credential?.data?.token && !credential.data.token.includes('****') ? credential.data.token : '') ||
-          (anyTgCred?.data?.botToken || '') ||
           config.tokenId ||
           process.env.TELEGRAM_BOT_TOKEN ||
           ''
@@ -1725,11 +1723,10 @@ export class WorkflowEngine {
           context.json?.chat_id ||
           credential?.data?.chatId ||
           credential?.data?.chat_id ||
-          anyTgCred?.data?.chatId ||
-          '5102553052',
+          '',
           context
         );
-        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '').replace(/^['"]|['"]$/g, '') : '5102553052');
+        const targetChatId = (rawChatId ? String(rawChatId).trim().replace(/^=+/, '').replace(/^['"]|['"]$/g, '') : '');
 
         const rawTemplate =
           config.text ||

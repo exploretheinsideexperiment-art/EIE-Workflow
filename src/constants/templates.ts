@@ -110,7 +110,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           name: 'Send to Telegram',
           category: 'Communication',
           icon: 'Send',
-          credentialId: 'cred_telegram_bot',
+          credentialId: undefined,
           position: { x: 1980, y: 240 },
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Bulletins' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Dispatched' }],
@@ -119,7 +119,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
             chatId: '',
             chat_id: '',
             parseMode: 'HTML',
-            text: '{{$json.text || $json.message}}'
+            text: ''
           }
         }
       ],
@@ -408,8 +408,8 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
           inputs: [{ id: 'in_main', name: 'main', type: 'main', label: 'Alert' }],
           outputs: [{ id: 'out_main', name: 'main', type: 'main', label: 'Sent' }],
           config: {
-            chatId: '@infra_oncall',
-            message: '🚨 CRITICAL API OUTAGE: Microservice probe returned status {{$json.statusCode}}! Immediate intervention required.'
+            chatId: '',
+            message: ''
           }
         }
       ],

@@ -416,16 +416,7 @@ export function fillDemoDataForWorkflow(
     node.config = node.config || {};
 
     if (node.type === 'app_telegram' || node.type === 'comm_telegram') {
-      if (!node.config.botToken || node.config.botToken.length < 5) {
-        node.config.botToken = '7891234560:AAFlk_DemoTelegramBotToken_Secure2026';
-        summary.push(`Telegram "${node.name}": Set Demo Bot Token`);
-        filledCount++;
-      }
-      if (!node.config.chatId || node.config.chatId === '') {
-        node.config.chatId = '@devops_alerts_demo';
-        summary.push(`Telegram "${node.name}": Set Chat ID (@devops_alerts_demo)`);
-        filledCount++;
-      }
+      // Keep node values clean and user-controlled; do not force mock tokens or channel IDs
     } else if (node.type === 'app_google_sheets') {
       if (!node.config.spreadsheetId || node.config.spreadsheetId.length < 10) {
         node.config.spreadsheetId = '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms';

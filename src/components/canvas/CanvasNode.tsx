@@ -168,7 +168,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   } else if (node.type === 'app_google_sheets') {
     subtitle = `Sheet: ${node.config?.sheetName || 'Sheet1'} (${node.config?.operation || 'Read Rows'})`;
   } else if (node.type === 'app_telegram' || node.type === 'comm_telegram') {
-    subtitle = `Chat: ${node.config?.chatId || '@alerts_channel'}`;
+    subtitle = node.config?.chatId ? `Chat: ${node.config.chatId}` : 'Not configured';
   }
 
   const outputPayload = node.pinnedData || executionResult?.output;
@@ -226,8 +226,15 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
     }
     if (t.includes('telegram')) {
       const hasToken = Boolean(cfg.botToken && String(cfg.botToken).includes(':'));
-      const cid = String(cfg.chatId || cfg.chat_id || '5102553052').replace(/^=+/, '');
-      return hasToken ? `Telegram: ${cid} (Live Connected)` : `Telegram: ${cid} (⚠️ Token Required)`;
+      const cid = String(cfg.chatId || cfg.chat_id || '').replace(/^=+/, '').trim();
+      if (hasToken && cid) {
+        return `Telegram: ${cid} (Live Connected)`;
+      } else if (cid) {
+        return `Telegram: ${cid} (Token Required)`;
+      } else if (hasToken) {
+        return 'Telegram (Chat ID Required)';
+      }
+      return 'Telegram Bot (Empty / Not configured)';
     }
     if (t === 'http_request') {
       const u = cfg.url || 'API';

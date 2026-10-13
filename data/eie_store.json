@@ -322,9 +322,9 @@
         "zoom": 0.729294585514598
       },
       "createdAt": "2026-10-08T17:52:04.919Z",
-      "updatedAt": "2026-10-11T17:43:23.892Z",
-      "executionCount": 16,
-      "lastExecutedAt": "2026-10-12T17:59:53.451Z"
+      "updatedAt": "2026-10-13T11:32:31.872Z",
+      "executionCount": 17,
+      "lastExecutedAt": "2026-10-13T11:32:31.878Z"
     },
     {
       "id": "wf_test_chat_tg",
@@ -337,8 +337,8 @@
           "name": "Live Chat Trigger",
           "category": "Chat",
           "position": {
-            "x": 100,
-            "y": 100
+            "x": 84.03771136303402,
+            "y": 36.15084545213608
           },
           "inputs": [],
           "outputs": [
@@ -374,8 +374,46 @@
             }
           ],
           "config": {
-            "chatId": "@test_chat",
-            "text": "New Telegram message: {{$json.message}}"
+            "chatId": "",
+            "text": ""
+          }
+        },
+        {
+          "id": "node_1791889244691_3lit",
+          "type": "http_request",
+          "name": "HTTP Request",
+          "category": "HTTP",
+          "icon": "Globe",
+          "position": {
+            "x": 320,
+            "y": 240
+          },
+          "inputs": [
+            {
+              "id": "in_main",
+              "name": "main",
+              "type": "main",
+              "label": "Trigger Input"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "out_main",
+              "name": "main",
+              "type": "main",
+              "label": "Response"
+            }
+          ],
+          "config": {
+            "method": "GET",
+            "url": "",
+            "headers": [],
+            "body": "",
+            "timeoutMs": 15000
+          },
+          "executionSettings": {
+            "continueOnError": false,
+            "timeoutMs": 15000
           }
         }
       ],
@@ -388,9 +426,14 @@
           "toPortId": "in_main"
         }
       ],
-      "updatedAt": "2026-10-06T11:04:29.778Z",
+      "updatedAt": "2026-10-13T11:00:50.969Z",
       "executionCount": 3,
-      "lastExecutedAt": "2026-10-10T15:34:18.461Z"
+      "lastExecutedAt": "2026-10-10T15:34:18.461Z",
+      "viewport": {
+        "x": -342.9273477875248,
+        "y": -24.47335589404969,
+        "zoom": 1.2529531607192814
+      }
     },
     {
       "id": "test_screenshot_wf",
@@ -694,7 +737,7 @@
     {
       "id": "wf_sample_ai_lead",
       "workspaceId": "ws_default_01",
-      "name": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "name": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "description": "Receives customer inquiries or alerts, analyzes sentiment and extracts key points using Gemini AI, then sends an email notification.",
       "active": true,
       "viewport": {
@@ -833,7 +876,7 @@
           ],
           "config": {
             "to": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: {{$node[\"Gemini AI Lead Analyst\"].json.estimatedContractTier}} from {{$json.company}}",
+            "subject": "🔥 HIGH PRIORITY LEAD: {{$node[\"Gemini AI Lead Analyst\"].json.estimatedContractTier}} from {{$json.company}}",
             "bodyHtml": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> {{$json.customer}}</p><p><strong>Summary:</strong> {{$node[\"Gemini AI Lead Analyst\"].json.summary}}</p><p><strong>Urgency Score:</strong> {{$node[\"Gemini AI Lead Analyst\"].json.urgencyScore}}/100</p>"
           }
         },
@@ -919,7 +962,8 @@
       "name": "DevOps Alert Bot",
       "type": "telegram",
       "data": {
-        "botToken": "6892****************"
+        "botToken": "",
+        "chatId": ""
       },
       "createdAt": "2026-09-26T03:23:13.182Z",
       "updatedAt": "2026-09-26T03:23:13.182Z"
@@ -943,8 +987,8 @@
       "name": "Telegram Test Bot",
       "type": "telegram",
       "data": {
-        "botToken": "1234****************",
-        "chatId": "-100123456789"
+        "botToken": "",
+        "chatId": ""
       },
       "createdAt": "2026-10-05T13:28:45.233Z",
       "updatedAt": "2026-10-05T13:28:45.233Z"
@@ -952,9 +996,294 @@
   ],
   "executions": [
     {
+      "id": "exec_1791891151877_4efd47",
+      "workflowId": "wf_1791481924919_c5c623",
+      "workflowName": "Multi-Source Content Crawler to Telegram",
+      "triggerType": "manual",
+      "status": "success",
+      "startedAt": "2026-10-13T11:32:31.878Z",
+      "nodeResults": {
+        "a84240aa-d3ec-40ff-be77-37af2e5efc77": {
+          "nodeId": "a84240aa-d3ec-40ff-be77-37af2e5efc77",
+          "nodeName": "Every Day 9,21",
+          "nodeType": "trigger_schedule",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.880Z",
+          "input": {
+            "testRun": true,
+            "triggeredAt": "2026-10-13T11:32:31.015Z"
+          },
+          "finishedAt": "2026-10-13T11:32:31.887Z",
+          "durationMs": 7,
+          "output": {
+            "scheduledTime": "2026-10-13T11:32:31.886Z",
+            "cron": "0 9,21 * * *",
+            "interval": "Daily at 09:00, 21:00",
+            "triggeredAt": "2026-10-13T11:32:31.886Z",
+            "event": "scheduled_trigger",
+            "status": "success",
+            "text": "Schedule Trigger activated according to set instructions (Cron: 0 9,21 * * *, Daily at 09:00, 21:00).",
+            "timestamp": "2026-10-13T11:32:31.886Z",
+            "output": {
+              "timestamp": "2026-10-13T11:32:31.886Z",
+              "cron": "0 9,21 * * *",
+              "interval": "Daily at 09:00, 21:00",
+              "status": "active",
+              "triggeredAt": "2026-10-13T11:32:31.886Z"
+            }
+          }
+        },
+        "1c391986-8774-4a48-ba70-88edf3d019c0": {
+          "nodeId": "1c391986-8774-4a48-ba70-88edf3d019c0",
+          "nodeName": "Target Sources List",
+          "nodeType": "core_code",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.887Z",
+          "input": {
+            "scheduledTime": "2026-10-13T11:32:31.886Z",
+            "cron": "0 9,21 * * *",
+            "interval": "Daily at 09:00, 21:00",
+            "triggeredAt": "2026-10-13T11:32:31.886Z",
+            "event": "scheduled_trigger",
+            "status": "success",
+            "text": "Schedule Trigger activated according to set instructions (Cron: 0 9,21 * * *, Daily at 09:00, 21:00).",
+            "timestamp": "2026-10-13T11:32:31.886Z",
+            "output": {
+              "timestamp": "2026-10-13T11:32:31.886Z",
+              "cron": "0 9,21 * * *",
+              "interval": "Daily at 09:00, 21:00",
+              "status": "active",
+              "triggeredAt": "2026-10-13T11:32:31.886Z"
+            }
+          },
+          "finishedAt": "2026-10-13T11:32:31.887Z",
+          "durationMs": 0,
+          "output": [
+            {
+              "json": {
+                "category": "Technology",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Business",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Regional",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Science",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "World",
+                "url": ""
+              }
+            }
+          ]
+        },
+        "383a3306-3068-4909-b5d0-3382e547eec2": {
+          "nodeId": "383a3306-3068-4909-b5d0-3382e547eec2",
+          "nodeName": "Fetch Source Content",
+          "nodeType": "core_http",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.888Z",
+          "input": [
+            {
+              "json": {
+                "category": "Technology",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Business",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Regional",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "Science",
+                "url": ""
+              }
+            },
+            {
+              "json": {
+                "category": "World",
+                "url": ""
+              }
+            }
+          ],
+          "finishedAt": "2026-10-13T11:32:31.888Z",
+          "durationMs": 0,
+          "output": {
+            "statusCode": 400,
+            "status": "error",
+            "error": "No target URL configured or provided from upstream.",
+            "data": {
+              "error": "No URL configured"
+            },
+            "output": {
+              "error": "No URL configured"
+            }
+          }
+        },
+        "2bb7771e-af75-4588-9b69-b20990b843f8": {
+          "nodeId": "2bb7771e-af75-4588-9b69-b20990b843f8",
+          "nodeName": "Extract Headlines",
+          "nodeType": "core_code",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.888Z",
+          "input": {
+            "statusCode": 400,
+            "status": "error",
+            "error": "No target URL configured or provided from upstream.",
+            "data": {
+              "error": "No URL configured"
+            },
+            "output": {
+              "error": "No URL configured"
+            }
+          },
+          "finishedAt": "2026-10-13T11:32:31.889Z",
+          "durationMs": 1,
+          "output": []
+        },
+        "66b8e6aa-285c-416b-acb0-22adf8b8f5e9": {
+          "nodeId": "66b8e6aa-285c-416b-acb0-22adf8b8f5e9",
+          "nodeName": "Only New Headlines",
+          "nodeType": "eie-nodes-base.removeDuplicates",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.889Z",
+          "input": [],
+          "finishedAt": "2026-10-13T11:32:31.889Z",
+          "durationMs": 0,
+          "output": []
+        },
+        "42882114-ede5-4c75-83b1-44f1f0a08f63": {
+          "nodeId": "42882114-ede5-4c75-83b1-44f1f0a08f63",
+          "nodeName": "Build Digest Messages",
+          "nodeType": "core_code",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.889Z",
+          "input": [],
+          "finishedAt": "2026-10-13T11:32:31.889Z",
+          "durationMs": 0,
+          "output": []
+        },
+        "f9acf953-4c0c-480c-b2fd-99a9d0044dc0": {
+          "nodeId": "f9acf953-4c0c-480c-b2fd-99a9d0044dc0",
+          "nodeName": "Send to Telegram",
+          "nodeType": "app_telegram",
+          "status": "success",
+          "startedAt": "2026-10-13T11:32:31.889Z",
+          "input": [],
+          "finishedAt": "2026-10-13T11:32:31.890Z",
+          "durationMs": 1,
+          "output": {
+            "sent": false,
+            "delivered": false,
+            "platform": "Telegram",
+            "chatId": "5102553052",
+            "message": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+            "text": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+            "reply": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+            "connectedExternally": false,
+            "realDispatched": false,
+            "botTokenConfigured": false,
+            "status": "warning",
+            "error": "Telegram Bot Token required to deliver message to mobile app (Chat ID: 5102553052). Please add your token from @BotFather in the \"Send to Telegram\" node.",
+            "output": {
+              "delivered": false,
+              "realDispatched": false,
+              "botTokenConfigured": false,
+              "chatId": "5102553052",
+              "message": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+              "text": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+              "reply": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>",
+              "status": "missing_token",
+              "apiNotice": "⚠️ Telegram Bot Token Missing: News bulletin prepared, but not dispatched to mobile phone. Please add your bot token from @BotFather in the Telegram node to deliver live messages to mobile.",
+              "messagePreview": "🔔 <b>Workflow Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nPipeline executed successfully for Telegram dispatch.\n⚡ <i>EIE-Workflow Cloud Automation</i>"
+            }
+          }
+        }
+      },
+      "logs": [
+        {
+          "timestamp": "2026-10-13T11:32:31.878Z",
+          "level": "info",
+          "message": "Workflow \"Multi-Source Content Crawler to Telegram\" started via manual trigger."
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.887Z",
+          "level": "info",
+          "message": "Node \"Every Day 9,21\" (trigger_schedule) executed successfully in 7ms.",
+          "nodeId": "a84240aa-d3ec-40ff-be77-37af2e5efc77"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.887Z",
+          "level": "info",
+          "message": "Node \"Target Sources List\" (core_code) executed successfully in 0ms.",
+          "nodeId": "1c391986-8774-4a48-ba70-88edf3d019c0"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.888Z",
+          "level": "info",
+          "message": "Node \"Fetch Source Content\" (core_http) executed successfully in 0ms.",
+          "nodeId": "383a3306-3068-4909-b5d0-3382e547eec2"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.889Z",
+          "level": "info",
+          "message": "Node \"Extract Headlines\" (core_code) executed successfully in 1ms.",
+          "nodeId": "2bb7771e-af75-4588-9b69-b20990b843f8"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.889Z",
+          "level": "info",
+          "message": "Node \"Only New Headlines\" (eie-nodes-base.removeDuplicates) executed successfully in 0ms.",
+          "nodeId": "66b8e6aa-285c-416b-acb0-22adf8b8f5e9"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.889Z",
+          "level": "info",
+          "message": "Node \"Build Digest Messages\" (core_code) executed successfully in 0ms.",
+          "nodeId": "42882114-ede5-4c75-83b1-44f1f0a08f63"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.890Z",
+          "level": "info",
+          "message": "Node \"Send to Telegram\" (app_telegram) executed successfully in 1ms.",
+          "nodeId": "f9acf953-4c0c-480c-b2fd-99a9d0044dc0"
+        },
+        {
+          "timestamp": "2026-10-13T11:32:31.890Z",
+          "level": "info",
+          "message": "Workflow execution finished with status SUCCESS in 12ms."
+        }
+      ],
+      "finishedAt": "2026-10-13T11:32:31.890Z",
+      "durationMs": 12
+    },
+    {
       "id": "exec_1791646460659_5fc41d",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "manual",
       "status": "success",
       "startedAt": "2026-10-10T15:34:20.659Z",
@@ -1117,7 +1446,7 @@
             "channel": "#standard-leads",
             "text": "Standard lead queued from : No customer inquiry content or sender information was provided.",
             "connectedExternally": false,
-            "apiNotice": "\u26a1 Slack Sandbox: Notification formatted for channel #standard-leads. Add Incoming Webhook URL in settings for real Slack workspace delivery.",
+            "apiNotice": "⚡ Slack Sandbox: Notification formatted for channel #standard-leads. Add Incoming Webhook URL in settings for real Slack workspace delivery.",
             "timestamp": "2026-10-10T15:34:24.849Z",
             "status": "success",
             "output": {
@@ -1126,7 +1455,7 @@
               "text": "Standard lead queued from : No customer inquiry content or sender information was provided.",
               "realDispatched": false,
               "status": "success",
-              "apiNotice": "\u26a1 Slack Sandbox: Notification formatted for channel #standard-leads. Add Incoming Webhook URL in settings for real Slack workspace delivery."
+              "apiNotice": "⚡ Slack Sandbox: Notification formatted for channel #standard-leads. Add Incoming Webhook URL in settings for real Slack workspace delivery."
             }
           }
         }
@@ -1135,7 +1464,7 @@
         {
           "timestamp": "2026-10-10T15:34:20.659Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via manual trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via manual trigger."
         },
         {
           "timestamp": "2026-10-10T15:34:20.903Z",
@@ -1917,7 +2246,7 @@
               "reply": "AI Assistant (Google Gemini Chat Model): I have processed your inquiry: \"Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).\". All automated steps and integrations verified.",
               "botTokenConfigured": false,
               "realDispatched": false,
-              "apiNotice": "\u26a1 Live Cloud Delivery Sandbox: News alert queued & formatted for Telegram (Chat ID: 5102553052). Add @BotFather token in node settings to deliver directly to personal bot.",
+              "apiNotice": "⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for Telegram (Chat ID: 5102553052). Add @BotFather token in node settings to deliver directly to personal bot.",
               "messagePreview": "AI Assistant (Google Gemini Chat Model): I have processed your inquiry: \"Schedule Trigger activated for morning automation run (Cron: 0 9 * * 1-5).\". All automa",
               "messageId": 86412,
               "status": "sent"
@@ -2061,7 +2390,7 @@
               "reply": "New Telegram message: Hello! How can I assist your workflow today?",
               "botTokenConfigured": false,
               "realDispatched": false,
-              "apiNotice": "\u26a1 Live Cloud Delivery Sandbox: News alert queued & formatted for Telegram (Chat ID: @test_chat). Add @BotFather token in node settings to deliver directly to personal bot.",
+              "apiNotice": "⚡ Live Cloud Delivery Sandbox: News alert queued & formatted for Telegram (Chat ID: @test_chat). Add @BotFather token in node settings to deliver directly to personal bot.",
               "messagePreview": "New Telegram message: Hello! How can I assist your workflow today?",
               "messageId": 16765,
               "status": "sent"
@@ -2460,7 +2789,7 @@
     {
       "id": "exec_1791108140003_57943e",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "webhook",
       "status": "success",
       "startedAt": "2026-10-04T10:02:20.003Z",
@@ -2760,7 +3089,7 @@
           "output": {
             "sent": true,
             "recipient": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: Tier 1 from ",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
             "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> AI A",
             "sentAt": "2026-10-04T10:02:28.689Z",
             "messageId": "msg_1791108148689_876ee9f8"
@@ -2771,7 +3100,7 @@
         {
           "timestamp": "2026-10-04T10:02:20.003Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via webhook trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
         },
         {
           "timestamp": "2026-10-04T10:02:20.008Z",
@@ -3151,9 +3480,9 @@
           "finishedAt": "2026-09-30T19:21:35.657Z",
           "durationMs": 2003,
           "output": {
-            "text": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
             "output": {
-              "briefing": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+              "briefing": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
               "recordsAnalyzed": 4,
               "accounts": [
                 "Nexus Global",
@@ -3165,8 +3494,8 @@
               "priorityTier": "Tier 1 Critical",
               "recommendedAction": "Dispatch instant summary to team Telegram channel"
             },
-            "result": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
-            "summary": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "result": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "summary": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
             "urgencyScore": 88,
             "estimatedContractTier": "Tier 1",
             "data": {
@@ -3271,9 +3600,9 @@
           "status": "success",
           "startedAt": "2026-09-30T19:21:35.658Z",
           "input": {
-            "text": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
             "output": {
-              "briefing": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+              "briefing": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
               "recordsAnalyzed": 4,
               "accounts": [
                 "Nexus Global",
@@ -3285,8 +3614,8 @@
               "priorityTier": "Tier 1 Critical",
               "recommendedAction": "Dispatch instant summary to team Telegram channel"
             },
-            "result": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
-            "summary": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "result": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "summary": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
             "urgencyScore": 88,
             "estimatedContractTier": "Tier 1",
             "data": {
@@ -3389,15 +3718,15 @@
             "sent": true,
             "platform": "Telegram",
             "chatId": "@alerts_channel",
-            "message": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
-            "text": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Logistics: $14,200 (High)\n\u2022 Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "message": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
+            "text": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Logistics: $14,200 (High)\n• Vortex Labs: $21,000 (High)\n\nHigh-priority accounts identified. Automated notification queued for Telegram channel dispatch.",
             "messageId": 57287,
             "deliveredAt": "2026-09-30T19:21:35.658Z",
             "status": "success",
             "output": {
               "delivered": true,
               "chatId": "@alerts_channel",
-              "messagePreview": "\ud83d\udcca Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n\u2022 Nexus Global: $32,500 (Critical)\n\u2022 Aura Log",
+              "messagePreview": "📊 Operations Intelligence Briefing (Google Gemini Chat Model)\n\nProcessed 4 enterprise records from Google Sheets:\n• Nexus Global: $32,500 (Critical)\n• Aura Log",
               "messageId": 27243,
               "status": "sent"
             }
@@ -3993,7 +4322,7 @@
     {
       "id": "exec_1790653339067_1316d6",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "manual",
       "status": "success",
       "startedAt": "2026-09-29T03:42:19.067Z",
@@ -4087,7 +4416,7 @@
           "output": {
             "sent": true,
             "recipient": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: Tier 1 from ",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
             "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Anal",
             "sentAt": "2026-09-29T03:42:22.258Z",
             "messageId": "msg_1790653342258_a43743da"
@@ -4098,7 +4427,7 @@
         {
           "timestamp": "2026-09-29T03:42:19.067Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via manual trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via manual trigger."
         },
         {
           "timestamp": "2026-09-29T03:42:19.068Z",
@@ -4136,7 +4465,7 @@
     {
       "id": "exec_1790393075741_33e5ec",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "webhook",
       "status": "success",
       "startedAt": "2026-09-26T03:24:35.744Z",
@@ -4290,7 +4619,7 @@
           "output": {
             "sent": true,
             "recipient": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: Tier 1 from ",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from ",
             "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Anal",
             "sentAt": "2026-09-26T03:24:46.468Z",
             "messageId": "msg_1790393086468_25078f35"
@@ -4301,7 +4630,7 @@
         {
           "timestamp": "2026-09-26T03:24:35.744Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via webhook trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
         },
         {
           "timestamp": "2026-09-26T03:24:35.745Z",
@@ -4339,7 +4668,7 @@
     {
       "id": "exec_1790393064367_0141c0",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "webhook",
       "status": "failed",
       "startedAt": "2026-09-26T03:24:24.367Z",
@@ -4437,7 +4766,7 @@
         {
           "timestamp": "2026-09-26T03:24:24.367Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via webhook trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
         },
         {
           "timestamp": "2026-09-26T03:24:24.368Z",
@@ -4464,7 +4793,7 @@
     {
       "id": "exec_1790393020010_da43f5",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "webhook",
       "status": "failed",
       "startedAt": "2026-09-26T03:23:40.010Z",
@@ -4562,7 +4891,7 @@
         {
           "timestamp": "2026-09-26T03:23:40.010Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via webhook trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via webhook trigger."
         },
         {
           "timestamp": "2026-09-26T03:23:40.010Z",
@@ -4589,7 +4918,7 @@
     {
       "id": "exec_1790393001703_3c105a",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "manual",
       "status": "success",
       "startedAt": "2026-09-26T03:23:21.703Z",
@@ -4690,7 +5019,7 @@
           "output": {
             "sent": true,
             "recipient": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: Tier 2 from ",
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 2 from ",
             "preview": "<h3>Urgent Lead Notification</h3><p><strong>Customer:</strong> </p><p><strong>Summary:</strong> Jane",
             "sentAt": "2026-09-26T03:23:29.605Z",
             "messageId": "msg_1790393009605_6939f7d4"
@@ -4701,7 +5030,7 @@
         {
           "timestamp": "2026-09-26T03:23:21.703Z",
           "level": "info",
-          "message": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" started via manual trigger."
+          "message": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" started via manual trigger."
         },
         {
           "timestamp": "2026-09-26T03:23:21.704Z",
@@ -4739,7 +5068,7 @@
     {
       "id": "exec_1042",
       "workflowId": "wf_sample_ai_lead",
-      "workflowName": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch",
+      "workflowName": "Inbound Webhook → AI Agent Analysis → Email Dispatch",
       "triggerType": "webhook",
       "status": "success",
       "startedAt": "2026-09-26T02:23:13.182Z",
@@ -4823,7 +5152,7 @@
           "output": {
             "sent": true,
             "recipient": "vp-sales@eie-workflow.internal",
-            "subject": "\ud83d\udd25 HIGH PRIORITY LEAD: Tier 1 from Apex Dynamics"
+            "subject": "🔥 HIGH PRIORITY LEAD: Tier 1 from Apex Dynamics"
           }
         },
         "node_5": {
@@ -4856,7 +5185,7 @@
       "id": "wf_sample_ai_lead",
       "workflowId": "wf_sample_ai_lead",
       "nodeId": "node_1",
-      "name": "Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch Cloud Webhook",
+      "name": "Inbound Webhook → AI Agent Analysis → Email Dispatch Cloud Webhook",
       "path": "wf_sample_ai_lead",
       "method": "ALL",
       "callCount": 1,
@@ -4876,6 +5205,16 @@
       "method": "ALL",
       "callCount": 0,
       "createdAt": "2026-10-08T17:52:04.919Z"
+    },
+    {
+      "id": "wf_test_chat_tg",
+      "workflowId": "wf_test_chat_tg",
+      "nodeId": "node_chat",
+      "name": "Chat to Telegram Test (Cloud Webhook)",
+      "path": "wf_test_chat_tg",
+      "method": "ALL",
+      "callCount": 0,
+      "createdAt": "2026-10-13T11:00:50.467Z"
     }
   ],
   "apiKeys": [
@@ -4890,6 +5229,13 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "aud_1791891151890",
+      "workspaceId": "ws_default_01",
+      "action": "Execution exec_1791891151877_4efd47",
+      "details": "Workflow \"Multi-Source Content Crawler to Telegram\" completed: SUCCESS (12ms)",
+      "timestamp": "2026-10-13T11:32:31.890Z"
+    },
     {
       "id": "aud_1791827995060",
       "workspaceId": "ws_default_01",
@@ -4957,7 +5303,7 @@
       "id": "aud_1791646464850",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1791646460659_5fc41d",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: SUCCESS (4191ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (4191ms)",
       "timestamp": "2026-10-10T15:34:24.850Z"
     },
     {
@@ -5168,7 +5514,7 @@
       "id": "aud_1791108148689",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1791108140003_57943e",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: SUCCESS (8686ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (8686ms)",
       "timestamp": "2026-10-04T10:02:28.689Z"
     },
     {
@@ -5200,7 +5546,7 @@
       "id": "aud_1790653342258",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1790653339067_1316d6",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: SUCCESS (3191ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (3191ms)",
       "timestamp": "2026-09-29T03:42:22.258Z"
     },
     {
@@ -5214,35 +5560,35 @@
       "id": "aud_1790393086469",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1790393075741_33e5ec",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: SUCCESS (10725ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (10725ms)",
       "timestamp": "2026-09-26T03:24:46.469Z"
     },
     {
       "id": "aud_1790393066829",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1790393064367_0141c0",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: FAILED (2462ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: FAILED (2462ms)",
       "timestamp": "2026-09-26T03:24:26.829Z"
     },
     {
       "id": "aud_1790393028444",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1790393020010_da43f5",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: FAILED (8434ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: FAILED (8434ms)",
       "timestamp": "2026-09-26T03:23:48.444Z"
     },
     {
       "id": "aud_1790393009606",
       "workspaceId": "ws_default_01",
       "action": "Execution exec_1790393001703_3c105a",
-      "details": "Workflow \"Inbound Webhook \u2192 AI Agent Analysis \u2192 Email Dispatch\" completed: SUCCESS (7902ms)",
+      "details": "Workflow \"Inbound Webhook → AI Agent Analysis → Email Dispatch\" completed: SUCCESS (7902ms)",
       "timestamp": "2026-09-26T03:23:29.606Z"
     },
     {
       "id": "aud_1",
       "workspaceId": "ws_default_01",
       "action": "Workflow Created",
-      "details": "Initialized workflow \"Inbound Webhook \u2192 AI Agent Analysis\"",
+      "details": "Initialized workflow \"Inbound Webhook → AI Agent Analysis\"",
       "timestamp": "2026-09-24T03:23:13.182Z"
     },
     {

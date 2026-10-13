@@ -260,7 +260,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
   }, []);
 
   const handleFetchMobileMessages = async () => {
-    const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
+    const token = (config.botToken || config.token || (node?.credentialId ? selectedCredential?.data?.botToken : '') || '').trim();
     if (!token) {
       setTgTestErrorToast('Please enter your Telegram Bot Token first');
       setTimeout(() => setTgTestErrorToast(null), 3500);
@@ -571,8 +571,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
         if (typeLower.includes('discord') && currentCred.type !== 'discord') isMismatched = true;
 
         if (isMismatched) {
-          const matching = relevantCredentials[0];
-          onUpdateConfig(node.id, { credentialId: matching ? matching.id : undefined });
+          onUpdateConfig(node.id, { credentialId: undefined });
         }
       }
     }
@@ -1495,7 +1494,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                       )}
 
                       {/* Prominent Hindi/English Mobile Delivery Guide if Token is Missing */}
-                      {!(config.botToken || config.token || selectedCredential?.data?.botToken) && (
+                      {!(config.botToken || config.token) && (
                         <div className="p-3 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-200 text-xs space-y-2 animate-in fade-in">
                           <div className="flex items-center gap-2 font-bold text-amber-300">
                             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
@@ -1533,7 +1532,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <div className="relative flex items-stretch">
                           <input
                             type={showBotToken ? 'text' : 'password'}
-                            value={String(config.botToken || config.token || (selectedCredential?.data?.botToken || '')).replace(/^bot/i, '').replace(/^=+/, '')}
+                            value={String(config.botToken || config.token || '').replace(/^bot/i, '').replace(/^=+/, '')}
                             onChange={(e) => {
                               const val = e.target.value.replace(/^bot/i, '').replace(/^=+/, '').trim();
                               handleConfigBatch({ botToken: val, token: val });
@@ -1551,9 +1550,9 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </button>
                           <button
                             type="button"
-                            disabled={tgVerifying || !(config.botToken || config.token || selectedCredential?.data?.botToken)}
+                            disabled={tgVerifying || !(config.botToken || config.token)}
                             onClick={async () => {
-                              const t = (config.botToken || config.token || selectedCredential?.data?.botToken || '').trim();
+                              const t = (config.botToken || config.token || '').trim();
                               if (!t) return;
                               setTgVerifying(true);
                               setTgTestErrorToast(null);
@@ -1640,7 +1639,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                           </span>
                           <input
                             type="text"
-                            value={String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).replace(/^=+/, '')}
+                            value={String(config.chatId || config.chat_id || '').replace(/^=+/, '')}
                             onChange={(e) => {
                               let val = e.target.value.trim().replace(/^=+/, '');
                               handleConfigBatch({ chatId: val, chat_id: val });
@@ -1774,8 +1773,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                         <button
                           type="button"
                           onClick={async () => {
-                            const token = (config.botToken || config.token || selectedCredential?.data?.botToken || selectedCredential?.data?.token || '').trim();
-                            const cid = String(config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')).trim().replace(/^=+/, '');
+                            const token = (config.botToken || config.token || (node?.credentialId ? selectedCredential?.data?.botToken : '') || '').trim();
+                            const cid = String(config.chatId || config.chat_id || (node?.credentialId ? selectedCredential?.data?.chatId : '') || '').trim().replace(/^=+/, '');
                             if (!token) {
                               setTgTestErrorToast('Missing Bot Token! मोबाइल ऐप पर मैसेज पाने के लिए ऊपर @BotFather से मिला Bot Token दर्ज करें।');
                               setTimeout(() => setTgTestErrorToast(null), 5500);
@@ -2531,19 +2530,17 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             <span className="text-[9px] text-slate-400 font-mono">Real-Time Mobile Sync</span>
                           </div>
 
-                          {/* Bot Token if not provided via credential */}
-                          {!selectedCredential?.data?.botToken && (
-                            <div>
-                              <label className="text-[10px] font-semibold text-slate-400 block mb-1">Telegram Bot Token (from @BotFather)</label>
-                              <input
-                                type="password"
-                                value={config.botToken || ''}
-                                onChange={(e) => handleConfigChange('botToken', e.target.value)}
-                                placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-                                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
-                              />
-                            </div>
-                          )}
+                          {/* Bot Token */}
+                          <div>
+                            <label className="text-[10px] font-semibold text-slate-400 block mb-1">Telegram Bot Token (from @BotFather)</label>
+                            <input
+                              type="password"
+                              value={config.botToken || ''}
+                              onChange={(e) => handleConfigChange('botToken', e.target.value)}
+                              placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-200 font-mono text-xs focus:border-cyan-500 focus:outline-none"
+                            />
+                          </div>
 
                           {/* Target Chat ID (Recipient) */}
                           <div>
@@ -2560,7 +2557,7 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                               </span>
                               <input
                                 type="text"
-                                value={config.chatId || config.chat_id || (selectedCredential?.data?.chatId || '')}
+                                value={config.chatId || config.chat_id || ''}
                                 onChange={(e) => {
                                   handleConfigBatch({ chatId: e.target.value, chat_id: e.target.value });
                                 }}
@@ -2576,8 +2573,8 @@ export const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({
                             <button
                               type="button"
                               onClick={async () => {
-                                const token = (config.botToken || selectedCredential?.data?.botToken || '').trim();
-                                const chat = (config.chatId || config.chat_id || selectedCredential?.data?.chatId || '').trim();
+                                const token = (config.botToken || (node?.credentialId ? selectedCredential?.data?.botToken : '') || '').trim();
+                                const chat = (config.chatId || config.chat_id || (node?.credentialId ? selectedCredential?.data?.chatId : '') || '').trim();
                                 if (!token || !chat) {
                                   setTgTestSuccessToast('Enter Bot Token and Target Chat ID first');
                                   setTimeout(() => setTgTestSuccessToast(null), 3500);
